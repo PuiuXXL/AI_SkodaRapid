@@ -1,0 +1,56 @@
+name: perception
+
+on:
+  push:
+    paths:
+      - "perception/**"
+      - "tests/perception/**"
+      - "scripts/benchmark.py"
+      - "scripts/enroll_face.py"
+      - "scripts/calibrate.py"
+      - "requirements/p1-*.txt"
+      - "pyproject.toml"
+      - ".github/workflows/perception.yml"
+  pull_request:
+    paths:
+      - "perception/**"
+      - "tests/perception/**"
+      - "requirements/p1-*.txt"
+      - "pyproject.toml"
+      - ".github/workflows/perception.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perception-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements/p1-*.txt
+
+      - name: Install dependencies (CPU-only torch, no models, no camera)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+            -r requirements/p1-perception.txt -r requirements/p1-dev.txt
+
+      - name: Ruff
+        run: ruff check
+
+      - name: Mypy
+        run: mypy
+
+      - name: Pytest (tests needing models or a camera are skipped)
+        run: python -m pytest tests/perception -m "not models and not camera" -q

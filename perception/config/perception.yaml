@@ -1,0 +1,134 @@
+# P1 perception thresholds and settings. Validated by perception/config.py (unknown keys are rejected).
+# Starting values: tune them on the real setup (Sunday, in the venue). Reasons: docs/perception.md.
+# Safety thresholds (when an alarm sounds, microsleep) belong to P2 in core/config/thresholds.yaml, NOT here.
+
+cameras:
+  driver:                      # laptop webcam, facing the driver only
+    enabled: true
+    device: 0                  # OpenCV index (or a path / URL)
+    backend: auto              # auto | dshow | msmf | v4l2 | any   (Windows: dshow opens MJPG reliably)
+    width: 1280
+    height: 720
+    fps: 30
+    fourcc: MJPG               # compressed USB stream -> 720p30 without USB bandwidth issues
+    buffer_size: 1             # keep only the latest frame
+  passenger:                   # phone via DroidCam over USB, facing the front-right seat only
+    enabled: false             # switch on once DroidCam is connected
+    device: 1                  # on Windows DroidCam is a virtual webcam index
+    backend: auto
+    width: 1280
+    height: 720
+    fps: 30
+    fourcc: MJPG
+    buffer_size: 1
+
+models:
+  dir: perception/models       # relative to the repo root; gitignored, filled by scripts/download_models.sh
+  face_landmarker: face_landmarker.task
+  gesture_recognizer: gesture_recognizer.task
+  gaze: mobileone_s0_gaze.onnx # MobileGaze MobileOne-S0 (yakhyo/gaze-estimation), check the weights' licence
+  yunet: face_detection_yunet_2023mar.onnx
+  sface: face_recognition_sface_2021dec.onnx
+  phone_device: auto           # auto | cpu | gpu   (auto = gpu if CUDA is available)
+  phone_cpu: { weights: yolo26n.pt, imgsz: 416 }
+  phone_gpu: { weights: yolo26s.pt, imgsz: 640 }
+  pose: yolo26n-pose.pt        # only for rear_seat (S feature)
+  onnx_providers:              # tried in order, the first available wins
+    - CUDAExecutionProvider
+    - OpenVINOExecutionProvider
+    - CPUExecutionProvider
+
+rates:
+  driver_face_every_frame: true  # the driver face is never degraded
+  passenger_face_hz: 10
+  gaze_hz: 15
+  phone_hz: 5
+  pose_hz: 2                   # rear_seat confirmation only
+  identity_recheck_s: 10
+  perf_window: 120             # samples kept per model for p50/p95
+  degrade_e2e_p95_ms: 150      # above this: lower the passenger rate first, then YOLO
+
+eyes:
+  baseline_window_s: 10        # open-eye EAR baseline learned over the first seconds with the face visible
+  baseline_percentile: 90      # high percentile of EAR = "eyes open" for this person and camera angle
+  k_close: 0.65                # closed if EAR < k_close * baseline
+  k_open: 0.80                 # open   if EAR > k_open  * baseline   (hysteresis band in between)
+  median_frames: 3             # median filter length (odd). No EMA: it would erase short blinks
+  min_state_frames: 2          # frames needed to accept a state change. No 300 ms minimum
+  blink_max_ms: 500            # closures longer than this are reported as closures, not blinks
+  blendshape_closed: 0.55      # eyeBlinkLeft/Right above this supports "closed"
+  perclos_window_s: 60
+
+yawn:
+  jaw_open_threshold: 0.50     # jawOpen blendshape
+  min_duration_s: 1.5
+
+speaking:
+  window_s: 1.0
+  jaw_var_threshold: 0.002     # variance of jawOpen over the window
+
+head:
+  nod:                         # fatigue head drop (with eyes closing)
+    pitch_drop_deg: 15
+    window_s: 1.5
+  answer:                      # yes/no head answer, only while the dialog window is open
+    min_reversals: 2
+    window_s: 1.2
+    min_amplitude_deg: 6
+
+gaze:
+  zones: [road, mirror_left, mirror_right, mirror_rear, cluster, infotainment, lap, passenger]
+  k: 5
+  weighted: true               # distance-weighted kNN
+  reject_distance: 3.0         # mean distance to the k neighbours (z-score units) above this -> unknown
+  min_conf: 0.6                # vote share below this -> unknown
+  calibration_s_per_zone: 2.0
+  calibration_modes: [owl, lizard]  # head turned / eyes only
+  vats_max_glance_s: 2.0       # off-road glances shorter than this count for VATS
+  window_s: 60                 # VATS and entropy window
+
+phone:
+  class_id: 67                 # COCO "cell phone"
+  conf_min: 0.40
+  vote_window: 5               # last N YOLO runs
+  vote_min: 3                  # seen in at least this many -> in use
+  near_face_ratio: 1.2         # phone centre within ratio * face width of the face centre -> near_face
+  lap_pattern:
+    min_glances: 3
+    window_s: 20
+    long_glance_s: 2.0
+    conf: 0.40                 # reported confidence for lap_pattern (lower than the detector)
+
+gesture:
+  allowed: [Thumb_Up, Thumb_Down, Open_Palm]
+  min_score: 0.60
+  min_duration_s: 0.5
+
+identity:
+  cosine_threshold: 0.363      # OpenCV's recommended SFace value
+  yunet_score_threshold: 0.80
+  yunet_nms_threshold: 0.30
+  enroll_frames: 10
+
+monitoring:
+  face_lost_s: 2.0             # driver face missing longer than this, unexplained -> monitoring_ok=false
+  frozen_frame_s: 1.0          # identical frames for this long -> camera frozen
+  frozen_pixel_diff: 0.5       # mean absolute pixel difference below this = identical
+
+filters:
+  one_euro:                    # head angles (and other continuous signals)
+    min_cutoff: 1.0            # Hz; lower = smoother at rest
+    beta: 0.05                 # higher = less lag on fast moves
+    d_cutoff: 1.0
+  min_detection_conf: 0.5      # MediaPipe face detection
+  min_tracking_conf: 0.5       # MediaPipe face tracking
+  unknown_below_conf: 0.5      # any output below this confidence is reported as unknown
+
+output:
+  ws_url: ws://localhost:8000/ws/perception
+  ws_reconnect_s: 1.0
+  publish_hz: 15
+  mjpeg_port: 8001
+  video_width: 640
+  video_fps: 12
+  jpeg_quality: 70

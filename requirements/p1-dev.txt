@@ -1,0 +1,7 @@
+# P1 perception: development tools (lint, types, tests, reading the organizers' deck).
+pytest>=8
+ruff>=0.8
+mypy>=1.13
+python-pptx>=1.0
+types-PyYAML
+types-psutil

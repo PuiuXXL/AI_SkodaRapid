@@ -1,0 +1,30 @@
+# P1 perception: runtime dependencies (Python 3.11).
+# Decisions and reasons: docs/perception.md.
+#
+#   uv venv --python 3.11 .venv
+#   uv pip install -r requirements/p1-perception.txt -r requirements/p1-dev.txt
+#
+# Note: mediapipe pulls opencv-contrib-python and ultralytics pulls opencv-python; both share `cv2`.
+# After install check: python -c "import cv2; print(cv2.__version__, hasattr(cv2, 'FaceDetectorYN'))"
+
+# Vision models
+mediapipe>=0.10.18            # Face Landmarker, Gesture Recognizer (Apache-2.0)
+opencv-python>=4.10           # capture, YuNet + SFace (FaceDetectorYN / FaceRecognizerSF), JPEG
+numpy>=1.26,<3
+ultralytics>=8.4              # YOLO26 (phone, class 67; pose only for rear_seat). AGPL-3.0
+onnxruntime>=1.20             # MobileGaze, YuNet/SFace, YOLO exports (CPU provider)
+# onnxruntime-gpu>=1.20       # NVIDIA: replaces onnxruntime (needs CUDA 12 + cuDNN 9). Do not install both.
+# openvino>=2024.4            # Intel CPU/iGPU: OpenVINO execution provider
+#
+# YOLO on an NVIDIA GPU under Windows (PyPI torch is CPU-only there):
+#   uv pip install --reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu128
+
+# I/O
+websockets>=13                # WS client -> core /ws/perception
+aiohttp>=3.10                 # MJPEG server on :8001
+orjson>=3.10
+
+# Config, perf
+pyyaml>=6
+pydantic>=2.7
+psutil>=6
