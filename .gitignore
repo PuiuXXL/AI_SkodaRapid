@@ -1,0 +1,40 @@
+# Secrets
+.env
+
+# Claude Code (shared directly, not through git)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+
+# Models
+perception/models/
+*.onnx
+*.pt
+*.task
+
+# Biometric data and calibration (generated at runtime)
+profiles/*/face.npy
+profiles/*/calibration.json
+
+# Media
+assistant/data/media/
+dashboard/public/sounds/music/
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Node
+node_modules/
+dashboard/dist/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
