@@ -263,8 +263,8 @@ Until P2 decides, `driver.eyes.microsleep` stays `false` from P1.
 
 ## 11. Research basis
 
-The two papers in `docs/` and what they change for us. (The PDFs are reference copies for the team; check their
-licences before keeping them in the public repo.)
+The two papers we work from and what they change for us. The PDFs are kept locally by the team, not in this public
+repo (copyright); the references below are enough to find them.
 
 ### Ersoy, Tatar, Tonbul, Kırbız: "Improving Driver Drowsiness Detection via Personalized EAR/MAR Thresholds and CNN-Based Classification" (MEF University, arXiv 2604.22479, 2026)
 
