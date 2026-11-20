@@ -77,7 +77,7 @@ Natural-language explanations, passenger interaction, or RAG.
 | Requirement | Consequence for `perception/` |
 |---|---|
 | **R1** | All detections in the AS (driver camera) and AP (passenger camera) tables of `DriveMate-PLAN-FINAL.md` §4.A are R1. The M rows must work live. |
-| **R3** | Perception runs **live on the real cameras**. No pre-recorded video and no pre-processed images, ever. The recorded JSON feature stream (replay) exists **only for development, evaluation and as a declared backup**. It is not the demo. We never record video. |
+| **R3** | Perception runs **live on the real cameras**. No pre-recorded video and no pre-processed images, ever. Recorded feature streams (`perception/replay.py`) exist **only for development and evaluation, never in the demo**. We never record video or images. |
 | **R4** | **Every detection has a field in `PerceptionFrame`**, so P4 can display it on the dashboard. A detection without a field is invisible to the jury and does not count. The debug overlay (MJPEG, key D) shows the raw signals: landmarks, gaze zone, live EAR, phone box, fps. |
 | **Jury: Technical execution (30%)** | "Architecture" and "Technical decisions" are scored explicitly. That is why every P1 choice is written down with its reason in [`docs/perception.md`](perception.md), and why we **measure** it: per-model latency p50/p95, fps per camera, end-to-end latency, and `scripts/benchmark.py` on the demo laptop. |
 | **Way of working** | One commit per feature, prefixed with the module: `perception: add PERCLOS window`. |

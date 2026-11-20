@@ -94,6 +94,23 @@ Lighting is the factor that hurts vision-based driver monitoring most (see the 1
   when tracking is lost. A hand-made crop adds code, can cut off the face during fast head turns, and gains little.
 - Driver camera: every frame (target ≥ 20 fps, ≤ 15 ms). Passenger camera: 10 Hz.
 
+### Face Landmarker rules (R-FL1 – R-FL5)
+
+| Rule | What | Where |
+|---|---|---|
+| **R-FL1** | `num_faces = 1` on each camera. MediaPipe's internal tracking/smoothing between frames only works with a single face. Each camera sees one person by design. | `face.num_faces` (fixed to 1 by validation) |
+| **R-FL2** | The three confidence thresholds live in yaml: detection 0.5, presence 0.5, tracking 0.6 (starting values). | `face.min_detection_conf`, `face.min_presence_conf`, `face.min_tracking_conf` |
+| **R-FL3** | The face must be **≥ ~250 px wide** in the frame. Below that, eye landmarks are too coarse for EAR: the frame is flagged `face_too_small` and the face confidence is reduced (`width / min_face_width_px`). | `face.min_face_width_px`; `FeatureFrame.face.too_small`, `.conf` |
+| **R-FL4** | **High `eyeSquint` + moderately low EAR = squinting, not closed.** Squinting (sun, smiling, concentrating) lowers EAR without the lids meeting; it must not count in PERCLOS or `closed_ms`. Squint if `eyeSquint ≥ squint_threshold` and `EAR / baseline` lies inside `squint_ear_band`. | `eyes.squint_threshold`, `eyes.squint_ear_band` |
+| **R-FL5** | Face Landmarker **does not identify people**: identity is YuNet + SFace only (§3.7). `brow*` blendshapes are optional signals at most, never used for identity or safety decisions. | — |
+
+Face Landmarker exposes **no per-face confidence score** in the Tasks API (landmark `presence` / `visibility` are
+`None`), so `FeatureFrame.face.conf` is geometry-based: 1.0 for a face at or above `min_face_width_px`, scaled down
+linearly below it, 0 when no face is found.
+
+Measured on the dev laptop webcam (1280×720, normal sitting distance): the face is only **~165 px** wide, below
+R-FL3. For the demo, the driver camera must be closer to the face (or have a narrower field of view).
+
 ### 3.2 Eyes: EAR + eyeBlink, relative thresholds
 - **EAR on each eye** (right `33,160,158,133,153,144`; left `362,385,387,263,373,380`), plus the `eyeBlinkLeft/Right`
   blendshapes. The better-seen eye is used and reported in `eye_used`.
@@ -179,6 +196,11 @@ Lighting is the factor that hurts vision-based driver monitoring most (see the 1
   timed separately by the benchmark.
 - **Why ONNX / TFLite:** both formats can be moved to automotive hardware and quantized (INT8) without rewriting the
   pipeline. That is the bridge to section 7.
+- **Measured, not assumed** ([`docs/benchmark/`](benchmark/), `scripts/benchmark.py`, live frames). On the dev laptop
+  (Ryzen 7 170 + RTX 4050): the GPU only pays off for the larger model. YOLO26s@640 takes 16.8 ms on CUDA vs 51.8 ms
+  OpenVINO / 75 ms CPU, but the small models are *slower* on CUDA (YOLO26n@320: 15.4 ms CUDA vs 6.9 ms OpenVINO;
+  MobileGaze p95 15.4 ms CUDA vs 8.2 ms OpenVINO) because of transfer and launch overhead. So the provider is chosen
+  **per model**, not one global order: small models on OpenVINO/CPU, YOLO26s on CUDA.
 - Warm-up at start-up: one inference per model, before the first frame is published.
 - **Timing:** each model call is wrapped in `time.perf_counter()`, with a `deque(maxlen=120)` per model for p50/p95,
   reported in `perf.*_ms_*`.
@@ -186,8 +208,20 @@ Lighting is the factor that hurts vision-based driver monitoring most (see the 1
 ## 5. Data policy
 
 - **In operation, no images are recorded.** Frames live in memory only, and the MJPEG preview is streamed, never stored.
-- **For development:** we record **feature streams as JSONL** (the `PerceptionFrame` sequence), never video. These are
-  also the replay backup for the demo, which is allowed by R3 only as a declared backup.
+- **For development and evaluation:** we record **features, never pixels**, so detectors can be tuned and tested on
+  real data, repeatably.
+  - `perception/features.py`, **`FeatureFrame`**: what the models extract from one frame, *before* detectors and
+    filters: time, a fixed subset of face landmarks (eyes, iris, mouth, face oval), all 52 blendshapes, the head
+    matrix, MobileGaze angles, hands + gestures with scores, phone boxes, face presence / confidence / width.
+  - `perception/recorder.py` writes them to JSONL (optionally gzip), with session metadata: camera, resolution, fps,
+    model files + SHA-256, package versions, the config used, a session label.
+  - `scripts/label_session.py` records live **and** lets you press keys to mark real events (blink, eyes closed, yawn,
+    speaking, gaze zone, phone): the ground truth for evaluation, aligned to the same session clock.
+  - `perception/replay.py` reads a session back with its original timing (or faster) as input for detectors, tests,
+    evaluation and threshold tuning.
+  - Sessions live in `data/features/<session>/` (gitignored; `data/README.md` explains the layout).
+- **Replay is never used in the demo (R3).** The demo always runs on the live camera. Replay exists only for
+  development, evaluation and tuning; the code warns about it too.
 - **Phone fine-tuning data:** team members only, with explicit consent, stored locally, **never in the repo**, deleted after the hackathon.
 - **DMD (Driver Monitoring Dataset):** only unrestricted subjects, **evaluation only** (no training), under the
   CC BY-NC-ND 4.0 licence. Nothing derived from it (crops, labels, weights) goes into the repo.
