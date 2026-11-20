@@ -127,6 +127,26 @@ def test_same_device_for_both_cameras_rejected(tmp_path: Path) -> None:
         load_config(_write(tmp_path, data))
 
 
+def test_camera_controls_and_reconnect() -> None:
+    cam = load_config().cameras.driver
+    assert cam.controls.power_line_hz == 50
+    assert cam.controls.autofocus is False
+    assert cam.controls.auto_exposure is False
+    assert cam.controls.focus is None  # null = leave the camera's setting
+    assert cam.reconnect_s > 0 and cam.max_read_failures >= 1
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("power_line_hz", 55), ("exposure_ms", 0), ("white_balance_k", 500)],
+)
+def test_invalid_camera_controls_rejected(tmp_path: Path, key: str, value: object) -> None:
+    data = _default_data()
+    data["cameras"]["driver"]["controls"][key] = value
+    with pytest.raises(ValidationError):
+        load_config(_write(tmp_path, data))
+
+
 def test_missing_file(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="not found"):
         load_config(tmp_path / "nope.yaml")

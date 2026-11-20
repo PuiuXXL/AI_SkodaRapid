@@ -16,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 __all__ = [
     "DEFAULT_CONFIG_PATH",
     "REPO_ROOT",
+    "CameraConfig",
+    "CameraControls",
     "ConfigError",
     "PerceptionConfig",
     "load_config",
@@ -53,6 +55,23 @@ class _Section(BaseModel):
 # --- cameras -------------------------------------------------------------------------------------------
 
 
+class CameraControls(_Section):
+    """Fixed image controls. ``null`` = leave the camera's own setting untouched.
+
+    Applied by ``scripts/camera_setup.sh`` (Linux, v4l2-ctl) or by ``perception/capture.py`` (Windows, OpenCV
+    properties, best effort). Units are semantic and converted per platform (e.g. ``exposure_ms``).
+    """
+
+    power_line_hz: Literal[0, 50, 60] | None
+    autofocus: bool | None
+    focus: Annotated[int, Field(ge=0)] | None
+    auto_exposure: bool | None
+    exposure_ms: Annotated[float, Field(gt=0, le=1000)] | None
+    gain: Annotated[int, Field(ge=0)] | None
+    auto_white_balance: bool | None
+    white_balance_k: Annotated[int, Field(ge=2000, le=10000)] | None
+
+
 class CameraConfig(_Section):
     enabled: bool
     device: int | str
@@ -62,6 +81,9 @@ class CameraConfig(_Section):
     fps: Annotated[int, Field(gt=0, le=120)]
     fourcc: Annotated[str, StringConstraints(min_length=4, max_length=4)]
     buffer_size: Annotated[int, Field(ge=1, le=4)]
+    reconnect_s: PositiveFloat
+    max_read_failures: Annotated[int, Field(ge=1, le=1000)]
+    controls: CameraControls
 
 
 class CamerasConfig(_Section):
