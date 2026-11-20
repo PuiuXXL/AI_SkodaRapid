@@ -1,0 +1,139 @@
+<!doctype html>
+<!--
+  DriveMate P3 voice test page (roluri/P3 step 3: "Vocea o testezi pe o pagină simplă").
+  Served by the fake core:  .venv/Scripts/python -m assistant.dev.voice_server
+  Open http://localhost:8010 in GOOGLE CHROME (not Chromium) and press Start.
+
+  What you can test here:
+  - Romanian speech recognition (continuous, half-duplex) and the wake word;
+  - edge-tts sentences (/tts) and the speechSynthesis fallback;
+  - the real assistant (Gemini or fixed texts) answering what you say;
+  - pause / "...cum ziceam" resume, alarms interrupting everything, music ducking;
+  - speech_onset timestamps (verbal reaction channel).
+-->
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DriveMate voice test</title>
+  <style>
+    :root { --bg: #f6f7f9; --fg: #1d2330; --card: #fff; --muted: #6b7280; --accent: #0b6bcb; --ok: #12805c; --warn: #b4541a; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #11151c; --fg: #e6e9ef; --card: #1b212c; --muted: #9aa3b2; --accent: #5aa9ff; --ok: #3ccf91; --warn: #ff9f5a; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; font: 15px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+    .card { background: var(--card); border-radius: 10px; padding: 12px; }
+    .card h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    button { margin: 3px 3px 3px 0; padding: 7px 10px; border: 1px solid var(--muted); border-radius: 7px; background: transparent; color: var(--fg); cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    input { width: 100%; padding: 7px; border-radius: 7px; border: 1px solid var(--muted); background: transparent; color: var(--fg); }
+    #log, #transcript { height: 260px; overflow-y: auto; font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 12px; border: 1px solid var(--muted); }
+    .pill.on { border-color: var(--ok); color: var(--ok); }
+    .interim { color: var(--muted); }
+    .addressed { color: var(--ok); }
+  </style>
+</head>
+<body>
+  <h1>DriveMate · test voce (P3)</h1>
+  <p>
+    <button id="start" class="primary">Start (microfon + audio)</button>
+    <span id="conn" class="pill">deconectat</span>
+    <span id="dialog" class="pill">fereastră dialog</span>
+    <span id="speaking" class="pill">asistentul vorbește</span>
+  </p>
+  <div class="grid">
+    <section class="card">
+      <h2>Evenimente (ca de la core)</h2>
+      <button data-event="trip_start">trip_start</button>
+      <button data-event="cause_detected">cause_detected</button>
+      <button data-event="fatigue_high">fatigue_high</button>
+      <button data-event="disengagement_high">disengagement_high</button>
+      <button data-event="message_received" data-data='{"msg_id":"m17","delivery":"ask"}'>message_received</button>
+      <button data-event="stop_suggested" data-data='{"poi_id":"omv_km42","poi_name":"OMV","dist_km":12,"task":"lichidul de parbriz"}'>stop_suggested</button>
+      <p style="color:var(--muted);font-size:13px">Vorbește cu „copilot …” sau „DriveMate …”. După o întrebare ai 6 s fără nume.</p>
+    </section>
+    <section class="card">
+      <h2>Voce și audio</h2>
+      <input id="sayText" value="Salut Andrei. Asta e vocea asistentului, propoziție cu propoziție. Merge bine?">
+      <button id="say">Spune textul (TTS)</button>
+      <button data-control="pause">Pauză</button>
+      <button data-control="resume">Reia („…cum ziceam”)</button>
+      <button data-control="stop">Stop</button><br>
+      <button id="alarm">Alarmă „ANDREI!”</button>
+      <button id="music">Muzică</button>
+      <button id="stopMusic">Oprește muzica</button>
+    </section>
+    <section class="card">
+      <h2>Ce aude (transcriere)</h2>
+      <div id="transcript"></div>
+    </section>
+    <section class="card">
+      <h2>Jurnal</h2>
+      <div id="log"></div>
+    </section>
+  </div>
+
+  <script type="module">
+    import { initVoice, onTranscript, isSpeaking } from "/voice/index.js";
+
+    const $ = (id) => document.getElementById(id);
+    const log = (text) => { $("log").textContent += text + "\n"; $("log").scrollTop = 1e9; };
+    let ws;
+
+    function connect() {
+      ws = new WebSocket(`ws://${location.host}/ws/ui`);
+      ws.addEventListener("open", () => { $("conn").textContent = "conectat"; $("conn").classList.add("on"); });
+      ws.addEventListener("close", () => { $("conn").textContent = "deconectat"; $("conn").classList.remove("on"); });
+      ws.addEventListener("message", (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === "dev_log") log(message.text);
+        else if (message.type === "state") $("dialog").classList.toggle("on", Boolean(message.state?.interaction?.dialog_window_open));
+        else if (message.type === "speak") log(`▶ speak ${message.is_question ? "(întrebare) " : ""}${message.text}`);
+      });
+      return new Promise((resolve) => ws.addEventListener("open", resolve, { once: true }));
+    }
+
+    const command = (payload) => ws && ws.send(JSON.stringify({ type: "command", ...payload }));
+
+    $("start").addEventListener("click", async () => {
+      await connect();
+      if (!window.webkitSpeechRecognition && !window.SpeechRecognition) {
+        log("[voce] EROARE: browserul nu are Web Speech API. Folosește Google Chrome.");
+      }
+      try {
+        await initVoice(ws, {
+          preloadClips: ["/sounds/clips/alarm_andrei.mp3"],
+          onStatus: (text) => log(`[voce] ${text}`),
+        });
+      } catch (err) {
+        log(`[voce] EROARE la pornire: ${err}`);
+        return;
+      }
+      onTranscript((r) => {
+        const css = r.final ? (r.addressed ? "addressed" : "") : "interim";
+        if (r.final || !$("transcript").lastChild?.classList?.contains("interim")) {
+          $("transcript").insertAdjacentHTML("beforeend", "<div></div>");
+        }
+        const line = $("transcript").lastChild;
+        line.className = css;
+        line.textContent = `${r.final ? "✓" : "…"} ${r.text}${r.final ? (r.addressed ? "  [adresat]" : "  [ignorat]") : ""}`;
+        $("transcript").scrollTop = 1e9;
+      });
+      setInterval(() => $("speaking").classList.toggle("on", isSpeaking()), 150);
+      $("start").disabled = true;
+      log("voce pornită");
+    });
+
+    document.querySelectorAll("[data-event]").forEach((button) => button.addEventListener("click", () =>
+      command({ name: "trigger", event: button.dataset.event, data: JSON.parse(button.dataset.data || "{}") })));
+    document.querySelectorAll("[data-control]").forEach((button) => button.addEventListener("click", () =>
+      command({ name: button.dataset.control })));
+    $("say").addEventListener("click", () => command({ name: "say", text: $("sayText").value }));
+    $("alarm").addEventListener("click", () => command({ name: "alarm", clip_url: "/sounds/clips/alarm_andrei.mp3" }));
+    $("music").addEventListener("click", () => command({ name: "music" }));
+    $("stopMusic").addEventListener("click", () => command({ name: "stop_music" }));
+  </script>
+</body>
+</html>
