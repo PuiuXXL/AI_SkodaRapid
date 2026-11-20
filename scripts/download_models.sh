@@ -77,9 +77,11 @@ for stem, sizes in variants.items():
     weights = dest / f"{stem}.pt"
     for size in sizes:
         onnx_out = dest / f"{stem}_{size}.onnx"
+        # nms=False keeps YOLO26's end-to-end NMS-free head: output [1, 300, 6] = x1, y1, x2, y2, score, class.
+        # (With the default nms=None, Ultralytics exports the raw [1, 84, N] head that needs NMS.)
         if force or not onnx_out.exists():
             exported = Path(YOLO(str(weights)).export(format="onnx", imgsz=size, dynamic=False, simplify=True,
-                                                      device="cpu", verbose=False))
+                                                      nms=False, device="cpu", verbose=False))
             shutil.move(str(exported), onnx_out)
             print(f"ok    {onnx_out.name}")
         else:
@@ -87,8 +89,8 @@ for stem, sizes in variants.items():
         if has_openvino:
             ov_out = dest / f"{stem}_{size}_openvino_model"
             if force or not ov_out.exists():
-                exported_dir = Path(YOLO(str(weights)).export(format="openvino", imgsz=size, device="cpu",
-                                                              verbose=False))
+                exported_dir = Path(YOLO(str(weights)).export(format="openvino", imgsz=size, nms=False,
+                                                              device="cpu", verbose=False))
                 if ov_out.exists():
                     shutil.rmtree(ov_out)
                 shutil.move(str(exported_dir), ov_out)
@@ -103,10 +105,12 @@ echo "== verifying"
 "$PY" - "$DEST" <<'PY'
 import hashlib
 import sys
+import zipfile
 from pathlib import Path
 
 import onnxruntime as ort
 
+ort.set_default_logger_severity(3)  # SFace triggers harmless "initializer in graph inputs" warnings
 dest = Path(sys.argv[1])
 errors: list[str] = []
 sums: list[str] = []
@@ -115,7 +119,7 @@ for path in sorted(dest.iterdir()):
     if not path.is_file() or path.name == "SHA256SUMS":
         continue
     if path.suffix == ".task":
-        if path.read_bytes()[:2] != b"PK":
+        if not zipfile.is_zipfile(path):  # MediaPipe bundles are zips (with 2 leading bytes before "PK")
             errors.append(f"{path.name}: not a MediaPipe .task bundle (zip)")
             continue
         print(f"ok    {path.name}: MediaPipe bundle")
@@ -127,6 +131,9 @@ for path in sorted(dest.iterdir()):
             continue
         ins = ", ".join(f"{i.name}{list(i.shape)}" for i in sess.get_inputs())
         outs = ", ".join(f"{o.name}{list(o.shape)}" for o in sess.get_outputs())
+        if path.name.startswith("yolo26") and list(sess.get_outputs()[0].shape)[-1] != 6:
+            errors.append(f"{path.name}: expected the end-to-end head [1, 300, 6], got {outs} (re-run with --force)")
+            continue
         print(f"ok    {path.name}: in {ins} -> out {outs}")
     sums.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
 
