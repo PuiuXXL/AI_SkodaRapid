@@ -156,7 +156,9 @@ def test_camera_controls_and_reconnect() -> None:
     cam = load_config().cameras.driver
     assert cam.controls.power_line_hz == 50
     assert cam.controls.autofocus is False
-    assert cam.controls.auto_exposure is False
+    # laptop profile: auto modes set explicitly to undo manual values the camera driver remembers
+    assert cam.controls.auto_exposure is True and cam.controls.exposure_ms is None
+    assert cam.controls.auto_white_balance is True
     assert cam.controls.focus is None  # null = leave the camera's setting
     assert cam.reconnect_s > 0 and cam.max_read_failures >= 1
 

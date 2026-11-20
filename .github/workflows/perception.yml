@@ -8,6 +8,8 @@ on:
       - "scripts/benchmark.py"
       - "scripts/preview.py"
       - "scripts/label_session.py"
+      - "scripts/live_driver.py"
+      - "scripts/eval_eyes.py"
       - "scripts/enroll_face.py"
       - "scripts/calibrate.py"
       - "scripts/*.sh"
@@ -61,4 +63,4 @@ jobs:
         run: mypy
 
       - name: Pytest (tests needing models or a camera are skipped)
-        run: python -m pytest tests/perception -m "not models and not camera" -q
+        run: python -m pytest tests/perception -m "not models and not camera and not data" -q

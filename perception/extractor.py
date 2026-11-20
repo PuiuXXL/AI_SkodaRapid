@@ -16,19 +16,11 @@ from pathlib import Path
 from typing import Any
 
 import cv2
-import numpy as np
 
 from perception.capture import Frame
 from perception.config import PerceptionConfig
-from perception.features import (
-    LANDMARK_GROUPS,
-    LANDMARK_INDICES,
-    FaceFeatures,
-    FeatureFrame,
-    GazeFeatures,
-    HandFeatures,
-    PhoneBox,
-)
+from perception.driver_cam.face import FaceLandmarkerModel, VideoClock
+from perception.features import FeatureFrame, GazeFeatures, HandFeatures, PhoneBox
 from perception.log import get_logger
 from perception.postprocess import gaze_from_outputs, yolo26_detections
 from perception.preprocess import crop_box, gaze_input, letterbox
@@ -39,7 +31,6 @@ __all__ = ["FeatureExtractor", "every_n_frames"]
 log = get_logger("perception.extractor")
 
 CUDA = "CUDAExecutionProvider"
-_OVAL = LANDMARK_GROUPS["face_oval"]
 
 
 def every_n_frames(camera_fps: float, rate_hz: float) -> int:
@@ -49,24 +40,13 @@ def every_n_frames(camera_fps: float, rate_hz: float) -> int:
     return max(1, round(camera_fps / rate_hz))
 
 
-class _VideoClock:
-    """Strictly increasing millisecond timestamps for MediaPipe VIDEO mode."""
-
-    def __init__(self) -> None:
-        self.last = -1
-
-    def __call__(self, t_capture: float) -> int:
-        ts = max(int(t_capture * 1000), self.last + 1)
-        self.last = ts
-        return ts
-
-
 class FeatureExtractor:
     def __init__(
         self,
         cfg: PerceptionConfig,
         *,
         camera_fps: float,
+        camera: str = "driver",
         gaze: bool = True,
         phone: bool = True,
         gesture_hz: float | None = None,
@@ -75,25 +55,13 @@ class FeatureExtractor:
         from mediapipe.tasks.python import BaseOptions, vision
 
         self._mp = mp
+        self.camera_fps = camera_fps
         self._cfg = cfg
         self._frame_index = 0
         self.models: dict[str, dict[str, str]] = {}
 
-        face_path = cfg.models.path(cfg.models.face_landmarker)
-        self._face = vision.FaceLandmarker.create_from_options(
-            vision.FaceLandmarkerOptions(
-                base_options=BaseOptions(model_asset_path=str(face_path)),
-                running_mode=vision.RunningMode.VIDEO,
-                num_faces=cfg.face.num_faces,
-                min_face_detection_confidence=cfg.face.min_detection_conf,
-                min_face_presence_confidence=cfg.face.min_presence_conf,
-                min_tracking_confidence=cfg.face.min_tracking_conf,
-                output_face_blendshapes=True,
-                output_facial_transformation_matrixes=True,
-            )
-        )
-        self._face_clock = _VideoClock()
-        self.models["face_landmarker"] = {"file": face_path.name, "backend": "mediapipe"}
+        self.face = FaceLandmarkerModel(cfg, camera=camera)
+        self.models["face_landmarker"] = {"file": self.face.path.name, "backend": "mediapipe"}
 
         self._gaze: OnnxModel | None = None
         self._gaze_every = every_n_frames(camera_fps, cfg.rates.gaze_hz)
@@ -128,7 +96,7 @@ class FeatureExtractor:
                     num_hands=2,
                 )
             )
-            self._gesture_clock = _VideoClock()
+            self._gesture_clock = VideoClock()
             self.models["gesture_recognizer"] = {"file": gesture_path.name, "backend": "mediapipe"}
 
         self.cadence = {
@@ -148,7 +116,7 @@ class FeatureExtractor:
         h, w = image.shape[:2]
         mp_image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-        face, face_box = self._face_features(mp_image, frame.t_capture, w, h)
+        face, face_box = self.face.detect(mp_image, frame.t_capture, w, h)
 
         gaze_out: GazeFeatures | None = None
         if self._gaze is not None and index % self._gaze_every == 0 and face_box is not None:
@@ -181,37 +149,11 @@ class FeatureExtractor:
         )
 
     def close(self) -> None:
-        self._face.close()
+        self.face.close()
         if self._gesture is not None:
             self._gesture.close()
 
     # -----------------------------------------------------------------------------------------------------
-
-    def _face_features(
-        self, mp_image: Any, t_capture: float, w: int, h: int
-    ) -> tuple[FaceFeatures, tuple[float, float, float, float] | None]:
-        result = self._face.detect_for_video(mp_image, self._face_clock(t_capture))
-        if not result.face_landmarks:
-            return FaceFeatures(present=False, conf=0.0), None
-        points = result.face_landmarks[0]
-        xs = [points[i].x * w for i in _OVAL]
-        ys = [points[i].y * h for i in _OVAL]
-        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-        width = max(0.0, x1 - x0)
-        min_width = self._cfg.face.min_face_width_px
-        landmarks = [(round(points[i].x, 5), round(points[i].y, 5), round(points[i].z, 5)) for i in LANDMARK_INDICES]
-        blendshapes = {c.category_name: round(float(c.score), 4) for c in result.face_blendshapes[0]}
-        matrix = np.asarray(result.facial_transformation_matrixes[0], dtype=np.float64).reshape(-1)
-        face = FaceFeatures(
-            present=True,
-            conf=round(min(1.0, width / min_width), 3),
-            width_px=round(width, 1),
-            too_small=width < min_width,
-            landmarks=landmarks,
-            blendshapes=blendshapes,
-            head_matrix=[round(float(v), 5) for v in matrix],
-        )
-        return face, (x0, y0, width, y1 - y0)
 
     def _hand_features(self, mp_image: Any, t_capture: float) -> list[HandFeatures]:
         result = self._gesture.recognize_for_video(mp_image, self._gesture_clock(t_capture))

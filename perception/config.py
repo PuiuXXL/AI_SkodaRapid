@@ -173,6 +173,8 @@ class EyesConfig(_Section):
     blendshape_closed: Fraction
     squint_threshold: Fraction  # R-FL4
     squint_ear_band: Annotated[list[Annotated[float, Field(gt=0, lt=1)]], Field(min_length=2, max_length=2)]
+    baseline_min_s: PositiveFloat
+    min_eye_width_px: Annotated[float, Field(ge=1)]
     perclos_window_s: PositiveFloat
 
     @model_validator(mode="after")
@@ -194,7 +196,8 @@ class YawnConfig(_Section):
 
 class SpeakingConfig(_Section):
     window_s: PositiveFloat
-    jaw_var_threshold: PositiveFloat
+    lip_std_threshold: PositiveFloat
+    min_reversals: Annotated[int, Field(ge=1, le=20)]
 
 
 class NodConfig(_Section):
@@ -272,6 +275,7 @@ class MonitoringConfig(_Section):
     face_lost_s: PositiveFloat
     frozen_frame_s: PositiveFloat
     frozen_pixel_diff: Annotated[float, Field(ge=0)]
+    dark_luma: Annotated[float, Field(ge=0, le=255)]
 
 
 class OneEuroConfig(_Section):

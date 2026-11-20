@@ -14,15 +14,19 @@ cameras:
     buffer_size: 1             # keep only the latest frame
     reconnect_s: 1.0           # wait between reconnect attempts
     max_read_failures: 15      # consecutive failed reads (~0.5 s at 30 fps) -> reopen the camera
-    controls:                  # fixed image controls; null = leave as is. Why: docs/perception.md §2.1
+    controls:                  # null = leave as is. Why: docs/perception.md §2.1
+      # LAPTOP PROFILE (no lamp): auto exposure + auto white balance, set EXPLICITLY to true because the
+      # camera driver remembers manual values after the app exits (a 16 ms manual exposure left the image at
+      # mean luma 36/255). VENUE PROFILE (our lamp on the driver): auto_exposure: false, exposure_ms: 16,
+      # auto_white_balance: false, white_balance_k: 4600.
       power_line_hz: 50        # EU mains: removes 100 Hz flicker banding under venue lights (Linux only)
       autofocus: false         # no focus hunting when the head moves
       focus: null              # set after checking `camera_setup.sh driver --list` on the real camera
-      auto_exposure: false     # auto-exposure "pumping" changes EAR and landmarks between frames
-      exposure_ms: 16          # <= 1/fps (33 ms); short enough to limit motion blur. Tune with our own lamp
+      auto_exposure: true      # venue with lamp: false (auto-exposure "pumping" changes EAR between frames)
+      exposure_ms: null        # venue with lamp: 16 (<= 1/fps; limits motion blur)
       gain: null
-      auto_white_balance: false
-      white_balance_k: 4600    # neutral for LED lamps; tune in the venue
+      auto_white_balance: true # venue with lamp: false
+      white_balance_k: null    # venue with lamp: 4600
   passenger:                   # phone via DroidCam over USB, facing the front-right seat only
     enabled: false             # switch on once DroidCam is connected
     device: 1                  # on Windows DroidCam is a virtual webcam index
@@ -90,7 +94,10 @@ eyes:
   blink_max_ms: 500            # closures longer than this are reported as closures, not blinks
   blendshape_closed: 0.55      # eyeBlinkLeft/Right above this supports "closed"
   squint_threshold: 0.55       # R-FL4: eyeSquintLeft/Right at or above this ...
-  squint_ear_band: [0.50, 0.80]  # ... with EAR/baseline inside this band = squinting, NOT closed (no PERCLOS)
+  squint_ear_band: [0.50, 0.80]  # ... with EAR/baseline inside this band = squinting, NOT closed (no PERCLOS).
+                               # Deliberately reaches below k_close: a broad smile pushes EAR/baseline to ~0.5-0.65
+  baseline_min_s: 2.0          # provisional baseline usable after this much valid face time (state UNKNOWN before)
+  min_eye_width_px: 18         # eye corner distance below this -> eyes.reliable = false
   perclos_window_s: 60
 
 yawn:
@@ -99,7 +106,8 @@ yawn:
 
 speaking:
   window_s: 1.0
-  jaw_var_threshold: 0.002     # variance of jawOpen over the window
+  lip_std_threshold: 0.008     # std of inner-lip gap (13-14) / face height (10-152) over the window
+  min_reversals: 3             # direction changes of the gap per window: speech oscillates, a yawn does not
 
 head:
   nod:                         # fatigue head drop (with eyes closing)
@@ -148,6 +156,7 @@ monitoring:
   face_lost_s: 2.0             # driver face missing longer than this, unexplained -> monitoring_ok=false
   frozen_frame_s: 1.0          # identical frames for this long -> camera frozen
   frozen_pixel_diff: 0.5       # mean absolute pixel difference below this = identical
+  dark_luma: 60                # mean frame luma (0-255) below this -> "TOO DARK" warning
 
 filters:
   one_euro:                    # head angles (and other continuous signals)

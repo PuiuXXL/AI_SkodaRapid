@@ -82,6 +82,13 @@ skipped with a message) or, on Windows, best-effort by `capture.py` through Open
 | `auto_exposure` | off, `exposure_ms` 16 | Auto-exposure "pumps" when the head turns or a hand passes, which changes EAR and landmark positions between frames. 16 ms is under the 33 ms frame period and limits motion blur. Needs our own lamp. |
 | `auto_white_balance` | off, 4600 K | Stable colours for the detectors; tuned in the venue. |
 
+**Two profiles.** *Laptop* (no lamp, current yaml): `auto_exposure: true`, `auto_white_balance: true`.
+*Venue* (our lamp on the driver): manual exposure 16 ms, 4600 K, as in the table. **On Windows the camera driver
+remembers the values we set, even after the app exits**: after a run with the venue profile, the webcam stayed at
+16 ms everywhere and the image was nearly black without the lamp (mean luma 36/255; 120 after restoring auto). To
+undo it, set the auto modes **explicitly to `true`** (`null` leaves the stored manual value in place). The overlay
+shows the mean luma and warns `TOO DARK` below `monitoring.dark_luma`.
+
 Lighting is the factor that hurts vision-based driver monitoring most (see the 100-Driver results in
 [§11](#11-research-basis)), so we fix what we can at the camera instead of compensating later.
 
@@ -120,13 +127,33 @@ R-FL3. For the demo, the driver camera must be closer to the face (or have a nar
 - **Filtering:** a **median over 3 frames**, then **hysteresis**, then a **minimum of 2 frames** in a state.
   - **No EMA and no 300 ms minimum duration.** Both erase normal blinks of 100–300 ms, and blink duration is one
     of the fatigue signals P2 uses.
-- **Outputs:** `ear`, `eye_used`, `blink_ms`, `closed_ms` (current closure duration), `perclos_60s`, `reliable`.
+  - Episode durations are measured from the hysteresis **transition times** (first frame of the confirming run), so
+    the median and min-frame delays cancel out: a synthetic 150 ms blink is measured as 133–167 ms (± 1 frame).
+- Implementation: `perception/driver_cam/eyes.py` (`EyeTracker`), on FeatureFrames (identical live and on replay).
+  - EAR in **pixels** (normalized coordinates distort the ratio on 16:9); `eye_used` = the eye with the larger corner
+    distance (least foreshortened); `reliable` needs an eye at least `eyes.min_eye_width_px` wide.
+  - **Baseline** per eye: from calibration, or provisional = p90 of the first `baseline_window_s` with a valid face,
+    usable after `baseline_min_s` (state `UNKNOWN` before); reported as `baseline_provisional`.
+  - **Fusion with `eyeBlink`:** when mean(eyeBlinkL, R) ≥ `blendshape_closed` and r is inside the hysteresis band,
+    r is pushed below `k_close` (the blendshape confirms what the geometry suggests).
+  - **R-FL4 squint, checked first:** max(eyeSquintL, R) ≥ `squint_threshold` and r inside `squint_ear_band` → state
+    `SQUINT`, `squint = true`; no PERCLOS, no `closed_ms`, no blink; a closure in progress ends there. The band
+    [0.50, 0.80] **deliberately reaches below `k_close` (0.65)**: a broad smile pushes r to ~0.5–0.65, and the exit
+    criterion is zero smiles/squints reported as closed. A really closed eye has r < 0.5, so it stays `CLOSED`.
+  - Closed episode ≤ `blink_max_ms` → blink (`blink_ms`, `blink_rate` per minute over 60 s); longer → closure.
+- **Outputs:** `ear`, `eye_used`, `blink_ms`, `closed_ms` (current closure duration), `perclos_60s`, `reliable`
+  (+ `squint`, `state`, `blink_rate`, see §9).
   - **P1 reports `closed_ms`. The microsleep threshold belongs to P2.**
   - `reliable=false` (sunglasses, eyes not visible) → only head metrics are trusted.
 
 ### 3.3 Head angles and slow events
 - Yaw / pitch / roll from the transformation matrix, smoothed with a **One Euro filter**: little lag on fast
-  movements (mirror checks, nods), strong smoothing when the head is still.
+  movements (mirror checks, nods), strong smoothing when the head is still (`perception/driver_cam/head.py`).
+- **Axis signs, in the driver's terms:** `yaw > 0` = head turned to the driver's **left** (left mirror);
+  `pitch > 0` = head **up**; `roll > 0` = head tilted to the **left shoulder**. MediaPipe's pose is in camera space
+  (x = image right, y = up, z = towards the camera, image not mirrored); `AXIS_SIGNS` maps the raw rotations about
+  x / y / z to this convention. Unit tests use known rotation matrices; the guided eval (`scripts/eval_eyes.py`,
+  "turn left / up / tilt left") checks the signs live and reports `pose_*_sign_ok`.
 - **Slow events need a minimum duration:**
   - yawn = `jawOpen` above its threshold for **≥ 1.5 s**;
   - gesture held for **≥ 0.5 s**.
@@ -134,7 +161,10 @@ R-FL3. For the demo, the driver camera must be closer to the face (or have a nar
 - **Head answer** (`head.answer`), only while core has the dialog window open:
   - ≥ 2 direction reversals in < 1.2 s, with the eyes open;
   - pitch reversals = yes, yaw reversals = no.
-- `speaking`: variance of `jawOpen` over a 1 s window.
+- `speaking` (`perception/driver_cam/mouth.py`): standard deviation over 1 s of the inner-lip gap (13–14) divided by
+  the face height (10–152) ≥ `speaking.lip_std_threshold`, **and** at least `speaking.min_reversals` direction
+  changes of the gap in the window (speech oscillates; a yawn opens and closes once), and never during or within one
+  window after a wide-open jaw (the closing of a yawn would otherwise look like speech).
 
 ### 3.4 Gaze zones: MobileGaze + kNN
 - **Why a gaze model.** Euro NCAP distinguishes **owl** glances (the head turns) from **lizard** glances (only the
@@ -283,6 +313,10 @@ Not yet in `shared/contracts.py` (owned by P2). To be announced on the group as 
 | `driver.eyes.closed_ms` | `int` | `0` | P1 | Current closure duration; P2 derives microsleep from it. |
 | `driver.phone.near_face` | `bool` | `false` | P1 | Phone held near the face (call / reading) vs. in the hand. |
 | `driver.phone.side` | `"left" \| "right" \| null` | `null` | P1 | Which side the phone is on; useful for the cause and the overlay. |
+| `driver.eyes.squint` | `bool` | `false` | P1 | R-FL4: squinting / smiling eyes, explicitly *not* closed. |
+| `driver.eyes.state` | `"OPEN" \| "CLOSED" \| "SQUINT" \| "UNKNOWN"` | `"UNKNOWN"` | P1 | Discrete eye state for the dashboard and P2's rules. |
+| `driver.eyes.blink_rate` | `float \| null` | `null` | P1 | Blinks per minute over 60 s (fatigue signal for F). |
+| `driver.face_too_small` | `bool` | `false` | P1 | R-FL3: face narrower than `face.min_face_width_px`; landmarks too coarse. |
 
 Until P2 decides, `driver.eyes.microsleep` stays `false` from P1.
 
