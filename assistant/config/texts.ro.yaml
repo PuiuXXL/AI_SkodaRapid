@@ -1,0 +1,87 @@
+# =============================================================================
+# DriveMate - fixed Romanian texts used by P3 (no LLM involved)
+# =============================================================================
+# Two groups:
+#   fallback:  fixed answers used when the LLM is off, has no key, times out (2.5 s)
+#              or returns nothing valid (plan C9, D1). Used by assistant/fallback.py.
+#   clips:     sentences pre-generated as mp3 by integrations/audio_clips.py so that
+#              critical audio never waits for the network (plan C3, E7).
+#
+# Rules (plan 4.D "Regula de formă"): max ~15 words to the driver, nothing to read.
+# Placeholders in {braces} are filled at runtime:
+#   {driver} {passenger} {child} {contact} {sender} {text} {poi} {km} {task} {name}
+#   {explanation}
+# A missing value is replaced by a neutral word, never by an error.
+#
+# To switch the assistant to English, copy this file to texts.en.yaml, translate it
+# and set `language: en` in assistant.yaml.
+# =============================================================================
+
+fallback:
+  # Scene 1: greeting when the trip starts and the occupants are recognised.
+  trip_start_driver_only: "Salut {driver}. Drum bun!"
+  trip_start_with_passenger: "Salut {driver}. Salut {passenger}."
+
+  # D2: resolving the cause of a distraction (one entry per cause.label).
+  cause:
+    passenger_showing_phone:
+      to_passenger: "{passenger}, poți să-i povestești tu?"
+      to_driver: "{driver}, ochii pe drum."
+    phone: "Lasă telefonul, ți-l citesc eu."
+    incoming_message: "Lasă telefonul, ți-l citesc eu."
+    passenger_talk: "{driver}, ochii pe drum, te ascult și așa."
+    child_activity: "{driver}, mă ocup eu de {child}. Ochii pe drum."
+    default: "{driver}, ochii pe drum, te rog."
+
+  # D3 + D10: fatigue -> keep-awake conversation, starting with the KSS question.
+  fatigue_kss: "{driver}, hai să vorbim puțin. Cât de obosit ești, de la 1 la 9?"
+
+  # D8: disengagement -> energetic music, from the driver's tastes.
+  disengagement_music: "Pare monoton. Pun ceva mai energic, din ce-ți place?"
+  disengagement_no_music: "Pare monoton. Vrei un quiz scurt?"
+  # D8: music refused -> quiz or podcast.
+  media_declined: "Bine. Vrei un quiz scurt sau un podcast?"
+
+  # F2 / F8: a message arrived and P2's timing rule allows it.
+  message_ask: "Mesaj de la {sender}. Îl citesc tare?"
+  message_read_intro: "Mesaj de la {sender}."
+  # F3: dictated reply, waiting for confirmation (shown text is the dictation itself).
+  reply_confirm: "Îi scriu: {text}. Trimit?"
+  reply_confirm_long: "Am notat răspunsul pentru {sender}. Îl trimit?"
+
+  # K3 / D3: the stop chosen by P2's rule, phrased as a question.
+  stop_suggest: "Oprim la {poi} peste {km} km?"
+  stop_suggest_with_task: "Oprim la {poi} peste {km} km? Iei și {task}."
+
+  # D5: one-sentence explanation of an alert (the explanation comes from P2).
+  alert_explain: "Te-am atenționat: {explanation}."
+
+  # D10: the driver refused the assistant ("lasă-mă în pace").
+  refusal_ack: "Ok, te las în pace."
+
+  # Free request the assistant could not handle without the LLM.
+  not_understood: "Scuze, n-am înțeles. Poți repeta?"
+  llm_unavailable: "Acum nu pot face asta. Încearcă puțin mai târziu."
+
+clips:
+  # C3: alarm with the driver's name (one clip per name).
+  alarm_name: "{NAME}!"
+  # C4
+  are_you_ok: "Ești bine?"
+  # C5: fixed instructions for the passenger, by name. Never "grab the wheel".
+  passenger_instructions: "{passenger}, {driver} nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  # C7
+  monitoring_lost: "Nu te mai văd. Monitorizarea e întreruptă."
+  # D10 + C10
+  refusal_ack: "Ok, te las în pace."
+  notify_contact: "Îi dau de veste lui {contact}."
+  # D4: resume after the assistant yielded the floor mid-sentence.
+  resume: "...cum ziceam,"
+  # F2: message deferred by the timing rule.
+  message_deferred: "Ți-l citesc imediat ce e liniște."
+  # Short confirmations (E7).
+  confirm_ok: "Ok."
+  confirm_noted: "Notat."
+  confirm_sent: "Trimis."
+  confirm_done: "Gata."
+  confirm_cancelled: "Bine, am anulat."

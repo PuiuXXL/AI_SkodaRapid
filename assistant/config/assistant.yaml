@@ -1,0 +1,152 @@
+# =============================================================================
+# DriveMate - P3 assistant configuration (LLM + voice + phone)
+# =============================================================================
+# Every threshold, limit and list used by assistant/ lives here, never in code
+# (DriveMate-PLAN-FINAL.md, section 8: "Pragurile stau în fișierele de configurare").
+#
+# Secrets (API key, phone numbers, KDE Connect device id) are NOT here: they live
+# only in the repo-root `.env` file (see `.env.example`).
+#
+# Loaded by assistant/config.py -> get_config().
+# =============================================================================
+
+# Spoken language of the assistant. Selects assistant/config/texts.<language>.yaml
+# and the TTS voices below. Decided after the Friday-night STT/TTS test:
+# "ro" (default) or "en" (fallback if Romanian speech recognition fails).
+language: ro
+
+# -----------------------------------------------------------------------------
+# LLM (plan 4.D / D1, section 6)
+# -----------------------------------------------------------------------------
+llm:
+  # Provider used when LLM_PROVIDER is empty in .env. Only "gemini" is implemented;
+  # "offline" forces the fixed fallback texts (no network at all).
+  default_provider: gemini
+  # Model used when LLM_MODEL is empty in .env. Leave null to require it in .env.
+  # Use a fast "Flash" model (NOT a "Pro" model): the plan needs < 2 s to first speech.
+  default_model: null
+  # Hard deadline for one LLM answer, in seconds (plan C9 / D1: 2.5 s -> fixed text).
+  timeout_s: 2.5
+  # Maximum number of actions accepted from one LLM answer (plan section 6).
+  max_actions: 3
+  # Sampling temperature. Low = predictable, short answers.
+  temperature: 0.4
+  # Upper bound for the generated JSON. Answers are tiny (<= 3 short actions).
+  max_output_tokens: 400
+  # Gemini "thinking" control. Leave BOTH null to use the model's default (tested:
+  # gemini-3.5-flash-lite answers in ~1.4 s with both null). Gemini 3.x models
+  # reject thinking_budget (HTTP 400) and some reject level "minimal"; set at most
+  # one of them only if a model needs it. A rejected value makes every call fail
+  # fast with "llm_error" and the fixed fallback texts are used - check the log.
+  thinking_budget: null
+  thinking_level: null
+
+# -----------------------------------------------------------------------------
+# Speaking rules (plan 4.D "Regula de formă", section 5)
+# -----------------------------------------------------------------------------
+speech:
+  # Maximum words in anything said to the driver (speak.text / ask.question).
+  max_words_to_driver: 15
+  # Maximum words for anything said to a passenger (looser, still short).
+  max_words_to_passenger: 25
+  # Dialog window after a question, in seconds: voice is accepted without the
+  # assistant's name while it is open (plan E1). Core opens it on speak_done.
+  dialog_window_s: 6
+
+# -----------------------------------------------------------------------------
+# Policies (assistant/policies.py; plan "cel mult o intervenție proactivă la 30 s")
+# -----------------------------------------------------------------------------
+policies:
+  # Minimum seconds between two PROACTIVE interventions (ones the driver did not ask for).
+  proactive_min_interval_s: 30
+  # Safety levels at which the LLM is vetoed (plan C8: LLM silent at P0-P2).
+  llm_vetoed_levels: [P0, P1, P2]
+  # Event types that are proactive (rate-limited, blocked while muted / during conversation).
+  proactive_events: [cause_detected, fatigue_high, disengagement_high, media_declined]
+  # Proactive events that are still allowed during an in-car conversation (plan G2:
+  # "cu excepția situațiilor de siguranță sau cauză").
+  allowed_during_conversation: [cause_detected, fatigue_high]
+  # Event types that are always delivered, even while the assistant is muted after
+  # a refusal (plan section 5, rule 8: messages from contacts keep being delivered).
+  allowed_while_muted: [message_received, safe_contact_reply, driver_speech,
+                        message_reply_dictated, stop_reached, trip_start, alert_explain]
+
+# -----------------------------------------------------------------------------
+# Short memory (assistant/memory.py; plan D1 "memorie scurtă")
+# -----------------------------------------------------------------------------
+memory:
+  # How many recent utterances (driver + assistant) are sent to the LLM.
+  turns: 3
+
+# -----------------------------------------------------------------------------
+# Text-to-speech (assistant/tts.py, integrations/audio_clips.py; plan E1, E7)
+# -----------------------------------------------------------------------------
+tts:
+  voices:
+    ro: ro-RO-AlinaNeural      # alternative: ro-RO-EmilNeural
+    en: en-US-AvaMultilingualNeural
+  rate: "+5%"                  # slightly faster than default, keeps sentences short
+  alarm_rate: "+15%"           # alarm clips are urgent
+  # How many synthesized sentences are kept in memory by the /tts router.
+  cache_size: 256
+
+# Pre-generated clips (integrations/audio_clips.py -> dashboard/public/sounds/clips/).
+# Names are used until profiles/<name>/profile.json exists (P4); then profiles win.
+clips:
+  output_dir: dashboard/public/sounds/clips
+  # People that get a personal alarm clip ("ANDREI!") and passenger instructions.
+  names: [Andrei, Maria, Ioana, Mihai]
+  # Trusted / emergency contacts that get "Îi dau de veste lui {contact}."
+  contact_names: [Mihai]
+
+# -----------------------------------------------------------------------------
+# Music recommendation (assistant/music.py; plan D8)
+# -----------------------------------------------------------------------------
+music:
+  catalog: assistant/data/media_catalog.json
+  media_dir: assistant/data/media        # mp3 files, gitignored, shared between us
+  # Minimum energy (1-5) for a track proposed against disengagement (D).
+  min_energy_for_disengagement: 4
+  # Genres used when the driver profile has no music preferences.
+  default_genres: [pop, rock, electronic]
+  # Playback volume (0-1): normal, and when the front passenger is asleep (plan G3).
+  volume_normal: 0.6
+  volume_passenger_asleep: 0.25
+  # How many candidate tracks are shown to the LLM to choose from.
+  candidates_for_llm: 5
+
+# -----------------------------------------------------------------------------
+# Reminders (plan K1 / D9)
+# -----------------------------------------------------------------------------
+reminders:
+  # Valid POI categories for create_reminder. TEMPORARY copy of the categories in
+  # simulator/stops.json (P4); when that file exists, its categories are used instead.
+  poi_categories: [fuel, cafe, pharmacy, supermarket, auto_parts]
+  trigger_types: [stop_at_category]
+
+# -----------------------------------------------------------------------------
+# Preferences the driver can change by voice (set_preference, plan section 6)
+# -----------------------------------------------------------------------------
+preferences:
+  # key: [min, max] for numbers, or a list of allowed values.
+  volume: [0.0, 1.0]
+  talkativeness: [low, normal, high]
+  music_genre: [pop, rock, electronic, jazz, classical, lofi, acoustic, dance, hiphop, kids]
+
+# -----------------------------------------------------------------------------
+# Phone bridge (integrations/phone_bridge.py; plan F1, F3, F8)
+# -----------------------------------------------------------------------------
+phone:
+  # Android app names (as reported by KDE Connect) -> app code used in the contract.
+  app_whitelist:
+    WhatsApp: whatsapp
+    Messages: sms
+    Mesaje: sms
+    "Google Messages": sms
+    "Samsung Messages": sms
+  # Senders accepted from whitelisted apps. ["*"] = everyone.
+  contact_whitelist: ["*"]
+  # Seconds between two battery / connection status reports to core.
+  status_interval_s: 30
+  # Seconds before retrying when core or the phone is unreachable.
+  reconnect_s: 3
