@@ -1,0 +1,9 @@
+# P1 perception: development tools (lint, types, tests, model export, reading the organizers' deck).
+pytest>=8
+ruff>=0.8
+mypy>=1.13
+python-pptx>=1.0
+types-PyYAML
+types-psutil
+onnx>=1.17          # tiny test models + YOLO ONNX export
+onnxslim>=0.1.40    # used by the Ultralytics ONNX export

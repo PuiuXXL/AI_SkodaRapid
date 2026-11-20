@@ -1,0 +1,39 @@
+# Tool configuration only (no packaging). Scoped to P1 perception for now.
+# Other modules can add their paths to `include` / `files` when they adopt ruff / mypy.
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+include = [
+    "perception/**/*.py",
+    "tests/perception/**/*.py",
+    "scripts/benchmark.py",
+    "scripts/preview.py",
+    "scripts/label_session.py",
+    "scripts/enroll_face.py",
+    "scripts/calibrate.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["perception"]
+
+[tool.mypy]
+python_version = "3.11"
+# Add scripts/enroll_face.py and scripts/calibrate.py here once they exist.
+files = ["perception", "tests/perception", "scripts/benchmark.py", "scripts/preview.py", "scripts/label_session.py"]
+strict = true
+explicit_package_bases = true  # tests/ has no __init__.py: name modules from the repo root (tests.perception.*)
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["cv2", "cv2.*", "mediapipe", "mediapipe.*", "ultralytics", "ultralytics.*", "onnxruntime", "onnxruntime.*", "openvino", "openvino.*", "onnx", "onnx.*"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
