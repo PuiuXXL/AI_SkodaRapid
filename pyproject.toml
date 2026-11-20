@@ -9,6 +9,7 @@ include = [
     "tests/perception/**/*.py",
     "scripts/benchmark.py",
     "scripts/preview.py",
+    "scripts/label_session.py",
     "scripts/enroll_face.py",
     "scripts/calibrate.py",
 ]
@@ -22,8 +23,9 @@ known-first-party = ["perception"]
 [tool.mypy]
 python_version = "3.11"
 # Add scripts/enroll_face.py and scripts/calibrate.py here once they exist.
-files = ["perception", "tests/perception", "scripts/benchmark.py", "scripts/preview.py"]
+files = ["perception", "tests/perception", "scripts/benchmark.py", "scripts/preview.py", "scripts/label_session.py"]
 strict = true
+explicit_package_bases = true  # tests/ has no __init__.py: name modules from the repo root (tests.perception.*)
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 
