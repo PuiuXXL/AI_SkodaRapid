@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "Media catalog for music recommendation (plan D8). Read by assistant/music.py.",
+    "Each track: id (stable, used in actions and in /media/<id>.mp3), title, artist, genre,",
+    "energy 1-5 (1 calm, 5 very energetic), kid_safe (true = ok with a child on board),",
+    "file (mp3 in assistant/data/media/, gitignored - share the files outside git), source URL, license.",
+    "Disengagement (D) proposals use energy >= music.min_energy_for_disengagement (assistant.yaml, default 4):",
+    "with this catalog that means pop1, rock1, rock2.",
+    "TODO: fill in title / artist / source for each file (needed for the licence record and spoken titles).",
+    "No kid_safe track yet: with a child on board the assistant offers a quiz instead of music."
+  ],
+  "tracks": [
+    {"id": "lofi1", "title": "Lofi 1", "artist": "", "genre": "lofi", "energy": 1, "kid_safe": false,
+     "file": "lofi1.mp3", "source": "TODO", "license": "Pixabay Content License"},
+    {"id": "lofi2", "title": "Lofi 2", "artist": "", "genre": "lofi", "energy": 2, "kid_safe": false,
+     "file": "lofi2.mp3", "source": "TODO", "license": "Pixabay Content License"},
+    {"id": "pop1", "title": "Pop 1", "artist": "", "genre": "pop", "energy": 4, "kid_safe": false,
+     "file": "pop1.mp3", "source": "TODO", "license": "Pixabay Content License"},
+    {"id": "pop2", "title": "Pop 2", "artist": "", "genre": "pop", "energy": 3, "kid_safe": false,
+     "file": "pop2.mp3", "source": "TODO", "license": "Pixabay Content License"},
+    {"id": "rock1", "title": "Rock 1", "artist": "", "genre": "rock", "energy": 5, "kid_safe": false,
+     "file": "rock1.mp3", "source": "TODO", "license": "Pixabay Content License"},
+    {"id": "rock2", "title": "Rock 2", "artist": "", "genre": "rock", "energy": 4, "kid_safe": false,
+     "file": "rock2.mp3", "source": "TODO", "license": "Pixabay Content License"}
+  ]
+}
