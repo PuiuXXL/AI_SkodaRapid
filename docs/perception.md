@@ -59,7 +59,31 @@ Perception turns the two cameras into a `PerceptionFrame` stream at 15 Hz. **P1 
   **The driver face is never degraded.**
 
 Inside each camera process, capture runs in its own thread and keeps **only the latest frame**
-(`CAP_PROP_BUFFERSIZE=1`, MJPG fourcc), stamped with `time.perf_counter()`.
+(`CAP_PROP_BUFFERSIZE=1`, MJPG fourcc), stamped with `time.perf_counter()`
+([`perception/capture.py`](../perception/capture.py), `LatestFrameCamera`):
+- `wait_new(last_id, timeout)` never hands the same frame twice to a consumer;
+- `dropped` counts frames replaced before anyone consumed them; `capture_fps` is measured over a 1 s window;
+- the obtained format, size and fps are logged (and a warning when they differ from the request);
+- after `max_read_failures` consecutive failed reads the camera is closed and reopened every `reconnect_s`;
+- the source is behind a `FrameSource` interface: `OpenCVSource` (real camera) or `SyntheticSource` (tests, CI,
+  `--synthetic`), so the capture logic is tested without a camera.
+- **Backend:** from yaml; `auto` = `CAP_V4L2` on Linux, `CAP_DSHOW` on Windows (DSHOW honours MJPG + 720p;
+  MSMF often ignores the FOURCC).
+
+### 2.1 Camera controls (fixed exposure, focus, white balance, 50 Hz)
+
+`cameras.<name>.controls` in yaml, applied by `scripts/camera_setup.sh` (Linux, `v4l2-ctl`; unsupported controls are
+skipped with a message) or, on Windows, best-effort by `capture.py` through OpenCV properties.
+
+| Control | Value | Why |
+|---|---|---|
+| `power_line_hz` | 50 | EU mains: removes 100 Hz flicker banding under venue LEDs / fluorescents (Linux only; OpenCV cannot set it on Windows). |
+| `autofocus` | off | No focus hunting when the head moves; landmarks stay sharp. |
+| `auto_exposure` | off, `exposure_ms` 16 | Auto-exposure "pumps" when the head turns or a hand passes, which changes EAR and landmark positions between frames. 16 ms is under the 33 ms frame period and limits motion blur. Needs our own lamp. |
+| `auto_white_balance` | off, 4600 K | Stable colours for the detectors; tuned in the venue. |
+
+Lighting is the factor that hurts vision-based driver monitoring most (see the 100-Driver results in
+[§11](#11-research-basis)), so we fix what we can at the camera instead of compensating later.
 
 ## 3. Detectors
 
@@ -141,10 +165,18 @@ Inside each camera process, capture runs in its own thread and keeps **only the 
 
 ## 4. Inference runtime
 
-- `perception/runtime.py` wraps **ONNX Runtime**, picking the first available execution provider:
-  **CUDA → OpenVINO → CPU** (the order is set in yaml).
-  - The ONNX models (MobileGaze, YuNet/SFace, the YOLO exports) all go through it.
-  - MediaPipe runs its own TFLite runtime.
+- `perception/runtime.py` (`OnnxModel`) picks the first provider that works: **CUDA → OpenVINO → CPU** (the order
+  is set in yaml, `models.onnx_providers`). A provider that fails to initialize is skipped with a warning; ORT's silent
+  fallback to CPU is detected and treated as a failure, so the reported provider is always the one really used.
+  - **CUDA:** `onnxruntime-gpu` with the CUDA/cuDNN libraries from pip (`requirements/p1-gpu.txt`).
+  - **OpenVINO:** ORT's OpenVINO EP if that build is installed, otherwise the **native `openvino` runtime** on the
+    same `.onnx`. `onnxruntime-gpu` and `onnxruntime-openvino` are separate wheels that cannot coexist, so native
+    OpenVINO is how one environment gets both.
+  - The ONNX models (MobileGaze, the YOLO exports) go through it. YuNet/SFace run in OpenCV DNN; MediaPipe runs its
+    own TFLite runtime.
+- `OnnxModel.run()` is **inference only**. Pre-processing (`perception/preprocess.py`: letterbox, gaze input) and
+  post-processing (`perception/postprocess.py`: YOLO26 NMS-free decoding, gaze bins → degrees) are separate functions,
+  timed separately by the benchmark.
 - **Why ONNX / TFLite:** both formats can be moved to automotive hardware and quantized (INT8) without rewriting the
   pipeline. That is the bridge to section 7.
 - Warm-up at start-up: one inference per model, before the first frame is published.
@@ -193,6 +225,7 @@ The demo runs on a laptop webcam and a phone. A production version of the same p
 
 | Topic | `roluri/P1-computer-vision.md` / plan §8 | Decision here | Reason |
 |---|---|---|---|
+| Capture backend | `cv2.VideoCapture(CAP_V4L2)` | **backend from yaml, `auto` = V4L2 on Linux / DSHOW on Windows**; camera controls via `camera_setup.sh` (Linux) or OpenCV properties (Windows) | The team tests on Windows and Linux laptops; the demo laptop is not fixed yet. |
 | Concurrency | one capture thread per camera | **one process per camera** + an asyncio main process | GIL contention between the two cameras and networking; a passenger-camera crash must not stop the driver. |
 | Face Landmarker input | crop from the previous landmarks, ×1.6 | **full frame**, VIDEO mode | MediaPipe already tracks the face in VIDEO mode; a manual crop can cut the face during fast turns. |
 | Eye-state filter | EMA + hysteresis at fixed 0.18 / 0.23 + 300 ms minimum duration | **median over 3 frames + hysteresis relative to a personal baseline + ≥ 2 frames** | EMA and a 300 ms minimum erase 100–300 ms blinks; fixed thresholds do not fit different eyes or angles. |
@@ -227,3 +260,63 @@ Until P2 decides, `driver.eyes.microsleep` stays `false` from P1.
   (see the commented command in `requirements/p1-perception.txt`). `onnxruntime-gpu` needs matching CUDA 12 and cuDNN 9.
 - **DroidCam on Windows** shows up as a virtual webcam (a device index), not as `/dev/videoN`; set the index in yaml.
 - **Lighting in the venue:** use our own lamp on the driver; recalibrate on the final setup on Sunday.
+
+## 11. Research basis
+
+The two papers in `docs/` and what they change for us. (The PDFs are reference copies for the team; check their
+licences before keeping them in the public repo.)
+
+### Ersoy, Tatar, Tonbul, Kırbız: "Improving Driver Drowsiness Detection via Personalized EAR/MAR Thresholds and CNN-Based Classification" (MEF University, arXiv 2604.22479, 2026)
+
+What they did: MediaPipe Face Mesh landmarks → EAR, MAR, PERCLOS, head-down; a **5 s calibration** with a neutral face
+gives the driver's baseline; thresholds **EAR < 0.75 × baseline**, **MAR > 1.40 × baseline**; compared with fixed
+thresholds and with two small CNNs (64×64 eye / mouth crops, CLAHE).
+
+| Result | Fixed threshold | Personalized | CNN |
+|---|---|---|---|
+| Eye state accuracy | 91.70% | 93.23% | 99.10% |
+| Open eyes classified as open | 89.0% | **98.9%** | |
+| Yawn detection (yawn class) | 92.5% | **98.4%** | 98.8% (overall) |
+
+What it means for P1:
+- **Relative EAR thresholds are confirmed.** The big gain is on *open* eyes (89.0% → 98.9%): fewer open eyes read as
+  closed means **fewer false alarms**, which is our main goal. Their single 0.75 sits inside our hysteresis band
+  (`k_close` 0.65 / `k_open` 0.80).
+- Our baseline is a high percentile over `baseline_window_s` (10 s) instead of a 5 s mean, so blinks during
+  calibration do not lower it.
+- They average over 15 frames before warning. **We do not smooth that much in perception**: it would erase the
+  100–300 ms blinks whose duration P2 uses. Decision-level smoothing belongs to P2.
+- **Upgrade path:** a small CNN on eye crops (99.1%, with CLAHE) for low light or partial occlusion, behind
+  `eyes.reliable`. Not in the M scope.
+- Yawn: we use the `jawOpen` blendshape (≈ 0 at rest), so a ratio to the baseline is not meaningful; we keep an
+  absolute threshold plus a minimum duration.
+
+### Wang, Li, Li, Zhang, Wu, Zhong, Sebe: "100-Driver: A Large-scale, Diverse Dataset for Distracted Driver Classification" (IEEE T-ITS)
+
+What they did: 470k images, 100 drivers, 5 vehicles, 4 camera views (front-left, front, front-right, side-right),
+RGB by day and NIR by night, 22 classes (including talk/text on the phone, left and right); six CNN backbones.
+
+| Finding | Number |
+|---|---|
+| Same camera, train/test split by driver (Table IV) | ~53–83% accuracy; best views front-left and side-right; night lower than day |
+| Cross-view, trained on one camera, tested on another (Table VI) | ~3–52%; front-left → side-right only ~4–7% |
+| Cross-vehicle, sedan → van (Table VII) | ~0–33% |
+| Cross-modality, day RGB → night NIR (Table IX) | ~4–33%; domain adaptation brings it to ~28–74% (Table X) |
+| "Normal driving" class | below 90% in all settings |
+| Two-camera fusion (Table V) | up to +8.5 pp; three or four cameras add little or hurt |
+
+What it means for P1:
+- **No whole-image "distracted / not distracted" classifier.** Such models collapse when the camera position, the
+  car or the lighting changes, and "normal driving" is their weakest class (false alarms). We use **geometry from
+  landmarks + per-driver calibration + a generic COCO phone detector**, and we **recalibrate on the final mount**.
+- **Camera placement:** front / front-left of the driver gives the best facial cues (yawning is recognised best from
+  the front-left view). Keep the laptop webcam in front of the driver, not off to the side.
+- **Lighting and modality matter more than the model.** Hence the fixed camera controls (§2.1), our own lamp for the
+  demo, and NIR for a real car (§7).
+- **Phone left / right:** the dataset separates talking and texting on each side, which supports the `phone.side` and
+  `phone.near_face` fields we propose (§9).
+- **Two cameras:** fusing two views helps, but more cameras give diminishing returns. Our two cameras have a
+  different job (driver + passenger), so we use this only as a general argument, not as a measured claim about our setup.
+- The paper quotes the 100-Car study: ~80% of crashes and 65% of near-crashes involved looking away from the forward
+  roadway; drowsiness contributed to 12% of crashes and 10% of near-crashes. **Check the primary 100-Car source before
+  putting these numbers on a slide.**
