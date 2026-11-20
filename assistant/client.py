@@ -1,0 +1,310 @@
+"""The assistant's main entry point: events -> actions (plan D1, roluri/P3 step 2).
+
+Core calls (same process)::
+
+    from assistant.client import handle_event
+    actions = await handle_event(event, state)
+
+Pipeline for one event:
+
+1. **Policies** (``assistant/policies.py``): safety veto, muted, conversation, rate
+   limit. Blocked -> ``[stay_silent(reason)]`` immediately, no LLM call.
+2. **Deterministic events**: ``driver_refused`` never goes to the LLM (plan D10).
+3. **LLM off?** No key / model, or the director switched it off
+   (``safety.llm_enabled = False``, plan C6) -> fixed fallback texts.
+4. **LLM call** with the state summary, streamed, under a hard deadline of
+   ``llm.timeout_s`` (2.5 s). Each complete ``speak`` / ``ask`` action that arrives
+   while streaming is validated and handed to ``on_early_speech`` so TTS can start
+   before the answer is finished (plan D1, section 8 rule 7).
+5. **Validation** (``assistant/actions.py``). If nothing valid survives, or on
+   timeout / error -> fixed fallback texts (plan C9).
+
+Every answer is described in :attr:`AssistantClient.last_result` (source LLM/RULE,
+latency, rejected actions) so core can show it in the event log (plan H3, J1).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import re
+import time
+from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Callable, Optional
+
+from assistant import actions as actions_mod
+from assistant import fallback
+from assistant.contract import Action, Event, State
+from assistant.llm import LLMError, LLMProvider, make_provider
+from assistant.memory import ShortMemory
+from assistant.policies import Policies
+from assistant.settings import cfg
+from assistant.summary import summarize
+
+log = logging.getLogger("drivemate.assistant.client")
+
+#: Callback for speech that is ready while the LLM is still streaming.
+EarlySpeechCallback = Callable[[Action], None]
+
+_PROMPT_FILE = Path(__file__).resolve().parent / "prompts" / "system.md"
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_LANGUAGE_NAMES = {"ro": "Romanian", "en": "English"}
+
+#: Events answered without the LLM even when it is available.
+DETERMINISTIC_EVENTS = frozenset({"driver_refused"})
+
+
+@lru_cache(maxsize=1)
+def system_prompt() -> str:
+    """Load ``prompts/system.md``, drop HTML comments and fill the placeholders.
+
+    Returns:
+        The system prompt sent with every LLM request.
+    """
+    text = _HTML_COMMENT.sub("", _PROMPT_FILE.read_text(encoding="utf-8")).strip()
+    language = cfg("language", default="ro")
+    return (
+        text.replace("{language_name}", _LANGUAGE_NAMES.get(language, language))
+        .replace("{max_words}", str(cfg("speech", "max_words_to_driver", default=15)))
+    )
+
+
+@dataclass
+class AnswerInfo:
+    """Description of the last answer, for core's event log and the perf panel.
+
+    Attributes:
+        event_type: The event answered.
+        source: ``"LLM"`` or ``"RULE"`` (fallback / policy / deterministic).
+        reason: Why RULE was used (``"policy:muted"``, ``"timeout"``, ``"no_llm"``,
+            ``"llm_disabled"``, ``"all_rejected"``, ``"llm_error"``, ``"invalid_json"``,
+            ``"deterministic"``) or ``"ok"``.
+        latency_ms: Total time spent in :meth:`AssistantClient.handle_event`.
+        llm_ttft_ms: Time to the first LLM chunk (plan J1 ``llm_ttft_ms``).
+        llm_total_ms: Time to the complete LLM answer (``llm_total_ms``).
+        rejected: ``(raw_action, reason)`` pairs rejected by validation.
+    """
+
+    event_type: str = ""
+    source: str = "RULE"
+    reason: str = "ok"
+    latency_ms: float = 0.0
+    llm_ttft_ms: Optional[float] = None
+    llm_total_ms: Optional[float] = None
+    rejected: list[tuple[Any, str]] = field(default_factory=list)
+
+
+class _StreamWatcher:
+    """Finds complete action objects in a partially streamed ``{"actions": [...]}``.
+
+    Each time the accumulated text grows, :meth:`feed` decodes any newly completed
+    action object. Valid ``speak`` / ``ask`` actions are passed to the callback
+    (at most ``llm.max_actions``, in order) and their indexes remembered.
+    """
+
+    def __init__(self, state: State, event: Event, callback: EarlySpeechCallback) -> None:
+        self._state = state
+        self._event = event
+        self._callback = callback
+        self._decoder = json.JSONDecoder()
+        self._pos: Optional[int] = None  # parse position inside the actions array
+        self._index = 0                  # index of the next action object
+        self.streamed: set[int] = set()  # indexes already handed to TTS
+
+    def feed(self, text: str) -> None:
+        """Process the accumulated text (called after every streamed chunk)."""
+        if self._pos is None:
+            match = re.search(r'"actions"\s*:\s*\[', text)
+            if not match:
+                return
+            self._pos = match.end()
+        max_actions = int(cfg("llm", "max_actions", default=3))
+        while self._index < max_actions:
+            pos = self._pos
+            while pos < len(text) and text[pos] in " \t\r\n,":
+                pos += 1
+            if pos >= len(text) or text[pos] != "{":
+                return
+            try:
+                obj, end = self._decoder.raw_decode(text, pos)
+            except ValueError:
+                return  # object not complete yet
+            self._pos = end
+            index = self._index
+            self._index += 1
+            if isinstance(obj, dict) and obj.get("type") in ("speak", "ask"):
+                checked = actions_mod.validate_actions([obj], self._state, self._event, source="LLM")
+                if checked.accepted:
+                    self.streamed.add(index)
+                    try:
+                        self._callback(checked.accepted[0].model_copy(update={"streamed": True}))
+                    except Exception:  # noqa: BLE001 - a UI callback must never break the answer
+                        log.exception("on_early_speech callback failed")
+
+
+class AssistantClient:
+    """Stateful assistant: provider, policies and short memory for one trip."""
+
+    def __init__(self, provider: Optional[LLMProvider] = None) -> None:
+        """Create the client.
+
+        Args:
+            provider: LLM provider (tests inject fakes); defaults to
+                :func:`assistant.llm.make_provider` (Gemini or offline).
+        """
+        self.provider: LLMProvider = provider or make_provider()
+        self.policies = Policies()
+        self.memory = ShortMemory()
+        self.last_result = AnswerInfo()
+
+    async def handle_event(
+        self,
+        event: Event | dict,
+        state: State | dict,
+        on_early_speech: Optional[EarlySpeechCallback] = None,
+        now: Optional[float] = None,
+    ) -> list[Action]:
+        """Turn one event into validated actions (see module docstring for the pipeline).
+
+        Args:
+            event: The event (model or plain dict).
+            state: The current state (model or plain dict).
+            on_early_speech: Optional callback for ``speak`` / ``ask`` actions that are
+                ready while the LLM is still streaming; such actions are returned again
+                in the final list with ``streamed=True`` so core does not repeat them.
+            now: Current Unix time (tests); defaults to ``time.time()``.
+
+        Returns:
+            At most ``llm.max_actions`` validated actions. Never raises.
+        """
+        started = time.perf_counter()
+        now = time.time() if now is None else now
+        event = event if isinstance(event, Event) else Event.model_validate(event)
+        state = state if isinstance(state, State) else State.model_validate(state)
+        info = AnswerInfo(event_type=event.type)
+
+        if event.type in ("driver_speech", "passenger_speech"):
+            speaker = "driver" if event.type == "driver_speech" else "passenger"
+            self.memory.add(speaker, str(event.data.get("text", "")), now)
+
+        decision = self.policies.check(event, state, now)
+        if not decision.allowed:
+            info.reason = f"policy:{decision.reason}"
+            result = [fallback.silent(decision.reason)]
+        elif event.type in DETERMINISTIC_EVENTS:
+            info.reason = "deterministic"
+            result = self._fallback(event, state, info)
+        elif not self.provider.available:
+            info.reason = "no_llm"
+            result = self._fallback(event, state, info)
+        elif not state.safety.llm_enabled:
+            info.reason = "llm_disabled"
+            result = self._fallback(event, state, info)
+        else:
+            result = await self._ask_llm(event, state, info, on_early_speech)
+
+        if any(a.type != "stay_silent" for a in result):
+            self.policies.record(event, now)
+        for action in result:
+            spoken = action.text if action.type == "speak" else action.question if action.type == "ask" else None
+            if spoken:
+                self.memory.add("assistant", spoken, now)
+
+        info.latency_ms = (time.perf_counter() - started) * 1000
+        self.last_result = info
+        log.info("event=%s source=%s reason=%s latency=%.0fms actions=%s",
+                 event.type, info.source, info.reason, info.latency_ms, [a.type for a in result])
+        return result
+
+    async def _ask_llm(
+        self, event: Event, state: State, info: AnswerInfo, on_early_speech: Optional[EarlySpeechCallback]
+    ) -> list[Action]:
+        """Call the LLM under the deadline, validate, fall back when needed."""
+        watcher = _StreamWatcher(state, event, on_early_speech) if on_early_speech else None
+        user = summarize(state, event, self.memory.recent())
+        timeout = float(cfg("llm", "timeout_s", default=2.5))
+        try:
+            llm = await asyncio.wait_for(
+                self.provider.generate(system_prompt(), user, watcher.feed if watcher else None),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            info.reason = "timeout"
+            log.warning("LLM timeout after %.1fs on %s; using fallback.", timeout, event.type)
+            return self._fallback(event, state, info, skip_speech=bool(watcher and watcher.streamed))
+        except LLMError as exc:
+            info.reason = "llm_error"
+            log.warning("LLM error on %s: %s; using fallback.", event.type, exc)
+            return self._fallback(event, state, info)
+
+        info.llm_ttft_ms, info.llm_total_ms = llm.ttft_ms, llm.total_ms
+        try:
+            payload = json.loads(llm.text)
+            raw_actions = payload.get("actions", []) if isinstance(payload, dict) else []
+        except ValueError:
+            info.reason = "invalid_json"
+            log.warning("LLM returned invalid JSON on %s: %r", event.type, llm.text[:200])
+            return self._fallback(event, state, info)
+
+        checked = actions_mod.validate_actions(raw_actions, state, event, source="LLM")
+        info.rejected = [(r.raw, r.reason) for r in checked.rejected]
+        if not checked.accepted:
+            if raw_actions:  # the LLM wanted to act but nothing was valid
+                info.reason = "all_rejected"
+                return self._fallback(event, state, info)
+            info.source = "LLM"
+            return [Action(type="stay_silent", reason="nothing_to_add", source="LLM")]
+
+        info.source = "LLM"
+        if watcher and watcher.streamed:
+            # Mark the actions already handed to TTS while streaming (same raw index).
+            return [
+                action.model_copy(update={"streamed": True}) if index in watcher.streamed else action
+                for action, index in zip(checked.accepted, checked.accepted_indexes)
+            ]
+        return checked.accepted
+
+    def _fallback(self, event: Event, state: State, info: AnswerInfo, skip_speech: bool = False) -> list[Action]:
+        """Fixed answer for ``event`` (validated, ``source="RULE"``).
+
+        Args:
+            skip_speech: True when the LLM already spoke during streaming before the
+                timeout; spoken fallback actions are then dropped to avoid repeating.
+        """
+        info.source = "RULE"
+        raw = fallback.build_fallback(event, state)
+        checked = actions_mod.validate_actions(raw, state, event, source="RULE")
+        info.rejected.extend((r.raw, r.reason) for r in checked.rejected)
+        result = checked.accepted
+        if skip_speech:
+            result = [a for a in result if a.type not in ("speak", "ask")]
+        return result
+
+    def reset(self) -> None:
+        """New trip / director reset: forget memory and the rate-limit clock."""
+        self.memory.clear()
+        self.policies.reset()
+
+
+_client: Optional[AssistantClient] = None
+
+
+def get_client() -> AssistantClient:
+    """Return the process-wide :class:`AssistantClient` (created on first use)."""
+    global _client
+    if _client is None:
+        _client = AssistantClient()
+    return _client
+
+
+async def handle_event(
+    event: Event | dict, state: State | dict, on_early_speech: Optional[EarlySpeechCallback] = None
+) -> list[Action]:
+    """Interface for core (plan section 13): ``handle_event(event, state) -> list[Action]``.
+
+    Thin wrapper around :meth:`AssistantClient.handle_event` on the shared client.
+    """
+    return await get_client().handle_event(event, state, on_early_speech)
