@@ -55,10 +55,20 @@ models:
   phone_cpu: { weights: yolo26n.pt, imgsz: 416 }
   phone_gpu: { weights: yolo26s.pt, imgsz: 640 }
   pose: yolo26n-pose.pt        # only for rear_seat (S feature)
-  onnx_providers:              # tried in order, the first available wins
+  onnx_providers:              # tried in order, the first available wins (YOLO26s on the GPU)
     - CUDAExecutionProvider
     - OpenVINOExecutionProvider
     - CPUExecutionProvider
+  gaze_providers:              # MobileGaze is small: CUDA adds jitter (p95 15.4 vs 8.2 ms, docs/benchmark/)
+    - OpenVINOExecutionProvider
+    - CPUExecutionProvider
+
+face:                          # MediaPipe Face Landmarker, rules R-FL1..R-FL5 in docs/perception.md
+  num_faces: 1                 # R-FL1: one face per camera (internal tracking/smoothing needs it)
+  min_detection_conf: 0.5      # R-FL2
+  min_presence_conf: 0.5       # R-FL2
+  min_tracking_conf: 0.6       # R-FL2
+  min_face_width_px: 250       # R-FL3: narrower face -> face_too_small + reduced confidence
 
 rates:
   driver_face_every_frame: true  # the driver face is never degraded
@@ -79,6 +89,8 @@ eyes:
   min_state_frames: 2          # frames needed to accept a state change. No 300 ms minimum
   blink_max_ms: 500            # closures longer than this are reported as closures, not blinks
   blendshape_closed: 0.55      # eyeBlinkLeft/Right above this supports "closed"
+  squint_threshold: 0.55       # R-FL4: eyeSquintLeft/Right at or above this ...
+  squint_ear_band: [0.50, 0.80]  # ... with EAR/baseline inside this band = squinting, NOT closed (no PERCLOS)
   perclos_window_s: 60
 
 yawn:
@@ -142,8 +154,6 @@ filters:
     min_cutoff: 1.0            # Hz; lower = smoother at rest
     beta: 0.05                 # higher = less lag on fast moves
     d_cutoff: 1.0
-  min_detection_conf: 0.5      # MediaPipe face detection
-  min_tracking_conf: 0.5       # MediaPipe face tracking
   unknown_below_conf: 0.5      # any output below this confidence is reported as unknown
 
 output:

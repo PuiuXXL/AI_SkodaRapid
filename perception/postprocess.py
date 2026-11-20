@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -11,7 +11,7 @@ import numpy.typing as npt
 
 from perception.preprocess import LetterboxMeta
 
-__all__ = ["Detection", "gaze_angles", "yolo26_detections"]
+__all__ = ["Detection", "gaze_angles", "gaze_from_outputs", "yolo26_detections"]
 
 
 @dataclass(frozen=True)
@@ -83,3 +83,14 @@ def gaze_angles(
         float(np.sum(pitch * idx) * bin_width - angle_offset),
         float(np.sum(yaw * np.arange(yaw.size, dtype=np.float64)) * bin_width - angle_offset),
     )
+
+
+def gaze_from_outputs(output_names: Sequence[str], outputs: Sequence[npt.NDArray[Any]]) -> tuple[float, float]:
+    """(pitch, yaw) in degrees from MobileGaze outputs, picked **by name**.
+
+    The released ONNX names them ``yaw`` and ``pitch`` in that order; relying on positions would swap them.
+    """
+    names = list(output_names)
+    if "pitch" not in names or "yaw" not in names:
+        raise ValueError(f"MobileGaze outputs must be named 'pitch' and 'yaw', got {names}")
+    return gaze_angles(outputs[names.index("pitch")], outputs[names.index("yaw")])

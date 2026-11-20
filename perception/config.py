@@ -117,19 +117,32 @@ class ModelsConfig(_Section):
     phone_gpu: YoloVariant
     pose: str
     onnx_providers: Annotated[list[OnnxProvider], Field(min_length=1)]
+    gaze_providers: Annotated[list[OnnxProvider], Field(min_length=1)]
 
     @model_validator(mode="after")
     def _cpu_fallback(self) -> Self:
-        if len(set(self.onnx_providers)) != len(self.onnx_providers):
-            raise ValueError("models.onnx_providers contains duplicates")
-        if self.onnx_providers[-1] != "CPUExecutionProvider":
-            raise ValueError("models.onnx_providers must end with CPUExecutionProvider (always-available fallback)")
+        for key, providers in (("onnx_providers", self.onnx_providers), ("gaze_providers", self.gaze_providers)):
+            if len(set(providers)) != len(providers):
+                raise ValueError(f"models.{key} contains duplicates")
+            if providers[-1] != "CPUExecutionProvider":
+                raise ValueError(f"models.{key} must end with CPUExecutionProvider (always-available fallback)")
         return self
 
     def path(self, filename: str) -> Path:
         """Absolute path of a model file; ``dir`` is relative to the repo root unless absolute."""
         base = self.dir if self.dir.is_absolute() else REPO_ROOT / self.dir
         return base / filename
+
+
+# --- face (MediaPipe Face Landmarker, rules R-FL1..R-FL5 in docs/perception.md) ------------------------
+
+
+class FaceConfig(_Section):
+    num_faces: Literal[1]  # R-FL1: internal tracking/smoothing only works with one face
+    min_detection_conf: Fraction  # R-FL2
+    min_presence_conf: Fraction  # R-FL2
+    min_tracking_conf: Fraction  # R-FL2
+    min_face_width_px: Annotated[int, Field(ge=50, le=2000)]  # R-FL3
 
 
 # --- rates ---------------------------------------------------------------------------------------------
@@ -158,6 +171,8 @@ class EyesConfig(_Section):
     min_state_frames: Annotated[int, Field(ge=1, le=10)]
     blink_max_ms: PositiveInt
     blendshape_closed: Fraction
+    squint_threshold: Fraction  # R-FL4
+    squint_ear_band: Annotated[list[Annotated[float, Field(gt=0, lt=1)]], Field(min_length=2, max_length=2)]
     perclos_window_s: PositiveFloat
 
     @model_validator(mode="after")
@@ -166,6 +181,9 @@ class EyesConfig(_Section):
             raise ValueError("eyes.k_close must be lower than eyes.k_open (hysteresis band)")
         if self.median_frames % 2 == 0:
             raise ValueError("eyes.median_frames must be odd")
+        low, high = self.squint_ear_band
+        if low >= high:
+            raise ValueError("eyes.squint_ear_band must be [low, high] with low < high (fractions of the EAR baseline)")
         return self
 
 
@@ -264,8 +282,6 @@ class OneEuroConfig(_Section):
 
 class FiltersConfig(_Section):
     one_euro: OneEuroConfig
-    min_detection_conf: Fraction
-    min_tracking_conf: Fraction
     unknown_below_conf: Fraction
 
 
@@ -285,6 +301,7 @@ class OutputConfig(_Section):
 class PerceptionConfig(_Section):
     cameras: CamerasConfig
     models: ModelsConfig
+    face: FaceConfig
     rates: RatesConfig
     eyes: EyesConfig
     yawn: YawnConfig

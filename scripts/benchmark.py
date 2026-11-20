@@ -41,7 +41,7 @@ from perception.capture import CaptureInfo, Frame, LatestFrameCamera, SyntheticS
 from perception.config import REPO_ROOT, PerceptionConfig, load_config
 from perception.log import configure_logging
 from perception.perf import percentile
-from perception.postprocess import gaze_angles, yolo26_detections
+from perception.postprocess import gaze_from_outputs, yolo26_detections
 from perception.preprocess import crop_box, gaze_input, letterbox
 from perception.runtime import DEFAULT_PROVIDER_ORDER, OnnxModel, available_providers
 
@@ -127,9 +127,10 @@ def make_face_landmarker(cfg: PerceptionConfig) -> Any:
     options = vision.FaceLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=str(cfg.models.path(cfg.models.face_landmarker))),
         running_mode=vision.RunningMode.VIDEO,
-        num_faces=1,
-        min_face_detection_confidence=cfg.filters.min_detection_conf,
-        min_tracking_confidence=cfg.filters.min_tracking_conf,
+        num_faces=cfg.face.num_faces,
+        min_face_detection_confidence=cfg.face.min_detection_conf,
+        min_face_presence_confidence=cfg.face.min_presence_conf,
+        min_tracking_confidence=cfg.face.min_tracking_conf,
         output_face_blendshapes=True,
         output_facial_transformation_matrixes=True,
     )
@@ -170,6 +171,10 @@ def face_box_from_landmarks(result: Any, shape: tuple[int, ...]) -> tuple[float,
     ys = [p.y for p in result.face_landmarks[0]]
     x0, x1, y0, y1 = min(xs) * w, max(xs) * w, min(ys) * h, max(ys) * h
     return x0, y0, x1 - x0, y1 - y0
+
+
+def gaze_pitch_yaw(model: OnnxModel, outputs: list[npt.NDArray[Any]]) -> tuple[float, float]:
+    return gaze_from_outputs([o.name for o in model.outputs], outputs)
 
 
 def yunet_largest(detector: Any, image: Image) -> npt.NDArray[np.float32] | None:
@@ -298,7 +303,7 @@ def bench_gaze(feed: FrameFeed, cfg: PerceptionConfig, n: int, provider: str, in
         outputs = model.run(tensor)
         inf = _ms(t_inf)
         t1 = time.perf_counter()
-        gaze_angles(outputs[0], outputs[1])
+        gaze_pitch_yaw(model, outputs)
         post = _ms(t1)
         if i >= WARMUP_FRAMES:
             res.infer_ms.append(inf)
@@ -417,8 +422,7 @@ def driver_loop(
             if box is not None and t0 - last_gaze >= gaze_period:
                 crop = crop_box(frame.image, box, expand=1.2)
                 if crop is not None:
-                    pitch, yaw = gaze.run(gaze_input(crop, gaze_size))
-                    gaze_angles(pitch, yaw)
+                    gaze_pitch_yaw(gaze, gaze.run(gaze_input(crop, gaze_size)))
                     gaze_runs += 1
                     last_gaze = t0
             if t0 - last_phone >= phone_period:

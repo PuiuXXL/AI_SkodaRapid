@@ -127,6 +127,31 @@ def test_same_device_for_both_cameras_rejected(tmp_path: Path) -> None:
         load_config(_write(tmp_path, data))
 
 
+def test_face_landmarker_rules_in_yaml() -> None:
+    cfg = load_config()
+    assert cfg.face.num_faces == 1  # R-FL1
+    assert (cfg.face.min_detection_conf, cfg.face.min_presence_conf, cfg.face.min_tracking_conf) == (0.5, 0.5, 0.6)
+    assert cfg.face.min_face_width_px == 250  # R-FL3
+    low, high = cfg.eyes.squint_ear_band  # R-FL4
+    assert 0 < low < high < 1 and 0 < cfg.eyes.squint_threshold <= 1
+
+
+@pytest.mark.parametrize(
+    ("section", "key", "value"),
+    [
+        ("face", "num_faces", 2),
+        ("eyes", "squint_ear_band", [0.8, 0.5]),
+        ("eyes", "squint_ear_band", [0.5]),
+        ("models", "gaze_providers", ["CUDAExecutionProvider"]),
+    ],
+)
+def test_face_rule_violations_rejected(tmp_path: Path, section: str, key: str, value: object) -> None:
+    data = _default_data()
+    data[section][key] = value
+    with pytest.raises(ValidationError):
+        load_config(_write(tmp_path, data))
+
+
 def test_camera_controls_and_reconnect() -> None:
     cam = load_config().cameras.driver
     assert cam.controls.power_line_hz == 50
