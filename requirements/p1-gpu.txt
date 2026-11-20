@@ -1,0 +1,13 @@
+# P1 perception: GPU / accelerator extras (optional, for the demo laptop and benchmarks).
+# CI and CPU-only machines use requirements/p1-perception.txt alone.
+#
+# onnxruntime and onnxruntime-gpu CANNOT coexist in one environment. Install order:
+#   uv pip uninstall onnxruntime
+#   uv pip install -r requirements/p1-gpu.txt
+#
+# YOLO export / torch on an NVIDIA GPU (PyPI torch is CPU-only on Windows). Pick the index that matches
+# your torch version and driver (checked 2026-11-20: torch 2.15 + driver CUDA 13.4 -> cu132):
+#   uv pip install --reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu132
+
+onnxruntime-gpu[cuda,cudnn]>=1.20   # CUDAExecutionProvider; CUDA + cuDNN runtime libs come from pip
+openvino>=2024.4                    # native OpenVINO runtime: reads .onnx directly (Intel/AMD x86 CPU)
