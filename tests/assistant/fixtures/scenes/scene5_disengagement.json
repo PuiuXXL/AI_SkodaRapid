@@ -1,0 +1,16 @@
+{
+  "description": "Scene 5: monotonous highway, D high, F low.",
+  "event": {
+    "type": "disengagement_high",
+    "ts": 1763672400.0,
+    "data": {}
+  },
+  "state_overrides": {
+    "assessment": {
+      "attention": 0.7,
+      "fatigue": 0.2,
+      "disengagement": 0.72,
+      "risk": 1
+    }
+  }
+}

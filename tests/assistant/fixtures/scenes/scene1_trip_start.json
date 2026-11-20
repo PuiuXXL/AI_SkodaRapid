@@ -1,0 +1,16 @@
+{
+  "description": "Scene 1: trip starts, driver and passenger recognised, parked.",
+  "event": {
+    "type": "trip_start",
+    "ts": 1763672400.0,
+    "data": {}
+  },
+  "state_overrides": {
+    "trip": {
+      "speed_kmh": 0,
+      "road": "city",
+      "elapsed_min": 0,
+      "stopped": true
+    }
+  }
+}

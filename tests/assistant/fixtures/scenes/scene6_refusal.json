@@ -1,0 +1,21 @@
+{
+  "description": "Scene 6: driver said 'Lasă-mă în pace.' (core recognised the refusal).",
+  "event": {
+    "type": "driver_refused",
+    "ts": 1763672400.0,
+    "data": {
+      "text": "Lasă-mă în pace."
+    }
+  },
+  "state_overrides": {
+    "safety": {
+      "level": "P3"
+    },
+    "passenger": {
+      "awake": false
+    },
+    "assessment": {
+      "fatigue": 0.71
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "description": "Scene 4: Maria shows her phone, Andrei glanced 3 times at her (cause from 2 cameras).",
+  "event": {
+    "type": "cause_detected",
+    "ts": 1763672400.0,
+    "data": {}
+  },
+  "state_overrides": {
+    "safety": {
+      "level": "P3"
+    },
+    "trip": {
+      "speed_kmh": 50,
+      "road": "city"
+    },
+    "passenger": {
+      "holding_phone": true
+    },
+    "cause": {
+      "target": "passenger",
+      "person_id": 2,
+      "label": "passenger_showing_phone",
+      "glances_30s": 3,
+      "conf": 0.8,
+      "sources": [
+        "cam_driver",
+        "cam_passenger"
+      ]
+    }
+  }
+}

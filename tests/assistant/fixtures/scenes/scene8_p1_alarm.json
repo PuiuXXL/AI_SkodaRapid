@@ -1,0 +1,17 @@
+{
+  "description": "Scene 8: microsleep alarm in progress (P1) -> LLM vetoed.",
+  "event": {
+    "type": "driver_speech",
+    "ts": 1763672400.0,
+    "data": {
+      "text": "Pune niște muzică"
+    }
+  },
+  "state_overrides": {
+    "safety": {
+      "level": "P1",
+      "alert": "microsleep",
+      "llm_allowed": false
+    }
+  }
+}

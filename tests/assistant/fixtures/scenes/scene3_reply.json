@@ -1,0 +1,26 @@
+{
+  "description": "Scene 3: driver dictates a reply to Mihai.",
+  "event": {
+    "type": "message_reply_dictated",
+    "ts": 1763672400.0,
+    "data": {
+      "msg_id": "m17",
+      "text": "Spune-i că ajung în 20 de minute."
+    }
+  },
+  "state_overrides": {
+    "trip": {
+      "speed_kmh": 50,
+      "road": "city"
+    },
+    "messages": [
+      {
+        "id": "m17",
+        "app": "whatsapp",
+        "from": "Mihai",
+        "state": "read",
+        "replyable": true
+      }
+    ]
+  }
+}

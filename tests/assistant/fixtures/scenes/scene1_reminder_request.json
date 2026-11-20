@@ -1,0 +1,18 @@
+{
+  "description": "Scene 1: driver asks for a reminder at the next fuel stop.",
+  "event": {
+    "type": "driver_speech",
+    "ts": 1763672400.0,
+    "data": {
+      "text": "Amintește-mi să iau lichid de parbriz când oprim la o benzinărie."
+    }
+  },
+  "state_overrides": {
+    "trip": {
+      "speed_kmh": 0,
+      "road": "city",
+      "stopped": true
+    },
+    "reminders": []
+  }
+}

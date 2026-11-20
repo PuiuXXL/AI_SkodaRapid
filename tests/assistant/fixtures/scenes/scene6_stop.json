@@ -1,0 +1,18 @@
+{
+  "description": "Scene 6/7: P2's rule picked OMV, which also solves the open reminder.",
+  "event": {
+    "type": "stop_suggested",
+    "ts": 1763672400.0,
+    "data": {
+      "poi_id": "omv_km42",
+      "poi_name": "OMV",
+      "dist_km": 12,
+      "task": "lichidul de parbriz"
+    }
+  },
+  "state_overrides": {
+    "safety": {
+      "level": "P3"
+    }
+  }
+}

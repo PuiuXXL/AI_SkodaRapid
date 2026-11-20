@@ -1,0 +1,58 @@
+{
+  "ts": 1763672400.123, "seq": 18231,
+  "trip": { "speed_kmh": 118, "road": "highway", "elapsed_min": 74,
+            "pos": { "lat": 45.75, "lon": 21.23 }, "eta_min": 20, "scene": 6,
+            "stopped": false, "at_poi": null,
+            "next_poi": { "id": "omv_km42", "category": "fuel", "dist_km": 12, "name": "OMV" } },
+  "occupants": [
+    { "id": 1, "seat": "driver",      "source": "cam_driver",    "profile": "andrei", "role": "adult" },
+    { "id": 2, "seat": "front_right", "source": "cam_passenger", "profile": "maria",  "role": "adult" }
+  ],
+  "driver": {
+    "eyes":  { "ear": 0.27, "eye_used": "left", "perclos_60s": 0.08, "blink_ms": 180, "microsleep": false, "reliable": true },
+    "head":  { "yaw": -4, "pitch": 2, "roll": 1, "nodding": false, "answer": null },
+    "gaze":  { "zone": "road", "conf": 0.91, "source": "face", "off_road_ms": 0, "vats_60s": 2, "entropy_60s": 1.42 },
+    "yawn": false,
+    "speaking": false,
+    "phone": { "in_use": false, "conf": 0.12, "source": null },
+    "gesture": null,
+    "reaction": {
+      "visual_ms": 650, "verbal_ms": 1400, "gesture_ms": 900,
+      "baseline_ms": { "visual": 500, "verbal": 900, "gesture": 800 },
+      "missed": 0, "response_rate_10min": 0.8
+    }
+  },
+  "passenger": { "present": true, "awake": true, "eyes_closed_s": 0, "speaking": false,
+                 "holding_phone": false, "gesture": null, "answer": null },
+  "conversation": false,
+  "cause":      { "target": null, "person_id": null, "label": null,
+                  "glances_30s": 0, "conf": 0.0, "sources": [] },
+  "assessment": { "attention": 0.82, "fatigue": 0.35, "disengagement": 0.30, "risk": 1 },
+  "safety":     { "level": "P4", "alert": null, "llm_allowed": true, "llm_enabled": true,
+                  "monitoring_ok": true, "alarm_ms_last": 120 },
+  "interaction": { "state": "idle", "addressed_to": null, "dialog_window_open": false,
+                   "last_input": null },
+  "assistant":  { "muted_until": null, "mute_reason": null },
+  "safe_contact": { "name": "Mihai", "configured": true, "consent": true, "announce": true,
+                    "notified_ts": null, "last_reply_msg_id": null },
+  "phone":      { "connected": true, "battery": 64 },
+  "messages": [
+    { "id": "m17", "app": "whatsapp", "from": "Mihai", "state": "pending",
+      "deferred_reason": null, "replyable": true, "ts": 1763672390.0 }
+  ],
+  "call": null,
+  "reminders": [
+    { "id": "r1", "task": "lichid de parbriz",
+      "trigger": { "type": "stop_at_category", "category": "fuel" },
+      "state": "active", "created_ts": 1763671200.0 }
+  ],
+  "media":        { "playing": false, "track_id": null, "title": null, "volume": 0.4,
+                    "reason": null, "kid_safe": false },
+  "intervention": { "last": null, "effect_pct": null, "stats": {} },
+  "ab":           { "naive_alerts": 7, "our_alerts": 1 },
+  "blind_m":      { "last": 64, "trip": 180 },
+  "scorecard":    { "longest_focus_min": 23, "hands_free_messages": 2, "phone_touches": 0,
+                    "suggestions_accepted": 3, "suggestions_rejected": 1, "reminders_done": 0 },
+  "integrations": { "phone_bridge": "ok", "twilio": "ok", "contact_app": "ok", "llm": "ok" },
+  "perf": {}
+}

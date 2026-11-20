@@ -1,0 +1,23 @@
+{
+  "description": "Scene 6: Maria asleep, Andrei yawns; F high.",
+  "event": {
+    "type": "fatigue_high",
+    "ts": 1763672400.0,
+    "data": {}
+  },
+  "state_overrides": {
+    "safety": {
+      "level": "P3"
+    },
+    "passenger": {
+      "awake": false,
+      "eyes_closed_s": 40
+    },
+    "assessment": {
+      "attention": 0.6,
+      "fatigue": 0.71,
+      "disengagement": 0.3,
+      "risk": 2
+    }
+  }
+}

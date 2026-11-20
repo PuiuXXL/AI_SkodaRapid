@@ -1,0 +1,14 @@
+{
+  "description": "Scene 4: Andrei and Maria talk; D slightly high -> stay silent.",
+  "event": {
+    "type": "disengagement_high",
+    "ts": 1763672400.0,
+    "data": {}
+  },
+  "state_overrides": {
+    "conversation": true,
+    "passenger": {
+      "speaking": true
+    }
+  }
+}

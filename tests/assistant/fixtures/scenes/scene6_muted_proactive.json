@@ -1,0 +1,14 @@
+{
+  "description": "Scene 6: assistant muted after the refusal; a proactive event must be blocked.",
+  "event": {
+    "type": "disengagement_high",
+    "ts": 1763672400.0,
+    "data": {}
+  },
+  "state_overrides": {
+    "assistant": {
+      "muted_until": 1763673300.0,
+      "mute_reason": "driver_refused"
+    }
+  }
+}

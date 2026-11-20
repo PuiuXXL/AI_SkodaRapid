@@ -1,0 +1,17 @@
+{
+  "description": "Scene 3: WhatsApp from Mihai, passenger present, P2 timing rule says ask.",
+  "event": {
+    "type": "message_received",
+    "ts": 1763672400.0,
+    "data": {
+      "msg_id": "m17",
+      "delivery": "ask"
+    }
+  },
+  "state_overrides": {
+    "trip": {
+      "speed_kmh": 50,
+      "road": "city"
+    }
+  }
+}

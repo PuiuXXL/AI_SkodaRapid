@@ -1,0 +1,231 @@
+{
+  "_comment": [
+    "Media catalog for music recommendation (plan D8). Read by assistant/music.py.",
+    "Each track: id (= file name without .mp3), title, artist, genre, energy 1-5 (1 calm, 5 very energetic),",
+    "kid_safe (true = ok with a child on board), file (mp3 in assistant/data/media/, gitignored), source URL, license.",
+    "TODO entries are a template: replace title/artist/source with the real downloaded tracks; keep genre/energy honest.",
+    "Disengagement (D) proposals use energy >= music.min_energy_for_disengagement (assistant.yaml, default 4)."
+  ],
+  "tracks": [
+    {
+      "id": "t01",
+      "title": "TODO title t01",
+      "artist": "TODO",
+      "genre": "lofi",
+      "energy": 1,
+      "kid_safe": false,
+      "file": "t01.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t02",
+      "title": "TODO title t02",
+      "artist": "TODO",
+      "genre": "lofi",
+      "energy": 2,
+      "kid_safe": false,
+      "file": "t02.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t03",
+      "title": "TODO title t03",
+      "artist": "TODO",
+      "genre": "acoustic",
+      "energy": 2,
+      "kid_safe": false,
+      "file": "t03.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t04",
+      "title": "TODO title t04",
+      "artist": "TODO",
+      "genre": "jazz",
+      "energy": 2,
+      "kid_safe": false,
+      "file": "t04.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t05",
+      "title": "TODO title t05",
+      "artist": "TODO",
+      "genre": "classical",
+      "energy": 1,
+      "kid_safe": false,
+      "file": "t05.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t06",
+      "title": "TODO title t06",
+      "artist": "TODO",
+      "genre": "pop",
+      "energy": 3,
+      "kid_safe": false,
+      "file": "t06.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t07",
+      "title": "TODO title t07",
+      "artist": "TODO",
+      "genre": "pop",
+      "energy": 3,
+      "kid_safe": false,
+      "file": "t07.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t08",
+      "title": "TODO title t08",
+      "artist": "TODO",
+      "genre": "acoustic",
+      "energy": 3,
+      "kid_safe": false,
+      "file": "t08.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t09",
+      "title": "TODO title t09",
+      "artist": "TODO",
+      "genre": "jazz",
+      "energy": 3,
+      "kid_safe": false,
+      "file": "t09.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t10",
+      "title": "TODO title t10",
+      "artist": "TODO",
+      "genre": "pop",
+      "energy": 4,
+      "kid_safe": false,
+      "file": "t10.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t11",
+      "title": "TODO title t11",
+      "artist": "TODO",
+      "genre": "hiphop",
+      "energy": 3,
+      "kid_safe": false,
+      "file": "t11.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t12",
+      "title": "TODO title t12",
+      "artist": "TODO",
+      "genre": "rock",
+      "energy": 3,
+      "kid_safe": false,
+      "file": "t12.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t13",
+      "title": "TODO title t13",
+      "artist": "TODO",
+      "genre": "pop",
+      "energy": 4,
+      "kid_safe": false,
+      "file": "t13.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t14",
+      "title": "TODO title t14",
+      "artist": "TODO",
+      "genre": "rock",
+      "energy": 5,
+      "kid_safe": false,
+      "file": "t14.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t15",
+      "title": "TODO title t15",
+      "artist": "TODO",
+      "genre": "rock",
+      "energy": 4,
+      "kid_safe": false,
+      "file": "t15.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t16",
+      "title": "TODO title t16",
+      "artist": "TODO",
+      "genre": "electronic",
+      "energy": 5,
+      "kid_safe": false,
+      "file": "t16.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t17",
+      "title": "TODO title t17",
+      "artist": "TODO",
+      "genre": "electronic",
+      "energy": 4,
+      "kid_safe": false,
+      "file": "t17.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t18",
+      "title": "TODO title t18",
+      "artist": "TODO",
+      "genre": "dance",
+      "energy": 5,
+      "kid_safe": false,
+      "file": "t18.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t19",
+      "title": "TODO title t19",
+      "artist": "TODO",
+      "genre": "kids",
+      "energy": 3,
+      "kid_safe": true,
+      "file": "t19.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    },
+    {
+      "id": "t20",
+      "title": "TODO title t20",
+      "artist": "TODO",
+      "genre": "kids",
+      "energy": 4,
+      "kid_safe": true,
+      "file": "t20.mp3",
+      "source": "TODO https://pixabay.com/music/...",
+      "license": "Pixabay Content License"
+    }
+  ]
+}

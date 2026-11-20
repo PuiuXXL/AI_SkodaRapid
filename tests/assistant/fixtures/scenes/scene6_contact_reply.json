@@ -1,0 +1,27 @@
+{
+  "description": "Scene 6: Mihai answered; delivered even while muted.",
+  "event": {
+    "type": "safe_contact_reply",
+    "ts": 1763672400.0,
+    "data": {
+      "msg_id": "m20",
+      "delivery": "ask"
+    }
+  },
+  "state_overrides": {
+    "assistant": {
+      "muted_until": 1763673300.0,
+      "mute_reason": "driver_refused"
+    },
+    "messages": [
+      {
+        "id": "m20",
+        "app": "whatsapp",
+        "from": "Mihai",
+        "state": "pending",
+        "replyable": true,
+        "text": "Oprește la o cafea, te rog!"
+      }
+    ]
+  }
+}
