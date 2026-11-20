@@ -1,0 +1,110 @@
+{
+  "alarm_andrei": {
+    "file": "alarm_andrei.mp3",
+    "text": "ANDREI!"
+  },
+  "alarm_maria": {
+    "file": "alarm_maria.mp3",
+    "text": "MARIA!"
+  },
+  "alarm_ioana": {
+    "file": "alarm_ioana.mp3",
+    "text": "IOANA!"
+  },
+  "alarm_mihai": {
+    "file": "alarm_mihai.mp3",
+    "text": "MIHAI!"
+  },
+  "passenger_instructions_andrei_maria": {
+    "file": "passenger_instructions_andrei_maria.mp3",
+    "text": "Andrei, Maria nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_andrei_ioana": {
+    "file": "passenger_instructions_andrei_ioana.mp3",
+    "text": "Andrei, Ioana nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_andrei_mihai": {
+    "file": "passenger_instructions_andrei_mihai.mp3",
+    "text": "Andrei, Mihai nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_maria_andrei": {
+    "file": "passenger_instructions_maria_andrei.mp3",
+    "text": "Maria, Andrei nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_maria_ioana": {
+    "file": "passenger_instructions_maria_ioana.mp3",
+    "text": "Maria, Ioana nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_maria_mihai": {
+    "file": "passenger_instructions_maria_mihai.mp3",
+    "text": "Maria, Mihai nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_ioana_andrei": {
+    "file": "passenger_instructions_ioana_andrei.mp3",
+    "text": "Ioana, Andrei nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_ioana_maria": {
+    "file": "passenger_instructions_ioana_maria.mp3",
+    "text": "Ioana, Maria nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_ioana_mihai": {
+    "file": "passenger_instructions_ioana_mihai.mp3",
+    "text": "Ioana, Mihai nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_mihai_andrei": {
+    "file": "passenger_instructions_mihai_andrei.mp3",
+    "text": "Mihai, Andrei nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_mihai_maria": {
+    "file": "passenger_instructions_mihai_maria.mp3",
+    "text": "Mihai, Maria nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "passenger_instructions_mihai_ioana": {
+    "file": "passenger_instructions_mihai_ioana.mp3",
+    "text": "Mihai, Ioana nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  },
+  "notify_contact_mihai": {
+    "file": "notify_contact_mihai.mp3",
+    "text": "Îi dau de veste lui Mihai."
+  },
+  "are_you_ok": {
+    "file": "are_you_ok.mp3",
+    "text": "Ești bine?"
+  },
+  "monitoring_lost": {
+    "file": "monitoring_lost.mp3",
+    "text": "Nu te mai văd. Monitorizarea e întreruptă."
+  },
+  "refusal_ack": {
+    "file": "refusal_ack.mp3",
+    "text": "Ok, te las în pace."
+  },
+  "resume": {
+    "file": "resume.mp3",
+    "text": "...cum ziceam,"
+  },
+  "message_deferred": {
+    "file": "message_deferred.mp3",
+    "text": "Ți-l citesc imediat ce e liniște."
+  },
+  "confirm_ok": {
+    "file": "confirm_ok.mp3",
+    "text": "Ok."
+  },
+  "confirm_noted": {
+    "file": "confirm_noted.mp3",
+    "text": "Notat."
+  },
+  "confirm_sent": {
+    "file": "confirm_sent.mp3",
+    "text": "Trimis."
+  },
+  "confirm_done": {
+    "file": "confirm_done.mp3",
+    "text": "Gata."
+  },
+  "confirm_cancelled": {
+    "file": "confirm_cancelled.mp3",
+    "text": "Bine, am anulat."
+  }
+}
