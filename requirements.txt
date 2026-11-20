@@ -2,5 +2,5 @@
 # Uncomment each line once the file exists:
 # -r requirements/p1-perception.txt
 # -r requirements/p2-core.txt
-# -r requirements/p3-assistant.txt
+-r requirements/p3-assistant.txt
 # -r requirements/p4-dashboard.txt

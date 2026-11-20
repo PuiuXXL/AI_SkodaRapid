@@ -1,0 +1,29 @@
+# P3 - LLM + voice + phone (assistant/, integrations/phone_bridge.py, integrations/audio_clips.py)
+# Python 3.11. Install with:  pip install -r requirements/p3-assistant.txt
+
+# Data models shared with core (shared/contracts.py uses Pydantic v2 too)
+pydantic>=2.6,<3
+
+# Module configuration (assistant/config/*.yaml) and secrets (.env)
+pyyaml>=6.0
+python-dotenv>=1.0
+
+# LLM: Google Gemini (Flash) through the official Google Gen AI SDK
+google-genai>=1.0
+
+# Text-to-speech with Romanian neural voices (ro-RO-AlinaNeural / ro-RO-EmilNeural)
+edge-tts>=6.1
+
+# HTTP router mounted by core (/tts, /media) + local dev server for the voice test page
+fastapi>=0.110
+uvicorn[standard]>=0.29
+
+# Phone bridge: WebSocket client towards core (/ws/phone)
+websockets>=12.0
+
+# Phone bridge: KDE Connect over D-Bus. Linux only (installed automatically only there).
+dbus-next>=0.2.3; sys_platform == "linux"
+
+# Tests
+pytest>=8.0
+pytest-asyncio>=0.23
