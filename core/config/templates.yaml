@@ -66,8 +66,25 @@ clips:
   passenger_instructions: "passenger_instructions_{passenger}_{driver}"   # "Maria, Andrei nu răspunde. ..."
   monitoring_lost: "monitoring_lost"                        # "Nu te mai văd. Monitorizarea e întreruptă."
   confirm_ok: "confirm_ok"                                  # "Ok."
+  message_deferred: "message_deferred"                      # "Ți-l citesc imediat ce e liniște." (F2)
+  # C2 voice stage. These clips do not exist yet: the text goes through P3's TTS until P3 generates them.
+  eyes_on_road: "eyes_on_road"                              # escalation.off_road
+  phone_down: "phone_down"                                  # escalation.phone
+  phone_read_for_you: "phone_read_for_you"                  # escalation.phone_message
   default_driver: "andrei"      # while P1 does not recognise the driver yet (occupants[].profile = null)
   default_passenger: "maria"
+
+# C2: the voice stage of a P2 distraction (fixed texts, no LLM; the alarm comes after if it goes on).
+escalation:
+  off_road: "Ochii pe drum."
+  phone: "Lasă telefonul."
+  phone_message: "Lasă telefonul, ți-l citesc eu."   # a message is waiting (scene 3)
+
+# B8: what the simple threshold "saw", for the event log next to the A/B counter.
+naive:
+  head_pose: "Prag simplu: capul întors peste prag."
+  eyes_closed: "Prag simplu: ochi închiși."
+  phone: "Prag simplu: telefon în cadru."
 
 # Deterministic yes / no for "Ești bine?" (C4): no LLM on the safety path. Compared after lower case, without
 # diacritics and punctuation; the phrase that starts first in the sentence wins ("da, nu-i nimic" = yes).

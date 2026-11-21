@@ -9,6 +9,7 @@ sound stops at an alert).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -35,6 +36,7 @@ class Arbiter:
         self.engine = engine
         self.active: dict[str, Alert] = {}  # rule name -> its alert
         self.interruptions = 0
+        self.on_interrupt: list[Callable[[], None]] = []  # e.g. the assistant drops its pending question
 
     def top(self) -> tuple[str, Alert] | None:
         if not self.active:
@@ -62,6 +64,8 @@ class Arbiter:
     def interrupt(self) -> None:
         """Stop the assistant's voice and the music (the alarm clip itself also stops them in the browser)."""
         self.interruptions += 1
+        for listener in self.on_interrupt:
+            listener()
         self.engine.hub.broadcast_ui(to_wire(UiSpeakControl(action="stop")))
         self.engine.hub.broadcast_ui(to_wire(UiMedia(action="stop")))
         self.engine.state.media.playing = False
