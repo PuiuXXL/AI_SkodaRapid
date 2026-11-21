@@ -1,8 +1,8 @@
-# Obsidian Orange — Anthropic Fusion × Motion.dev × GSAP
+# DriveMate Graphite — Anthropic Fusion × Motion.dev × GSAP
 
-A reusable **web-design agent skill** (v2.0) for transforming real web apps into the charcoal/orange CY·FOCUS visual style based on 12 user-provided screenshots.
+A reusable **web-design agent skill** (v2.0) for transforming real web apps into the charcoal/silver CY·FOCUS visual style based on 12 user-provided screenshots.
 
-**Priority**: image 01 visual identity; image 08 dashboard anatomy; user-requested vertical FLOATING GLASS SIDEBAR with functional **Expanded 268px ↔ Collapsed 80px** modes; all other images provide domain-specific patterns only. Responsive mobile drawer with full labels. Preserve existing app routing, authentication, forms, data, real charts and accessibility.
+**Priority**: DriveMate landing colors; image 01 composition; image 08 dashboard anatomy; user-requested vertical FLOATING GLASS SIDEBAR with functional **Expanded 268px ↔ Collapsed 80px** modes; all other images provide domain-specific patterns only. Responsive mobile drawer with full labels. Preserve existing app routing, authentication, forms, data, real charts and accessibility.
 
 ## Contents
 

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type {DriverUI, Phase, Point, Poi} from "./driver/contracts";
 
 export type Reading = number | null;
-export interface Assessment { attention?: Reading; fatigue?: Reading; disengagement?: Reading; risk?: Reading }
+export interface Assessment { ts?:number; attention?: Reading; fatigue?: Reading; disengagement?: Reading; risk?: Reading }
 export interface Trip {
   speed_kmh?: Reading; elapsed_min?: Reading; eta_min?: Reading; road?: string;
   id?: string|null; phase?: Phase; distance_km?: Reading; scene?:number;pos?:Point;at_poi?:Poi|null;

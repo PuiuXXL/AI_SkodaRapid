@@ -1,5 +1,7 @@
 # Reference forensics — design elements visible in the 12 supplied images
 
+The color descriptions below document the original screenshots. For every implementation use the DriveMate landing palette in design-tokens.md; these images guide composition and material.
+
 These are **qualitative interpretations**, not source Figma data or guaranteed pixel measurements. Screenshots are inspiration for the inner user interface. Do not copy photo/gallery margins, tablet outlines, video progress bars or unrelated labels into the product.
 
 ## 01 — CY·FOCUS product showcase (PRIMARY, highest weight)

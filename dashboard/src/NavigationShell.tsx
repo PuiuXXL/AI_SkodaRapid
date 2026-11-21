@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from "react";
+import {BrandLogo} from "./BrandLogo";
 import type {ReactNode} from "react";
 
 export function useMobileNavigation() {
@@ -12,7 +13,7 @@ export function useMobileNavigation() {
   return mobile;
 }
 
-export function NavigationShell({mobile,navigationKey,children}: {mobile:boolean;navigationKey:string;children:ReactNode}) {
+export function NavigationShell({mobile,navigationKey,children,dark}: {dark:boolean;mobile:boolean;navigationKey:string;children:ReactNode}) {
   const dialog=useRef<HTMLDialogElement>(null),trigger=useRef<HTMLButtonElement>(null);
   const [open,setOpen]=useState(false);
   useEffect(()=>setOpen(false),[mobile,navigationKey]);
@@ -35,7 +36,7 @@ export function NavigationShell({mobile,navigationKey,children}: {mobile:boolean
   }}>{children}{mobile&&<button className="mobile-close" aria-label="Închide meniul" onClick={()=>setOpen(false)}>Închide meniul</button>}</header>;
   if(!mobile)return content;
   return <>
-    <div className="mobile-toolbar"><span>DriveMate</span><button ref={trigger} className="mobile-menu-button" aria-haspopup="dialog" aria-controls="mobile-navigation" aria-expanded={open} onClick={()=>setOpen(true)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Meniu</button></div>
+    <div className="mobile-toolbar"><BrandLogo dark={dark}/><button ref={trigger} className="mobile-menu-button" aria-haspopup="dialog" aria-controls="mobile-navigation" aria-expanded={open} onClick={()=>setOpen(true)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Meniu</button></div>
     <dialog ref={dialog} id="mobile-navigation" className="mobile-drawer" aria-label="Navigare DriveMate" onCancel={()=>setOpen(false)} onClose={()=>setOpen(false)} onClick={event=>{
       if(event.target===event.currentTarget){
         const bounds=event.currentTarget.getBoundingClientRect();

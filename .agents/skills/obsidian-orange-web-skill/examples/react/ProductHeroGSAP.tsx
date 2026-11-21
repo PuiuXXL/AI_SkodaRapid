@@ -51,7 +51,7 @@ export function ProductHeroGSAP({ heading, description, heroImageUrl, callouts }
   return (
     <section ref={root} className="story-section" aria-label={heading}
       style={{ background: "#121315", border: "1px solid #ffffff18", borderRadius: 22,
-        padding: "clamp(20px,4vw,48px)", color: "#f4f2ef" }}>
+        padding: "clamp(20px,4vw,48px)", color: "#f5f5f5" }}>
       <h1 className="story-heading" style={{ fontSize: "clamp(28px,4vw,54px)", lineHeight: 1.08 }}>
         {heading}
       </h1>
@@ -60,8 +60,8 @@ export function ProductHeroGSAP({ heading, description, heroImageUrl, callouts }
         style={{ width: "100%", maxHeight: 500, objectFit: "contain", display: "block" }} />
       <ul style={{ display: "flex", gap: 12, flexWrap: "wrap", padding: 0, listStyle: "none" }}>
         {callouts.map(feature => (
-          <li key={feature} className="story-callout" style={{ border: "1px solid #ff714455",
-            borderRadius: 14, padding: "12px 18px", background: "#ff71441a" }}>{feature}</li>
+          <li key={feature} className="story-callout" style={{ border: "1px solid #cecece55",
+            borderRadius: 14, padding: "12px 18px", background: "#cecece1a" }}>{feature}</li>
         ))}
       </ul>
     </section>

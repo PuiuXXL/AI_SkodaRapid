@@ -16,7 +16,7 @@ Verified source categories: [Motion documentation](https://motion.dev/docs), [Mo
 | Scenario / context | Target behavior | Preferred | Suggested duration / easing | Official reference |
 |---|---|---|---|---|
 | Sidebar Collapsed ↔ Expanded (all platforms) | Width/layout and label continuity, no content jump | Motion `layout` or synchronized CSS grid **not both for same property** | 200–240ms easing-out | https://motion.dev/docs/react-layout-animations |
-| Moving active sidebar pill | Selected orange underlay moves to actual active route | Motion `layoutId` in `LayoutGroup` | 180–240ms spring, little/no bounce | https://motion.dev/examples/react-shared-layout-animation |
+| Moving active sidebar pill | Selected silver underlay moves to actual active route | Motion `layoutId` in `LayoutGroup` | 180–240ms spring, little/no bounce | https://motion.dev/examples/react-shared-layout-animation |
 | Mobile drawer | Backdrop fade and panel slide, restore focus | Motion `AnimatePresence` + native/a11y dialog semantics | 180–240ms ease-out | https://motion.dev/docs/react-animate-presence |
 | Tabs & filter segment | Underline/pill tracks selection, chart updates without warp | Motion `layoutId`; CSS if static | 160–220ms | https://motion.dev/examples/react-layout-animation |
 | Accordion / details | Compact height + arrow change | Motion layout | 180–260ms | https://motion.dev/docs/react-layout-animations |

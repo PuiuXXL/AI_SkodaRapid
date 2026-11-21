@@ -1,7 +1,13 @@
 import {randomBytes, timingSafeEqual} from "node:crypto";
 import {fileURLToPath} from "node:url";
+import {createReadStream,existsSync,readFileSync} from "node:fs";
 import {DemoDrive} from "./demo.mjs";
 import {InputError, profileStore} from "./profile.mjs";
+
+const catalog=JSON.parse(readFileSync(new URL("../../assistant/data/media_catalog.json",import.meta.url),"utf8")).tracks;
+function mediaFile(track){
+  return [new URL("../public/sounds/music/"+track.file,import.meta.url),new URL("../../assistant/data/media/"+track.file,import.meta.url)].find(path=>existsSync(path));
+}
 
 function json(res, status, data) {
   res.writeHead(status, {"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","Referrer-Policy":"no-referrer"});
@@ -60,9 +66,19 @@ export async function createDriverApi({profilePath=fileURLToPath(new URL("../../
         throw new InputError("Operație de contact necunoscută.",404);
       }
       if(!isLocal(req))throw new InputError("Comenzile șoferului sunt disponibile pe laptopul local.",403);
+      if(req.method==="GET"&&path==="/api/driver/catalog"){
+        json(res,200,{tracks:catalog.map(({id,title,artist,genre,kid_safe,...rest})=>({id,title,artist,genre,kid_safe,available:!!mediaFile({file:rest.file})}))});return;
+      }
+      if(req.method==="GET"&&path.startsWith("/api/driver/media/")){
+        const track=catalog.find(track=>track.id===path.slice("/api/driver/media/".length));
+        const file=track&&mediaFile(track);if(!file)throw new InputError("Fișierul audio nu este instalat.",404);
+        res.writeHead(200,{"Content-Type":"audio/mpeg","Cache-Control":"no-store"});
+        const stream=createReadStream(file);stream.on("error",()=>res.destroy());stream.pipe(res);return;
+      }
       if(path==="/api/driver/profile"){
         if(req.method==="GET"){json(res,200,drive.profile);return;}
         if(req.method==="PUT"){
+          drive.requireStop();
           drive.profile=await profiles.save(await body(req));drive.media.volume=drive.profile.preferences.volume;
           broadcast({type:"profile_changed",revision:drive.profile.revision});sendState();json(res,200,drive.profile);return;
         }
@@ -81,6 +97,10 @@ export async function createDriverApi({profilePath=fileURLToPath(new URL("../../
         const key="cmd:"+m.id;
         if(!receipts.has(key)){
           if(m.trip_id!==undefined && m.trip_id!==drive.tripId)throw new InputError("Călătoria s-a schimbat.",409);
+          if(m.cmd==="play_catalog"){
+            const track=catalog.find(track=>track.id===m.args?.id);
+            if(!track||!mediaFile(track))throw new InputError("Fișierul audio nu este instalat.",404);
+          }
           drive.command(m.cmd,m.args);remember(key,{ok:true});sendState();
         }
         json(res,200,receipts.get(key));return;
@@ -99,7 +119,7 @@ export async function createDriverApi({profilePath=fileURLToPath(new URL("../../
 
 export function driverPlugin() {
   async function setup(server){
-    const api=await createDriverApi();
+    const api=await createDriverApi(process.env.DRIVEMATE_PROFILE_PATH?{profilePath:process.env.DRIVEMATE_PROFILE_PATH}:{});
     server.middlewares.use(api.handler);
     server.httpServer?.once("close",()=>api.close());
   }

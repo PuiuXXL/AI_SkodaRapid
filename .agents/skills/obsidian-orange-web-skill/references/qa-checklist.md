@@ -2,7 +2,7 @@
 
 ## Visual identity
 
-- [ ] Near-black / graphite is the dominant color, with intentional warm orange accents.
+- [ ] Near-black / graphite is the dominant color, with intentional silver accents.
 - [ ] Primary screenshot 01 guides atmosphere; screenshot 08 guides application layout.
 - [ ] Visual mimicry targets the actual CY·FOCUS app UI, **not** the surrounding gallery framing, laptop/tablet hardware or video scrubber.
 - [ ] Sidebar follows user override (floating glass + both functional widths) rather than treating the screenshot rail literally.
@@ -76,7 +76,7 @@
 
 ## Quick scoring heuristic
 
-1. **Identity (25%)** — dark graphite, orange and strong screenshot-01 atmosphere.
+1. **Identity (25%)** — dark graphite, silver and strong screenshot-01 atmosphere.
 2. **Navigation (20%)** — vertical side menu, collapsible glass card, route-driven state, accessible mobile drawer.
 3. **Context fit (20%)** — widgets, architecture and charts match the product.
 4. **Readability (15%)** — hierarchy, accessibility, readable glass and density.

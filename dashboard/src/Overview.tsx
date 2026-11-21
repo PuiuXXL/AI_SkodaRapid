@@ -5,22 +5,12 @@ import {MeasureIcon} from "./MeasureIcon";
 import {fmt,time,words} from "./Panels";
 
 export function AttentionGauge({value}: {value: Reading | undefined}){
-  const count=32;
-  const lit=Number.isFinite(value)?Math.round(Math.max(0,Math.min(1,value!))*count):0;
-  return <div className="gauge-card">
-    <div className="gauge-art">
-      <svg viewBox="0 0 200 110" aria-hidden="true">
-        {Array.from({length:count},(_,i)=>{
-          const angle=Math.PI*(1-i/(count-1));
-          return <line key={i} x1={100+78*Math.cos(angle)} y1={98-78*Math.sin(angle)}
-            x2={100+92*Math.cos(angle)} y2={98-92*Math.sin(angle)}
-            stroke={i<lit?"var(--accent)":"var(--ui-stroke-strong)"} strokeWidth="4.8"/>;
-        })}
-      </svg>
-      <div className="gauge-number"><b>{fmt(value,"",100,0)}</b><span>/ 100</span></div>
-    </div>
-    <strong>Atenție</strong>
-  </div>;
+  // Adapted from Vision UI Dashboard React's SatisfactionRate (MIT).
+  const progress=Number.isFinite(value)?Math.max(0,Math.min(100,value!*100)):null;
+  return <div className="vision-ring"><svg viewBox="0 0 120 120" aria-hidden="true">
+    <circle cx="60" cy="60" r="49" fill="none" stroke="var(--line)" strokeWidth="9"/>
+    {progress!==null&&progress>0&&<circle cx="60" cy="60" r="49" pathLength="100" strokeDasharray={progress+" 100"} transform="rotate(-90 60 60)" fill="none" stroke="var(--accent)" strokeWidth="9" strokeLinecap="round"/>}
+    </svg><div><strong>{fmt(value,"",100,0)}</strong><small>Atenție / 100</small></div></div>;
 }
 
 export function CameraStandby({onLive}: {onLive: () => void}){
@@ -42,7 +32,6 @@ export function ScoreReading({label, icon, value}: {
   return <div>
     <span><MeasureIcon name={icon}/>{label}</span>
     <b>{fmt(value, "", 100, 0)}{measured && <em>/100</em>}</b>
-    {measured && <div className="score-meter" aria-hidden="true"><i style={{width: Math.min(100, Math.max(0, value * 100)) + "%"}}/></div>}
   </div>;
 }
 
