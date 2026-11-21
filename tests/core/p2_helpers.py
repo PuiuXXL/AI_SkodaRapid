@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from assistant.client import AnswerInfo
+from core.assistant_link import AssistantLink
 from core.engine import Engine
 from core.hub import Hub
 from core.safety import Safety
@@ -47,12 +49,15 @@ class RecordingHub(Hub):
 class Rig:
     """Engine + Safety + FakePerception, run in fake time: frames at 15 Hz, ticks at 10 Hz."""
 
-    def __init__(self, scene: int = 8, sos_channels: dict[str, SosChannel] | None = None) -> None:
+    def __init__(self, scene: int = 8, sos_channels: dict[str, SosChannel] | None = None,
+                 assistant: Any = None) -> None:
         self.hub = RecordingHub()
         self.engine = Engine(self.hub, FakeSimulator())
         self.safety = Safety(self.engine, sos_channels)
         self.t = T0
+        self.link = AssistantLink(self.engine, client=assistant, clock=lambda: self.t) if assistant else None
         self.fake = FakePerception(now=T0)
+        self.patch: Any = None  # optional (frame dict, t) -> None, to shape what "P1" reports
         self._next_frame = self._next_tick = T0
         self.command("scene", scene)
         self.engine.tick(T0)  # the trip speed is known before the first frame
@@ -75,7 +80,10 @@ class Rig:
                 break
             self.t = t
             if t == self._next_frame:
-                self.engine.on_perception_message(self.fake.frame(t), t)
+                frame = self.fake.frame(t)
+                if self.patch is not None:
+                    self.patch(frame, t)
+                self.engine.on_perception_message(frame, t)
                 self._next_frame += 1.0 / FRAME_HZ
             if t == self._next_tick:
                 self.engine.tick(t)
@@ -100,3 +108,29 @@ class Rig:
 
     def speaks(self) -> list[dict[str, Any]]:
         return self.hub.of_type("speak")
+
+
+class FakeClient:
+    """Stands in for P3's AssistantClient: scripted actions per event type, optional sentences while "streaming"."""
+
+    def __init__(self, replies: dict[str, Any] | None = None, early: dict[str, list[Any]] | None = None,
+                 reason: str = "ok") -> None:
+        self.replies = replies or {}  # event type -> list[Action] or (event, state) -> list[Action]
+        self.early = early or {}
+        self.events: list[Any] = []
+        self.last_result = AnswerInfo(source="LLM", reason=reason, llm_ttft_ms=420.0, llm_total_ms=900.0)
+
+    async def handle_event(self, event: Any, state: Any, on_early_speech: Any = None) -> list[Any]:
+        self.events.append(event)
+        for action in self.early.get(event.type, []):
+            if on_early_speech is not None:
+                on_early_speech(action)
+        reply = self.replies.get(event.type, [])
+        actions = reply(event, state) if callable(reply) else reply
+        return [action.model_copy() for action in actions]
+
+    def reset(self) -> None:
+        self.events.clear()
+
+    def types(self) -> list[str]:
+        return [event.type for event in self.events]

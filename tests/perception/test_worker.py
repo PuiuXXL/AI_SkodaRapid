@@ -273,3 +273,43 @@ def test_extra_module_from_config_runs_in_the_process() -> None:
         assert "patch" in _latest(worker)["frame_patch"]
     finally:
         worker.stop()
+
+
+def test_missing_camera_reports_unavailable_and_never_exits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No device matches: the process body keeps running with a camera_unavailable heartbeat and logs it every
+    workers.unavailable_report_s, instead of exiting with code 2 (which made the supervisor restart it in a loop)."""
+    import queue
+    import threading
+    from types import SimpleNamespace
+
+    import perception.capture as capture
+    import perception.worker as worker_mod
+    from perception.worker import run_camera
+
+    monkeypatch.setattr(capture, "list_devices", lambda: [])
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        worker_mod, "log", SimpleNamespace(warning=lambda msg, **_: warnings.append(msg), info=lambda *a, **k: None)
+    )
+    cfg = load_config()
+    driver = cfg.cameras.driver.model_copy(update={"device": "usb:dead:beef", "device_name": None, "reconnect_s": 0.1})
+    cfg = cfg.model_copy(
+        update={
+            "cameras": cfg.cameras.model_copy(update={"driver": driver}),
+            "workers": cfg.workers.model_copy(update={"unavailable_report_s": 0.4}),
+        }
+    )
+    results: Any = queue.Queue(maxsize=1)
+    stop = threading.Event()
+    opts = WorkerOptions(models=False)
+    args: tuple[Any, ...] = (cfg.model_dump(mode="json"), opts, results, queue.Queue(1), queue.Queue(), stop)
+    thread = threading.Thread(target=run_camera, args=("driver", *args, SimpleNamespace(value=0)), daemon=True)
+    thread.start()
+    time.sleep(1.5)
+    assert thread.is_alive()  # no exit, no restart loop
+    msg = results.get(timeout=1.0)
+    assert msg["kind"] == "status" and msg["reason"] == "camera_unavailable" and msg["connected"] is False
+    assert 2 <= warnings.count("camera_unavailable") <= 5  # every 0.4 s, not every frame / reconnect
+    stop.set()
+    thread.join(5.0)
+    assert not thread.is_alive()  # stops cleanly without a camera

@@ -356,6 +356,59 @@ def test_other_preferences_still_need_confirmation():
     assert validate_actions(raw, city_state()).accepted[0].needs_confirmation
 
 
+# --- a yes / no followed by a new request ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("nu, vreau să pui muzică", "vreau să pui muzică"),
+    ("… nu ,vreau să pui muzică", "vreau să pui muzică"),     # as Chrome sent it in the reported case
+    ("Nu mulțumesc, mai bine caută un podcast", "caută un podcast"),
+    ("da, și pune muzică", "pune muzică"),
+    ("nu", None), ("nu, mersi", None), ("da, te rog", None), ("nu, nu acum", None), ("da, dar mai târziu", None),
+    ("nu știu", None),
+])
+def test_request_after_answer(text, expected):
+    from assistant.answers import request_after_answer
+
+    assert request_after_answer(text) == expected
+
+
+def _stop_question():
+    raw = [{"type": "ask", "to": "driver", "question": "Oprim la OMV, prima benzinărie?", "expects": "yes_no"},
+           {"type": "suggest_stop", "poi_id": "omv_km42"}]
+    dialog = DialogManager()
+    dialog.register(validate_actions(raw, make_state()).accepted, NOW)
+    return dialog
+
+
+def test_no_plus_request_cancels_and_passes_the_request_on():
+    """Reported case: "Oprim la prima benzinărie?" -> "nu, vreau să pui muzică" used to be only a "no"."""
+    result = _stop_question().handle([voice("… nu ,vreau să pui muzică")], NOW + 2, state=make_state())
+    assert result.handled and result.answer == "no" and [a.type for a in result.cancelled] == ["suggest_stop"]
+    assert result.speak == []                                  # no "Bine, am anulat." before the music answer
+    assert [(e.type, e.data["text"]) for e in result.events] == [("driver_speech", "vreau să pui muzică")]
+
+
+def test_yes_plus_request_confirms_and_passes_the_request_on():
+    result = _stop_question().handle([voice("da, și pune muzică")], NOW + 2, state=make_state())
+    assert [a.type for a in result.execute] == ["suggest_stop"]
+    assert result.events[0].data["text"] == "pune muzică"
+
+
+def test_plain_no_still_cancels_with_the_clip():
+    result = _stop_question().handle([voice("nu")], NOW + 2, state=make_state())
+    assert result.speak[0].clip_id == "confirm_cancelled" and result.events == []
+
+
+@pytest.mark.asyncio
+async def test_plain_music_request_without_llm_offers_a_catalog_track():
+    client = AssistantClient(OfflineProvider())
+    actions = await client.handle_event(Event(type="driver_speech", data={"text": "vreau să pui muzică"}),
+                                        city_state(), now=NOW)
+    assert [a.type for a in actions] == ["ask", "suggest_media"]
+    assert actions[0].question == "Pun ceva din ce-ți place?" and actions[1].needs_confirmation
+
+
 # --- router helpers --------------------------------------------------------------------------------------------
 
 

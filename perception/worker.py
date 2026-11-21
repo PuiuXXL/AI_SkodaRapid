@@ -20,8 +20,11 @@
   reported unavailable while it is down.
 
 Messages are plain dicts (picklable, cheap). ``kind="frame"`` carries the pipeline output plus ``t_capture``
-(``perf_counter``) and ``t_wall`` (``time.time()`` at capture); ``kind="status"`` is a heartbeat when no frame arrives
-(camera unplugged, frozen driver), so the main process always knows the state. The gaze calibration state rides on
+(``perf_counter``), ``t_wall`` (``time.time()`` at capture) and ``capture`` (device opened, how it was selected:
+usb / name / fallback); ``kind="status"`` is a heartbeat when no frame arrives (camera unplugged, frozen driver), so
+the main process always knows the state. A camera that is not there never makes its process exit (that was a restart
+loop): the process keeps a ``camera_unavailable`` heartbeat, logs it every ``workers.unavailable_report_s`` and starts
+the pipeline as soon as the camera delivers its first frame. The gaze calibration state rides on
 every driver frame (``calibration``: id, state, prompt, result), and the enrollment state on every frame of that
 camera (``identity.enroll``): ``results`` keeps only the newest message, so a one-off "done" message could be lost; a
 persistent state cannot.
@@ -569,8 +572,16 @@ def run_camera(
     factory: PipelineFactory | str | None = None,
     modules: tuple[str, ...] = (),
 ) -> None:
-    """Process body (spawn). Returns when ``stop`` is set; exits with code 2 if the camera never delivers a frame."""
-    from perception.capture import LatestFrameCamera, SyntheticSource
+    """Process body (spawn). Returns when ``stop`` is set. A missing camera is reported (``camera_unavailable``
+    heartbeat, logged every ``workers.unavailable_report_s``), never an exit: no restart loop."""
+    from perception.capture import (
+        FrameSource,
+        LatestFrameCamera,
+        OpenCVSource,
+        SyntheticSource,
+        list_devices,
+        select_device,
+    )
     from perception.log import configure_logging
     from perception.perf import PerfTracker
 
@@ -581,9 +592,16 @@ def run_camera(
     set_intra_op_threads(cfg.models.onnx_threads)  # before any model is loaded in this process
     cam_cfg = getattr(cfg.cameras, name)
     out = cfg.output
-    source = SyntheticSource(cam_cfg.width, cam_cfg.height, cam_cfg.fps) if options.synthetic else None
+    source: FrameSource = (
+        SyntheticSource(cam_cfg.width, cam_cfg.height, cam_cfg.fps)
+        if options.synthetic
+        else OpenCVSource(cam_cfg, name, resolver=lambda: select_device(name, cfg.cameras, list_devices()))
+    )
     is_driver = name == "driver"
     advertised: list[str] = []
+    report_s = cfg.workers.unavailable_report_s
+    last_report = float("-inf")
+    t_begin = time.perf_counter()
 
     def status(connected: bool, reason: str) -> dict[str, Any]:
         return {
@@ -595,12 +613,30 @@ def run_camera(
             "commands": advertised,
         }
 
-    with LatestFrameCamera(cam_cfg, name, source) as cam:
-        first = cam.wait_new(0, timeout=cfg.workers.first_frame_timeout_s)
+    def report_unavailable(error: str | None) -> None:
+        """Log ``camera_unavailable`` at most every ``report_s``: at once when opening really failed, otherwise only
+        after ``first_frame_timeout_s`` (DirectShow takes ~4 s to open 720p)."""
+        nonlocal last_report
+        now = time.perf_counter()
+        if error is None and now - t_begin < cfg.workers.first_frame_timeout_s:
+            return
+        if now - last_report >= report_s:
+            last_report = now
+            log.warning(
+                "camera_unavailable",
+                extra={"fields": {"camera": name, "error": error or "no frame", "retry_report_s": report_s}},
+            )
+
+    with LatestFrameCamera(cam_cfg, name, source, quiet_open_errors=True) as cam:
+        first = None
+        while first is None and not stop.is_set():
+            first = cam.wait_new(0, timeout=STATUS_EVERY_S)
+            if first is None:
+                put_latest(results, status(False, "camera_unavailable"))  # heartbeat: the process is alive
+                report_unavailable(cam.stats().last_error)
         info = cam.stats().info
         if first is None or info is None:
-            put_latest(results, status(False, "no_frame"))
-            raise SystemExit(2)
+            return  # stopped before the camera ever appeared
         ctx = CameraContext(
             name=name,
             cfg=cfg,
@@ -650,7 +686,10 @@ def run_camera(
                     if now - last_status >= STATUS_EVERY_S:
                         last_status = now
                         stats = cam.stats()
-                        put_latest(results, status(stats.connected, "no_new_frame"))
+                        reason = "no_new_frame" if stats.connected else "camera_unavailable"
+                        put_latest(results, status(stats.connected, reason))
+                        if not stats.connected:
+                            report_unavailable(stats.last_error or "camera lost")
                     continue
                 last_id = frame.frame_id
                 if face_hz:  # passenger camera at its (degradable) rate; due times, so 30 fps / 10 Hz = every 3rd frame
@@ -664,6 +703,7 @@ def run_camera(
                 perf.add("e2e_worker", (time.perf_counter() - frame.t_capture) * 1000.0)
                 perf.rate.tick()
                 stats = cam.stats()
+                cap_info = stats.info or info
                 seq += 1
                 msg = {
                     **payload,
@@ -674,6 +714,7 @@ def run_camera(
                     "t_wall": round(t_wall, 4),
                     "connected": stats.connected,
                     "commands": advertised,
+                    "capture": {"device": cap_info.device, "via": cap_info.via, "name": cap_info.device_name},
                     "perf": {
                         "models": perf.snapshot(),
                         "capture_fps": round(stats.capture_fps, 1),

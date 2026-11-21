@@ -4,8 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from perception.config import load_config
+from perception.config import PerceptionConfig, load_config
+from perception.driver_cam.pipeline import DriverPipeline, DriverState
 from perception.evaluation import EvalResult, evaluate, run_pipeline
+from perception.features import FaceFeatures
 from perception.labels import Interval, load_labels, to_intervals
 from perception.recorder import DATA_DIR, FeatureWriter
 from perception.replay import FeatureReplay
@@ -159,3 +161,57 @@ def test_looking_down_at_the_lap_is_not_a_nod() -> None:
 
     assert run({"ear_left": OPEN * 0.6, "look_down": 0.8, "blink": 0.3}) is False
     assert run({"ear_left": CLOSED, "blink": 0.9}) is True
+
+
+def _nod_run(
+    cfg: PerceptionConfig,
+    before: list[tuple[float, dict[str, object]]],
+    during: dict[str, object],
+    dropout_frames: int = 0,
+) -> list[DriverState]:
+    """3 s open upright, ``before`` (upright), then the head falls 25 deg in 0.5 s and stays down 2 s with the eyes
+    as ``during``; ``dropout_frames`` frames without a face in the middle of the fall."""
+    spec: list[tuple[float, dict[str, object]]] = [(3.0, {"ear_left": OPEN, "matrix": rotation_matrix()})]
+    spec += [(d, {**kw, "matrix": rotation_matrix()}) for d, kw in before]
+    spec += [(0.1, {**during, "matrix": rotation_matrix(pitch=NOD_SIGN * 5.0 * k)}) for k in range(1, 6)]
+    spec.append((2.0, {**during, "matrix": rotation_matrix(pitch=NOD_SIGN * 25.0)}))
+    fall_start = round((3.0 + sum(d for d, _ in before)) * FPS)
+    gap = range(fall_start + 6, fall_start + 6 + dropout_frames)
+    pipeline = DriverPipeline(cfg, (W, H), (OPEN, OPEN))
+    states = []
+    for k, ff in enumerate(frames(spec)):
+        if k in gap:
+            ff = ff.model_copy(update={"face": FaceFeatures(present=False, conf=0.0)})
+        states.append(pipeline.update(ff))
+    return states
+
+
+SHUT: dict[str, object] = {"ear_left": CLOSED, "blink": 0.9}
+# shut lids seen from above: the eye detector says SQUINT
+SHUT_LIDS_HEAD_DOWN: dict[str, object] = {"ear_left": OPEN * 0.6, "blink": 0.3}
+LOOK_DOWN: dict[str, object] = {"ear_left": OPEN * 0.6, "look_down": 0.8, "blink": 0.3}
+
+
+@pytest.mark.parametrize("dropout_frames", [0, 4])
+def test_nod_with_closed_eyes_reading_squint_once_the_head_is_down(dropout_frames: int) -> None:
+    """The real microsleep: eyes shut, then the head falls. With the head down the shut lids read SQUINT and the face
+    can drop out for a few frames; before the latch / gap tolerance this was not a nod (1 of 2 live nods, eval
+    2026-11-21)."""
+    cfg = load_config()
+    states = _nod_run(cfg, [(0.8, SHUT)], SHUT_LIDS_HEAD_DOWN, dropout_frames)
+    assert any(s.eyes.state == "SQUINT" for s in states)  # the eye detector alone no longer says CLOSED
+    assert any(s.head.nodding for s in states)
+
+
+def test_blink_then_glance_at_the_lap_is_not_a_nod() -> None:
+    """A blink does not arm the nod latch: only a closure longer than a blink does."""
+    cfg = load_config()
+    states = _nod_run(cfg, [(0.15, SHUT), (0.3, {"ear_left": OPEN})], LOOK_DOWN)
+    assert not any(s.head.nodding for s in states)
+
+
+def test_reopened_eyes_disarm_the_nod_latch() -> None:
+    """Closure, eyes clearly open again, then a glance at the lap: not a nod."""
+    cfg = load_config()
+    states = _nod_run(cfg, [(0.8, SHUT), (0.4, {"ear_left": OPEN})], LOOK_DOWN)
+    assert not any(s.head.nodding for s in states)
