@@ -80,6 +80,21 @@ escalation:
   phone: "Lasă telefonul."
   phone_message: "Lasă telefonul, ți-l citesc eu."   # a message is waiting (scene 3)
 
+# B4: the cause of the distraction, for the event log. Fields: glances (in cause.window_s)
+causes:
+  passenger_showing_phone: "Cauză: pasagerul îi arată ceva pe telefon ({glances} priviri spre dreapta)."
+  passenger_talk: "Cauză: discuția cu pasagerul ({glances} priviri spre dreapta)."
+  incoming_message: "Cauză: un mesaj nou pe telefon."
+  phone: "Cauză: telefonul în mână."
+  child_activity: "Cauză: copilul din spate ({glances} priviri în spate)."
+
+# D2, D6: the measured effect of an intervention ("efectul măsurat în această sesiune"). Fields: pct
+interventions:
+  delegate_ok: "Cauză rezolvată ✓ (+{pct}%): privirile spre pasager au scăzut."
+  delegate_no: "Remediul nu a ajutat: privirile spre pasager nu au scăzut. Se renunță la el."
+  music_ok: "Muzica a ajutat: dezinteresul a scăzut cu {pct}%."
+  music_no: "Muzica nu a scăzut dezinteresul."
+
 # B8: what the simple threshold "saw", for the event log next to the A/B counter.
 naive:
   head_pose: "Prag simplu: capul întors peste prag."

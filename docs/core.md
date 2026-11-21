@@ -248,7 +248,24 @@ monotonous highway alone gives D ~0.3); key 5 on the highway crosses D 0.6 after
 Checked end to end (real processes, P3's real client): scene 5, fixed gaze on the highway -> `disengagement_high` ->
 "Pare monoton. Pun ceva mai energic, din ce-ți place?" -> "da" -> music with `reason=disengagement`.
 
-## 7. Testing without the others
+## 7. The cause from two cameras (B4) and the effect of interventions (D2, D6)
+
+| File | What it does |
+|---|---|
+| `cause.py` | **B4.** Glances = entries into a zone (driver camera), counted over `cause.window_s`, fused with what the passenger camera sees and the context. Priority: `passenger_showing_phone` (>= 3 glances at the passenger AND her phone seen), `passenger_talk` (the glances AND she spoke), `incoming_message` (a message in the last `message_window_s` AND the driver took the phone or looked at the lap), `phone`, `child_activity` (>= 3 glances at `rear_seat` with a child declared). Kept `hold_s` after the evidence ends. A new cause goes to the log (`cause`, text from `templates.yaml`) and, for `cause.notify_labels`, to the assistant as `cause_detected` (not while it is silenced). `phone` is not sent: the C2 escalation handles it. |
+| `intervention.py` | **D6.** When the assistant answers a cabin cause (delegation, D2) or music starts against disengagement, the metric is taken over `intervention.before_s` and again `after_s` later: glances at the passenger for a delegation, mean D for the music. `intervention.last / effect_pct / stats` and the event `intervention_effect`: "Cauză rezolvată ✓ (+X%)" or "Remediul nu a ajutat ... Se renunță la el." Music asked by the driver is not measured. |
+
+F2 now defers messages only for the cabin causes (`messages.defer_causes`): a message is never deferred because of
+itself (`incoming_message`).
+
+Note for the demo: the music's effect on D shows within 15 s mostly through the reaction terms (the driver answers
+the offer promptly); the gaze entropy needs P1's 60 s window to recover.
+
+Checked end to end (real processes, P3's real client): scene 4, Maria shows her phone, three glances -> cause from
+both cameras -> "Maria, poți să-i povestești tu?" / "Andrei, ochii pe drum." -> A/B 2 / 0 -> 15 s later "Cauză
+rezolvată ✓ (+100%)".
+
+## 8. Testing without the others
 
 ```bash
 pytest tests/core                                   # the rules, scene by scene, in fake time

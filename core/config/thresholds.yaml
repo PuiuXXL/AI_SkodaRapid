@@ -149,6 +149,9 @@ cause:                          # B4: cause of the distraction, from the two cam
   message_window_s: 10          # driver phone / lap glances within 10 s of a new message -> incoming_message
   hold_s: 10                    # cause.label is kept this long after the evidence stops
   resolve_window_s: 30          # D2: the remedy is dropped if the glances do not fall within this window
+  # Labels the assistant gets as cause_detected (D2: delegate, read it for you, riddle). "phone" is not sent: the
+  # deterministic escalation (C2) already handles it and the LLM is silent at P2.
+  notify_labels: [passenger_showing_phone, passenger_talk, incoming_message, child_activity]
 
 blind_m:                        # B6: speed x time with the gaze off the road
   min_segment_m: 5              # shorter off-road stretches are not drawn on the map
@@ -167,7 +170,8 @@ messages:                       # F2: defer / ask / read
   defer_min_risk: 2             # assessment.risk at or above -> defer
   defer_min_speed_kmh: 120      # trip.speed_kmh at or above -> defer
   defer_levels: [P0, P1, P2]    # safety.level in these -> defer
-  defer_on_cause: true          # cause.label set -> defer
+  defer_causes: [passenger_showing_phone, passenger_talk, child_activity]   # cause.label in these -> defer
+                                # (not incoming_message / phone: the message is the cause, reading it solves it)
   retry_s: 5                    # a deferred message is checked again this often
 
 reminders:                      # K2, K3
