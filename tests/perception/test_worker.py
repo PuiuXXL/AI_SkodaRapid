@@ -136,10 +136,21 @@ def test_default_pipeline_satisfies_the_interface() -> None:
         assert isinstance(pipeline, CameraPipeline)
         assert {"debug", "dialog_window", "calibrate"} <= pipeline.commands
         payload = pipeline.process(_input(1))
-        assert {"state", "phone", "gesture", "monitoring", "calibration", "luma"} <= set(payload)
-        assert payload["modules"] == ["detectors", "calibration", "phone", "gesture", "monitoring"]
+        keys = {"state", "phone", "gesture", "hands", "monitoring", "calibration", "luma", "head_answer", "identity"}
+        assert keys <= set(payload)
+        assert payload["modules"] == [
+            "detectors",
+            "calibration",
+            "monitoring",
+            "hands",
+            "phone",
+            "head_answer",
+            "identity",
+        ]
+        assert {"enroll", "load_profile"} <= pipeline.commands
         assert pipeline.handle({"cmd": "debug", "on": True}) and pipeline.debug
-        assert not pipeline.handle({"cmd": "enroll", "name": "x"})  # no module for it yet
+        assert pipeline.handle({"cmd": "enroll", "name": "x"})  # identity module (no models here: error state)
+        assert pipeline.process(_input(2))["identity"]["enroll"]["state"] == "error"
         img = pipeline.render(_input(2), payload, debug=True, fps=15.0)
         assert img.shape == (240, 320, 3)
     finally:
@@ -154,10 +165,10 @@ def test_extra_modules_are_appended_and_isolated() -> None:
         assert pipeline.modules[-2].name == "failing" and pipeline.modules[-1].name == "patch"
         assert "enroll" in pipeline.commands
         first = pipeline.process(_input(1))  # the failing module is skipped, the frame still comes out
-        assert "frame_patch" not in first and first["patch"]["last"] is None
+        assert "patch" not in first.get("frame_patch", {}) and first["patch"]["last"] is None
         assert pipeline.handle({"cmd": "enroll", "name": "andrei"})
         second = pipeline.process(_input(2))
-        assert second["frame_patch"] == {"patch": {"driver": {"head": {"answer": "yes"}}}}
+        assert second["frame_patch"]["patch"] == {"driver": {"head": {"answer": "yes"}}}
         assert "patch_module" in pipeline.perf.snapshot()  # per-module timing
     finally:
         pipeline.close()
@@ -258,7 +269,7 @@ def test_extra_module_from_config_runs_in_the_process() -> None:
         assert _wait(worker, lambda: worker.available, 30.0)
         assert "patch" in _latest(worker)["modules"]
         worker.send({"cmd": "enroll", "name": "andrei"})
-        assert _wait(worker, lambda: "frame_patch" in _latest(worker), 10.0)
-        assert _latest(worker)["patch"]["last"] == "andrei"
+        assert _wait(worker, lambda: _latest(worker)["patch"]["last"] == "andrei", 10.0)
+        assert "patch" in _latest(worker)["frame_patch"]
     finally:
         worker.stop()

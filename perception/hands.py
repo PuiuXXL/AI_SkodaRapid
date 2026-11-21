@@ -248,9 +248,7 @@ class HandTracker:
         seen = [
             h
             for h in self._hands
-            if h.gesture in cfg.allowed
-            and (h.gesture_score or 0.0) >= cfg.min_score
-            and (mode == "dialog" or h.raised)
+            if h.gesture in cfg.allowed and (h.gesture_score or 0.0) >= cfg.min_score and (mode == "dialog" or h.raised)
         ]
         if not seen:
             if self._candidate is not None and (t - self._last_seen) * 1000.0 > cfg.dropout_ms:
@@ -286,6 +284,10 @@ class HandTracker:
             box_px=(round(x0, 1), round(y0, 1), round(max(xs) - x0, 1), round(max(ys) - y0, 1)),
             raised=raised,
         )
+
+    def warmup(self) -> None:
+        """Load the Gesture Recognizer and run it once on a blank frame (plan §8 rule 5: no stall on first use)."""
+        self._recognize(np.zeros((128, 128, 3), dtype=np.uint8), -1.0)
 
     def _ensure_recognizer(self) -> Any:
         if self._recognizer is None:

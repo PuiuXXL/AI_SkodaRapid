@@ -154,7 +154,7 @@ class Perf(_Model):
 class PerceptionFrame(_Model):
     """One message on ``/ws/perception`` (15 Hz)."""
 
-    ts: float  # time.time() of publication
+    ts: float  # time.time() at the capture of the newest driver frame (publication time without driver data)
     seq: int
     occupants: list[Occupant] = Field(default_factory=list)
     driver: Driver = Field(default_factory=Driver)
@@ -177,6 +177,7 @@ class Command(_Model):
     profile: str | None = None
     name: str | None = None
     quick: bool = False  # calibrate: ~15 s road + mirrors only, merged into the existing profile (proposed, §9)
+    camera: Literal["driver", "passenger"] | None = None  # enroll: the camera that takes the face (proposed, §9)
 
 
 # --- switch to P2's contract when it exists --------------------------------------------------------------
