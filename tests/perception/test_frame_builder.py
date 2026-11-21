@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import logging
 import time
+import typing
 from collections.abc import Iterator, Mapping
 from typing import Any
 
 import pytest
+from pydantic import BaseModel
 
 from perception import frame_builder
 from perception.config import PerceptionConfig, load_config
 from perception.contract import PerceptionFrame
 from perception.driver_cam.pipeline import DriverPipeline
+from perception.features import FaceFeatures, FeatureFrame
 from perception.frame_builder import build_frame, build_valid_frame, deep_merge, register_mapper
 from tests.perception.driver_factory import H, W, frames
 
@@ -94,13 +97,80 @@ def test_defaults_only_frame_is_valid(cfg: PerceptionConfig) -> None:
 
 
 def test_defaults_only_in_strict_mode(cfg: PerceptionConfig) -> None:
+    """Strict mode: P1 writes only the plan §7 fields. The P1 additions (``eyes.state``, ``monitoring_reason``,
+    ``perf.cameras.*.available``, ``publish_ts``) are part of contract v2.0 (shared/contracts.py) with defaults, so the
+    VALIDATED frame always carries them, on their defaults; what P1 itself writes is checked before validation."""
     strict = cfg.model_copy(update={"output": cfg.output.model_copy(update={"proposed_fields": False})})
-    frame = _build(strict, cameras={"driver": False}, publish_ts=1.0)
-    assert "state" not in frame["driver"]["eyes"]  # only plan §7 fields, all on their defaults
+    kwargs: dict[str, Any] = {
+        "seq": 1,
+        "driver": None,
+        "passenger": None,
+        "cameras": {"driver": False},
+        "e2e_ms_p95": None,
+        "system": {},
+        "max_age_ms": MAX_AGE_MS,
+        "publish_ts": 1.0,
+    }
+    written = build_frame(strict, **kwargs)
+    assert written["driver"] == {}  # no driver data: nothing written, not even the proposed eyes.state
+    assert set(written["perf"]["cameras"]["driver"]) == {"capture_fps", "process_fps", "dropped_frames"}
+    assert "publish_ts" not in written["perf"]
+    frame = build_valid_frame(strict, **kwargs)
     assert frame["driver"]["eyes"]["ear"] is None
-    assert "monitoring_reason" not in frame["driver"]
-    assert set(frame["perf"]["cameras"]["driver"]) == {"capture_fps", "process_fps", "dropped_frames"}
-    assert "publish_ts" not in frame["perf"]
+    assert frame["driver"]["eyes"].get("state", "UNKNOWN") == "UNKNOWN"  # contract default
+    assert frame["driver"].get("monitoring_reason") is None
+    assert frame["perf"].get("publish_ts") is None
+
+
+def _null_required(model: type[BaseModel], data: Any, path: str = "") -> list[str]:
+    """Paths of fields the contract declares without ``None`` that hold null (recursing into nested models)."""
+    bad: list[str] = []
+    if not isinstance(data, dict):
+        return bad
+    for name, info in model.model_fields.items():
+        key = info.alias or name
+        if key not in data:
+            continue
+        value, ann = data[key], info.annotation
+        nullable = ann is None or type(None) in typing.get_args(ann) or ann is type(None)
+        if value is None and not nullable:
+            bad.append(f"{path}{key}")
+        sub = ann if isinstance(ann, type) and issubclass(ann, BaseModel) else None
+        if sub is not None:
+            bad += _null_required(sub, value, f"{path}{key}.")
+        elif typing.get_origin(ann) is dict and isinstance(value, dict):
+            args = typing.get_args(ann)
+            if len(args) == 2 and isinstance(args[1], type) and issubclass(args[1], BaseModel):
+                for k, v in value.items():
+                    bad += _null_required(args[1], v, f"{path}{key}.{k}.")
+    return bad
+
+
+def test_empty_pipeline_result_gives_a_valid_frame(cfg: PerceptionConfig) -> None:
+    """No face on either camera and minimal worker messages (no monitoring confidence, no phone result): every
+    numeric field the contract declares without null is a number. ``face_conf`` is 0.0 without a face (P1's choice;
+    contract 2.1 also accepts null there)."""
+    pipeline = DriverPipeline(cfg, (W, H))
+    out = None
+    no_face = FaceFeatures(present=False, conf=0.0)
+    for i in range(30):
+        out = pipeline.update(FeatureFrame(t=i / 30.0, frame_id=i + 1, camera="driver", face=no_face))
+    assert out is not None and out.face.present is False
+    empty = out.model_dump(mode="json")
+    now = time.perf_counter()
+    minimal: dict[str, Any] = {"monitoring": {}, "phone": {}, "perf": {}, "modules": []}
+    frame = _build(
+        cfg,
+        driver=_msg(empty, "driver", now, time.time(), **minimal),
+        passenger=_msg(empty, "passenger", now, time.time(), **minimal),
+        cameras={"driver": True, "passenger": True},
+        now_perf=now,
+        publish_ts=time.time(),
+    )
+    shared = pytest.importorskip("shared.contracts")
+    parsed = shared.PerceptionFrame.model_validate(frame)
+    assert parsed.driver.face_conf == 0.0
+    assert _null_required(shared.PerceptionFrame, frame) == []
 
 
 def test_full_frame_with_capture_time(cfg: PerceptionConfig, state: dict[str, Any]) -> None:
@@ -219,3 +289,17 @@ def test_deep_merge() -> None:
     base: dict[str, Any] = {"a": {"b": 1, "c": {"d": 2}}, "e": [1]}
     deep_merge(base, {"a": {"c": {"d": 3, "f": 4}}, "e": [2], "g": {"h": 5}})
     assert base == {"a": {"b": 1, "c": {"d": 3, "f": 4}}, "e": [2], "g": {"h": 5}}
+
+
+def test_fallback_camera_is_reported(cfg: PerceptionConfig, state: dict[str, Any]) -> None:
+    """A camera opened through the development fallback says so (unless the monitor has a real reason)."""
+    now = time.perf_counter()
+    fallback = {"device": "0", "via": "fallback", "name": "Integrated Camera"}
+    frame = _build(cfg, driver=_msg(state, "driver", now, time.time(), capture=fallback), now_perf=now)
+    assert frame["driver"]["monitoring_reason"] == "camera_fallback"
+    lost = {"ok": False, "reason": "face_lost", "face_missing_s": 3.0}
+    frame = _build(cfg, driver=_msg(state, "driver", now, time.time(), capture=fallback, monitoring=lost), now_perf=now)
+    assert frame["driver"]["monitoring_reason"] == "face_lost"
+    usb = {"device": "1", "via": "usb", "name": "Logi C615 HD WebCam"}
+    frame = _build(cfg, driver=_msg(state, "driver", now, time.time(), capture=usb), now_perf=now)
+    assert frame["driver"]["monitoring_reason"] is None

@@ -93,14 +93,19 @@ def _present(cfg: PerceptionConfig, mon: Mapping[str, Any]) -> bool:
     return missing < cfg.monitoring.face_lost_s and mon.get("reason") not in _CAMERA_FAILURES
 
 
+def _num(value: Any, default: float = 0.0) -> float:
+    """A required numeric contract field: a missing / None source value becomes ``default`` (never null)."""
+    return default if value is None else float(value)
+
+
 def _phone(cfg: PerceptionConfig, phone: Mapping[str, Any], gaze: Mapping[str, Any]) -> dict[str, Any]:
     """AS7 from the phone tracker (YOLO + hands + owner vote; the lap pattern is already folded in there). A
     message without a tracker result falls back to the lap pattern alone."""
     if phone.get("in_use"):
-        return {"in_use": True, "conf": phone["conf"], "source": phone.get("source") or "detector"}
+        return {"in_use": True, "conf": _num(phone.get("conf")), "source": phone.get("source") or "detector"}
     if gaze.get("lap_pattern"):
         return {"in_use": True, "conf": cfg.phone.lap_pattern.conf, "source": "lap_pattern"}
-    return {"in_use": False, "conf": phone.get("conf", 0.0), "source": None}
+    return {"in_use": False, "conf": _num(phone.get("conf")), "source": None}
 
 
 def _occupant(cfg: PerceptionConfig, oid: int, seat: str, source: str, msg: Mapping[str, Any]) -> dict[str, Any]:
@@ -112,13 +117,19 @@ def _occupant(cfg: PerceptionConfig, oid: int, seat: str, source: str, msg: Mapp
     return occ
 
 
-def _monitoring_extras(mon: Mapping[str, Any]) -> dict[str, Any]:
+def _monitoring_extras(mon: Mapping[str, Any], msg: Mapping[str, Any]) -> dict[str, Any]:
+    """Proposed monitoring fields. ``face_conf`` is 0.0 without a face (the contract field is a float, never null).
+    A camera opened through the development fallback (``capture.via == "fallback"``, perception/capture.py) reports
+    ``monitoring_reason = "camera_fallback"`` unless the monitor has a real reason."""
+    reason = mon.get("reason")
+    if reason is None and (msg.get("capture") or {}).get("via") == "fallback":
+        reason = "camera_fallback"
     return {
-        "monitoring_ok": mon.get("ok", True),
-        "monitoring_reason": mon.get("reason"),
+        "monitoring_ok": bool(mon.get("ok", True)),
+        "monitoring_reason": reason,
         "monitoring_warnings": list(mon.get("warnings") or ()),
         "camera_mode": mon.get("mode"),
-        "face_conf": mon.get("confidence"),
+        "face_conf": _num(mon.get("confidence")),
     }
 
 
@@ -171,7 +182,7 @@ def _driver_block(cfg: PerceptionConfig, d: Mapping[str, Any], frame: dict[str, 
         frame["driver"]["gaze"].update(
             calibrated=g["calibrated"], off_road_60s_ms=g["off_road_60s_ms"], lap_pattern=g["lap_pattern"]
         )
-        frame["driver"].update(face_too_small=st["face"]["too_small"], **_monitoring_extras(mon))
+        frame["driver"].update(face_too_small=bool(st["face"]["too_small"]), **_monitoring_extras(mon, d))
 
 
 def _passenger_block(cfg: PerceptionConfig, p: Mapping[str, Any], frame: dict[str, Any]) -> None:
@@ -182,7 +193,7 @@ def _passenger_block(cfg: PerceptionConfig, p: Mapping[str, Any], frame: dict[st
         present, awake, closed_s = bool(ps["present"]), bool(ps["awake"]), float(ps["eyes_closed_s"])
     else:
         present = _present(cfg, mon)
-        closed_s = st["eyes"]["closed_ms"] / 1000.0
+        closed_s = _num(st["eyes"]["closed_ms"]) / 1000.0
         awake = closed_s < cfg.passenger.asleep_closed_s
     frame["passenger"] = {
         "present": present,
@@ -196,7 +207,7 @@ def _passenger_block(cfg: PerceptionConfig, p: Mapping[str, Any], frame: dict[st
     if present:
         frame["occupants"].append(_occupant(cfg, PASSENGER_ID, "front_right", "cam_passenger", p))
     if cfg.output.proposed_fields:
-        frame["passenger"].update(_monitoring_extras(mon))
+        frame["passenger"].update(_monitoring_extras(mon, p))
 
 
 def _apply_modules(

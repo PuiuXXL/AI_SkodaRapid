@@ -276,11 +276,11 @@ def build_perf_block(
         msg = msgs.get(name)
         cam: dict[str, Any] = {"capture_fps": 0.0, "process_fps": 0.0, "dropped_frames": 0}
         if msg is not None:
-            p = msg["perf"]
-            cam = {
-                "capture_fps": p["capture_fps"],
-                "process_fps": p["process_fps"],
-                "dropped_frames": p["dropped_frames"],
+            p = msg.get("perf") or {}
+            cam = {  # required numeric contract fields: never null, even from a partial message
+                "capture_fps": float(p.get("capture_fps") or 0.0),
+                "process_fps": float(p.get("process_fps") or 0.0),
+                "dropped_frames": int(p.get("dropped_frames") or 0),
             }
         if proposed:
             capture_ts, age_ms = (timing or {}).get(name, (None, None))
@@ -288,7 +288,7 @@ def build_perf_block(
                 available=available,
                 capture_ts=capture_ts,
                 age_ms=age_ms,
-                dropped_results=int(msg["perf"].get("dropped_results", 0)) if msg is not None else 0,
+                dropped_results=int((msg.get("perf") or {}).get("dropped_results") or 0) if msg is not None else 0,
             )
         perf["cameras"][name] = cam
     fields: dict[str, float | None] = {}
@@ -308,6 +308,8 @@ def build_perf_block(
     perf.update(e2e_ms_p95=e2e_ms_p95, cpu=system.get("cpu"), ram_mb=system.get("ram_mb"), gpu=system.get("gpu"))
     if proposed:
         perf["degrade_level"] = degrade_level
-        perf["stages_ms"] = {name: msg["perf"]["models"] for name, msg in msgs.items() if msg is not None}
+        perf["stages_ms"] = {
+            name: (msg.get("perf") or {}).get("models", {}) for name, msg in msgs.items() if msg is not None
+        }
         perf["publish_ts"] = round(publish_ts, 3) if publish_ts is not None else None
     return perf
