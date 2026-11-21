@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 from assistant import cabin, music
 from assistant.contract import Action, Event, State
-from assistant.settings import get_texts
+from assistant.settings import cfg, get_texts
 from assistant.textutil import fill, word_count
 
 _DEFAULT_NAME = ""  # placeholder used when a name is unknown ("Salut ." is avoided by fill())
@@ -100,8 +100,26 @@ def _disengagement_high(event: Event, state: State) -> list[dict]:
 
 
 def _media_declined(event: Event, state: State) -> list[dict]:
-    """Plan D8: music refused -> offer a quiz or a podcast."""
-    return [_ask(_t("media_declined"), expects="free")]
+    """Plan D8: music refused -> offer a quiz (or a podcast, if the catalog has one).
+
+    The question carries ``reason="quiz_offer"`` so ``assistant/dialog.py`` knows the
+    next "da" / "quiz" / "podcast" answer starts the quiz or plays the podcast.
+    """
+    key = "media_declined_with_podcast" if music.podcasts(state) else "media_declined"
+    question = _ask(_t(key), expects="free")
+    question["reason"] = "quiz_offer"
+    return [question]
+
+
+def _kss_answer(event: Event, state: State) -> list[dict]:
+    """Plan D3: acknowledge the KSS value; P2's rule picks the actual stop for high values."""
+    value = event.data.get("value")
+    if not isinstance(value, int):
+        return []
+    high = int(cfg("kss", "high", default=7))
+    mid = int(cfg("kss", "mid", default=5))
+    key = "kss_high" if value >= high else "kss_mid" if value >= mid else "kss_low"
+    return [_speak(fill(_t(key), value=value))]
 
 
 def _message(event: Event, state: State) -> list[dict]:
@@ -170,6 +188,7 @@ BUILDERS: dict[str, Callable[[Event, State], list[dict]]] = {
     "fatigue_high": _fatigue_high,
     "disengagement_high": _disengagement_high,
     "media_declined": _media_declined,
+    "kss_answer": _kss_answer,
     "message_received": _message,
     "safe_contact_reply": _message,
     "message_reply_dictated": _reply_dictated,

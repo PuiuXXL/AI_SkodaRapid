@@ -347,7 +347,8 @@ EVENT_TYPES: tuple[str, ...] = (
     "cause_detected",          # D2: state.cause.label is set
     "fatigue_high",            # D3/D10: F above threshold
     "disengagement_high",      # D8: D above threshold, context monotonous
-    "media_declined",          # D8: the driver refused the music
+    "media_declined",          # D8: the driver refused the music       (handled without LLM: quiz offer)
+    "kss_answer",              # D3: the driver answered the KSS question data: value (1-9)
     "message_received",        # F2: allowed by the timing rule           data: msg_id, delivery ("ask"|"read")
     "safe_contact_reply",      # F8: reply of the trusted contact         data: msg_id, delivery
     "message_reply_dictated",  # F3: the driver dictated a reply          data: msg_id, text

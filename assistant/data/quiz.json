@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "Spoken quiz offered when the driver refuses music against disengagement (plan D8: 'Refuz -> quiz sau podcast').",
+    "Read by assistant/quiz.py. Rules: question <= 15 words, nothing to read, a short spoken answer.",
+    "q = the question (Romanian); a = accepted answers (any of them, matched as whole words after removing",
+    "diacritics; put digits AND words for numbers); say = how the right answer is said when the driver misses it;",
+    "kid_safe = may be asked with a child on board (all of these are)."
+  ],
+  "questions": [
+    {"q": "Care e capitala Franței?", "a": ["paris"], "say": "Paris", "kid_safe": true},
+    {"q": "Câte roți are o bicicletă?", "a": ["2", "doua", "doi"], "say": "două", "kid_safe": true},
+    {"q": "Ce culoare are cerul într-o zi senină?", "a": ["albastru", "albastra"], "say": "albastru", "kid_safe": true},
+    {"q": "Câte zile are o săptămână?", "a": ["7", "sapte"], "say": "șapte", "kid_safe": true},
+    {"q": "Cel mai lung fluviu din România?", "a": ["dunarea", "dunare"], "say": "Dunărea", "kid_safe": true},
+    {"q": "Ce animal spune mu?", "a": ["vaca", "vaci", "bou"], "say": "vaca", "kid_safe": true},
+    {"q": "Câte continente sunt pe Pământ?", "a": ["7", "sapte"], "say": "șapte", "kid_safe": true},
+    {"q": "Cum se numește cel mai înalt munte din lume?", "a": ["everest"], "say": "Everest", "kid_safe": true},
+    {"q": "În ce oraș e Turnul Eiffel?", "a": ["paris"], "say": "Paris", "kid_safe": true},
+    {"q": "Câte minute are o oră?", "a": ["60", "saizeci"], "say": "șaizeci", "kid_safe": true},
+    {"q": "Ce planetă e cunoscută ca planeta roșie?", "a": ["marte"], "say": "Marte", "kid_safe": true},
+    {"q": "Care e cel mai mare ocean?", "a": ["pacific", "pacificul"], "say": "Pacificul", "kid_safe": true},
+    {"q": "Câte picioare are un păianjen?", "a": ["8", "opt"], "say": "opt", "kid_safe": true},
+    {"q": "Ce fruct e galben și curbat?", "a": ["banana", "banane"], "say": "banana", "kid_safe": true},
+    {"q": "Care e capitala Italiei?", "a": ["roma"], "say": "Roma", "kid_safe": true},
+    {"q": "În ce anotimp cad frunzele?", "a": ["toamna"], "say": "toamna", "kid_safe": true},
+    {"q": "Câte luni are un an?", "a": ["12", "douasprezece", "doisprezece"], "say": "douăsprezece", "kid_safe": true},
+    {"q": "Ce marcă de mașini e din Mladá Boleslav?", "a": ["skoda"], "say": "Skoda", "kid_safe": true},
+    {"q": "Care e capitala României?", "a": ["bucuresti"], "say": "București", "kid_safe": true},
+    {"q": "Ce culoare are semaforul când oprești?", "a": ["rosu", "rosie"], "say": "roșu", "kid_safe": true}
+  ]
+}

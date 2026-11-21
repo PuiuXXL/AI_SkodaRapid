@@ -148,9 +148,11 @@ def candidates(state: State, reason: str = "disengagement") -> list[Track]:
     child = cabin.has_child(state)
     playing = state.media.track_id if state.media.playing else None
 
+    podcast_genre = cfg("music", "podcast_genre", default="podcast")
     pool = [
         t for t in load_catalog()
         if t.energy >= min_energy and (t.kid_safe or not child) and t.id != playing
+        and t.genre != podcast_genre
     ]
 
     def rank(track: Track) -> tuple[int, int]:
@@ -159,6 +161,17 @@ def candidates(state: State, reason: str = "disengagement") -> list[Track]:
 
     pool.sort(key=rank)
     return pool[: cfg("music", "candidates_for_llm", default=5)]
+
+
+def podcasts(state: State) -> list[Track]:
+    """Podcast tracks (genre ``music.podcast_genre``) playable in the current cabin.
+
+    Offered together with the quiz when the driver refuses music (plan D8). Never
+    proposed as music by :func:`candidates`.
+    """
+    podcast_genre = cfg("music", "podcast_genre", default="podcast")
+    child = cabin.has_child(state)
+    return [t for t in load_catalog() if t.genre == podcast_genre and (t.kid_safe or not child)]
 
 
 def pick_track(state: State, reason: str = "disengagement") -> Optional[Track]:

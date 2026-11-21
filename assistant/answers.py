@@ -94,6 +94,41 @@ def interpret_voice(text: str, fatigue_dialog: bool = False) -> Optional[AnswerV
     return None
 
 
+#: Spoken Romanian numbers 1-9 (normalised, no diacritics) for the KSS answer (plan D3).
+KSS_WORDS: dict[str, int] = {
+    "unu": 1, "una": 1, "unul": 1, "doi": 2, "doua": 2, "trei": 3, "patru": 4, "cinci": 5,
+    "sase": 6, "sapte": 7, "opt": 8, "noua": 9,
+}
+
+
+def parse_kss(text: str) -> Optional[int]:
+    """Read a Karolinska Sleepiness Scale answer (1 = very alert ... 9 = very sleepy).
+
+    Accepts digits ("7", "cam 7") and Romanian words ("șapte", "vreo opt"). The first
+    number found wins, so "7, poate 8" gives 7.
+
+    Examples:
+        >>> parse_kss("Cam șapte")
+        7
+        >>> parse_kss("8")
+        8
+        >>> parse_kss("nu știu") is None
+        True
+
+    Args:
+        text: Recognised answer.
+
+    Returns:
+        An integer 1-9, or None when no KSS value is present.
+    """
+    for word in normalize(text).split():
+        if word.isdigit() and 1 <= int(word) <= 9:
+            return int(word)
+        if word in KSS_WORDS:
+            return KSS_WORDS[word]
+    return None
+
+
 def interpret(event: InputEvent, fatigue_dialog: bool = False) -> Optional[AnswerValue]:
     """Interpret one input on any channel (see module docstring for the mapping)."""
     if event.channel == "voice":

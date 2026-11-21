@@ -39,8 +39,20 @@ fallback:
   # D8: disengagement -> energetic music, from the driver's tastes.
   disengagement_music: "Pare monoton. Pun ceva mai energic, din ce-ți place?"
   disengagement_no_music: "Pare monoton. Vrei un quiz scurt?"
-  # D8: music refused -> quiz or podcast.
-  media_declined: "Bine. Vrei un quiz scurt sau un podcast?"
+  # D8: music refused -> quiz or podcast (podcast offered only if the catalog has one).
+  media_declined: "Bine. Vrei un quiz scurt?"
+  media_declined_with_podcast: "Bine. Vrei un quiz scurt sau un podcast?"
+  # Quiz (assistant/quiz.py, driven by assistant/dialog.py).
+  quiz_correct: "Corect!"
+  quiz_wrong: "Nu chiar, era {answer}."
+  quiz_end: "Gata quizul: {score} din {total}. Bravo!"
+  quiz_stopped: "Bine, oprim quizul."
+  quiz_unavailable: "Acum n-am întrebări pregătite."
+
+  # D3: answer to the KSS question (value 1-9; thresholds in assistant.yaml -> kss).
+  kss_high: "Ok, {value} e mult. Hai să găsim o pauză."
+  kss_mid: "Înțeles. Mai vorbim puțin, te ține treaz."
+  kss_low: "Bine. Spune-mi dacă obosești."
 
   # F2 / F8: a message arrived and P2's timing rule allows it.
   message_ask: "Mesaj de la {sender}. Îl citesc tare?"

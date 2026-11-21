@@ -29,8 +29,9 @@ llm:
   timeout_s: 2.5
   # Maximum number of actions accepted from one LLM answer (plan section 6).
   max_actions: 3
-  # Sampling temperature. Low = predictable, short answers.
-  temperature: 0.4
+  # Sampling temperature. Low = predictable, short answers (0.4 sometimes made the
+  # model stay silent on a direct request; 0.2 is more consistent).
+  temperature: 0.2
   # Upper bound for the generated JSON. Answers are tiny (<= 3 short actions).
   max_output_tokens: 400
   # Gemini "thinking" control. Leave BOTH null to use the model's default (tested:
@@ -52,6 +53,10 @@ speech:
   # Dialog window after a question, in seconds: voice is accepted without the
   # assistant's name while it is open (plan E1). Core opens it on speak_done.
   dialog_window_s: 6
+  # Seconds a question with pending actions ("Trimit?", "Bine?", KSS, quiz) waits for an
+  # answer before the pending actions are cancelled silently (assistant/dialog.py).
+  # Longer than the dialog window because the question itself must be spoken first.
+  pending_timeout_s: 20
 
 # -----------------------------------------------------------------------------
 # Policies (assistant/policies.py; plan "cel mult o intervenție proactivă la 30 s")
@@ -62,7 +67,8 @@ policies:
   # Safety levels at which the LLM is vetoed (plan C8: LLM silent at P0-P2).
   llm_vetoed_levels: [P0, P1, P2]
   # Event types that are proactive (rate-limited, blocked while muted / during conversation).
-  proactive_events: [cause_detected, fatigue_high, disengagement_high, media_declined]
+  # (media_declined is NOT proactive: it answers the driver's "no" to the music.)
+  proactive_events: [cause_detected, fatigue_high, disengagement_high]
   # Proactive events that are still allowed during an in-car conversation (plan G2:
   # "cu excepția situațiilor de siguranță sau cauză").
   allowed_during_conversation: [cause_detected, fatigue_high]
@@ -114,6 +120,26 @@ music:
   volume_passenger_asleep: 0.25
   # How many candidate tracks are shown to the LLM to choose from.
   candidates_for_llm: 5
+  # Catalog genre that marks spoken podcasts (offered with the quiz when music is
+  # refused, plan D8). With no such track in the catalog only the quiz is offered.
+  podcast_genre: podcast
+
+# -----------------------------------------------------------------------------
+# Quiz (assistant/quiz.py; plan D8 "Refuz -> quiz sau podcast")
+# -----------------------------------------------------------------------------
+quiz:
+  questions_file: assistant/data/quiz.json
+  # Questions per quiz.
+  length: 3
+
+# -----------------------------------------------------------------------------
+# KSS answer (plan D3: "Cât de obosit ești, 1-9?" -> pauză concretă)
+# -----------------------------------------------------------------------------
+kss:
+  # KSS >= high: the assistant announces a break (P2's rule then picks the stop).
+  high: 7
+  # mid <= KSS < high: keep the driver talking; below mid: just acknowledge.
+  mid: 5
 
 # -----------------------------------------------------------------------------
 # Reminders (plan K1 / D9)

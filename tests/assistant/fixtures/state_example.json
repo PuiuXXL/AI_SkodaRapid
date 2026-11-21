@@ -38,7 +38,8 @@
   "phone":      { "connected": true, "battery": 64 },
   "messages": [
     { "id": "m17", "app": "whatsapp", "from": "Mihai", "state": "pending",
-      "deferred_reason": null, "replyable": true, "ts": 1763672390.0 }
+      "deferred_reason": null, "replyable": true, "ts": 1763672390.0,
+      "text": "Salut! Unde ești? Mai durează mult?" }
   ],
   "call": null,
   "reminders": [
