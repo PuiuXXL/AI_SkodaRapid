@@ -88,6 +88,12 @@ class LatencyWindow:
         with self._lock:
             return list(self._values)
 
+    def clear(self) -> None:
+        """Drop the samples (the warm-up inference must not count in the p95)."""
+        with self._lock:
+            self._values.clear()
+            self._total = 0
+
     @property
     def count(self) -> int:
         """Total samples ever added (not only the ones still in the window)."""

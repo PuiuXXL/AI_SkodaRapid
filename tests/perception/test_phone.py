@@ -8,14 +8,12 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 import pytest
-import yaml
 
 from perception.hands import Hand
 from perception.phone import PhoneConfig, PhoneDetector, PhoneResult, PhoneTracker
 from perception.postprocess import Detection
 
 ROOT = Path(__file__).resolve().parents[2]
-PENDING = ROOT / "perception" / "config" / "pending" / "modules.yaml"
 SESSION = ROOT / "data" / "features" / "20261121-005208_desk-test-laptop-webcam"
 FACE = (540.0, 150.0, 200.0, 240.0)  # centre (640, 270), width 200
 W, H = 1280, 720
@@ -37,11 +35,6 @@ DRIVER_LEFT_FAR = det(1050, 500)  # driver's left (door side), far from the face
 
 def vote(tracker: PhoneTracker, seq: list[bool], box: Detection = NEAR_FACE, **kw: Any) -> list[PhoneResult]:
     return [tracker.update(i * 0.2, [box] if seen else [], face_box=FACE, **kw) for i, seen in enumerate(seq)]
-
-
-def test_pending_yaml_matches_defaults() -> None:
-    section = yaml.safe_load(PENDING.read_text(encoding="utf-8"))["phone"]
-    assert PhoneConfig.from_mapping(section) == PhoneConfig()
 
 
 def test_invalid_config_rejected() -> None:

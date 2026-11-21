@@ -7,7 +7,9 @@ eye crops vs 93.2 % with personalised EAR).
 
 Model: **open-closed-eye-0001** (Intel OpenVINO Open Model Zoo, Apache-2.0), trained on the MRL Eye Dataset,
 95.84 % accuracy, 0.0014 GFLOPs: input ``1x3x32x32`` BGR, ``(x - 127) / 255``; output ``19``: softmax
-``[open, closed]``. Downloaded by ``scripts/download_models.sh`` (SHA-384 from the official ``model.yml``).
+``[closed, open]`` (:data:`CLOSED_CLASS`; checked live 2026-11-21: wide-open eyes give class 1 ~ 1.0, shut eyes
+class 0 ~ 1.0; reading it the other way round vetoed every real closure). Downloaded by
+``scripts/download_models.sh`` (SHA-384 from the official ``model.yml``).
 
 The crop is a square around the two eye corners (``eyes.cnn.crop_scale`` x the corner distance), axis-aligned.
 Crops are computed in memory and never stored (data policy, docs/perception.md §5).
@@ -26,10 +28,11 @@ from perception.driver_cam.eyes import EAR_POINTS
 from perception.features import FaceFeatures
 from perception.runtime import OnnxModel
 
-__all__ = ["EyeStateCNN", "eye_crop", "eye_input"]
+__all__ = ["CLOSED_CLASS", "EyeStateCNN", "eye_crop", "eye_input"]
 
 Image = npt.NDArray[np.uint8]
 INPUT = 32
+CLOSED_CLASS = 0  # output index of 'closed' (see the module docstring)
 
 
 def eye_crop(image: Image, face: FaceFeatures, side: str, scale: float) -> Image | None:
@@ -78,5 +81,5 @@ class EyeStateCNN:
             (out,) = self.model.run(eye_input(crop))[:1]
             scores = np.asarray(out, dtype=np.float64).reshape(-1)[:2]
             total = float(scores.sum())
-            probs.append(round(float(scores[1] / total) if total > 0 else 0.0, 4))
+            probs.append(round(float(scores[CLOSED_CLASS] / total) if total > 0 else 0.0, 4))
         return probs
