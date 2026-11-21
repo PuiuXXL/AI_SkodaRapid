@@ -13,10 +13,12 @@ No detector logic and no filtering here: this is the raw, per-frame model output
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
 import cv2
+import numpy as np
 
 from perception.capture import Frame
 from perception.config import PerceptionConfig
@@ -67,7 +69,10 @@ class FeatureExtractor:
         self.models["face_landmarker"] = {"file": self.face.path.name, "backend": "mediapipe"}
 
         self._gaze: MobileGazeModel | None = None
-        self._gaze_every = every_n_frames(camera_fps, cfg.rates.gaze_hz)
+        self._gaze_every = every_n_frames(camera_fps, cfg.rates.gaze_hz)  # nominal, for the recording meta
+        # time-based: at 22 processed fps a frame count runs MobileGaze at ~11 Hz instead of gaze_hz
+        self._gaze_period = 1.0 / cfg.rates.gaze_hz if cfg.rates.gaze_hz > 0 else 0.0
+        self._gaze_next = float("-inf")
         if gaze:
             self._gaze = MobileGazeModel(cfg)
             self.models["gaze"] = {
@@ -140,7 +145,7 @@ class FeatureExtractor:
             face = face.model_copy(update={"eye_closed_p": self._eye_cnn.closed_probs(image, face)})
 
         gaze_out: GazeFeatures | None = None
-        if self._gaze is not None and index % self._gaze_every == 0 and face.present:
+        if self._gaze is not None and face.present and self._gaze_due(frame.t_capture):
             gaze_out = self._gaze.estimate(image, face_box)
 
         phones: list[PhoneBox] | None = None
@@ -165,6 +170,34 @@ class FeatureExtractor:
         return FeatureFrame(
             t=round(t, 4), frame_id=frame.frame_id, camera=camera, face=face, gaze=gaze_out, hands=hands, phones=phones
         )
+
+    def _gaze_due(self, t_capture: float) -> bool:
+        """True when the gaze model is due (10 ms tolerance so a 30 fps camera hits 15 Hz exactly)."""
+        if t_capture < self._gaze_next - 0.010:
+            return False
+        late = t_capture - self._gaze_next > self._gaze_period
+        self._gaze_next = t_capture + self._gaze_period if late else self._gaze_next + self._gaze_period
+        return True
+
+    def warmup(self, width: int, height: int) -> None:
+        """One inference of every loaded model on a blank frame (plan §8 rule 5: no first-frame stall)."""
+        image = np.zeros((height, width, 3), dtype=np.uint8)
+        mp_image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=image)
+        t0 = time.perf_counter()
+        self.face.detect(mp_image, t0 - 1.0, width, height)  # earlier than any real frame (VideoClock stays monotonic)
+        if self._gaze is not None:
+            self._gaze.estimate(image, (width / 4, height / 4, width / 2, height / 2))
+        if self._eye_cnn is not None:
+            from perception.driver_cam.eye_cnn import eye_input
+
+            self._eye_cnn.model.run(eye_input(np.zeros((32, 32, 3), dtype=np.uint8)))
+        if self._phone is not None:
+            tensor, _ = letterbox(image, self._phone_size)
+            self._phone.run(tensor)
+        for window in (self.gaze_latency, self.eye_state_latency, self.phone_latency):
+            if window is not None:
+                window.clear()
+        log.info("models warmed up", extra={"fields": {"ms": round((time.perf_counter() - t0) * 1000, 1)}})
 
     def set_phone_hz(self, rate_hz: float) -> None:
         """Change the YOLO rate at run time (degradation rule, plan §8)."""

@@ -6,12 +6,15 @@
   - ``results`` (maxsize 1): the newest result only; an unread older one is thrown away (counted: ``dropped_results``);
   - ``jpegs`` (maxsize 1): the overlay preview (``output.video_width`` px, ``output.jpeg_quality``,
     ``output.video_fps``), rendered and encoded **only while** ``want_jpeg`` is set (an MJPEG client is connected);
-  - ``commands``: ``debug``, ``dialog_window``, ``calibrate``, ``rates`` (degradation rule), and anything a module
-    declares (``enroll`` once identity exists). A command no module handles is only logged.
-* :class:`ModularPipeline` (the default) = the feature extractor (models) + an ordered list of
-  :class:`PipelineModule`. Built-in modules wrap the existing detectors: ``detectors`` (DriverPipeline), ``calibration``
-  (driver only), ``phone`` (YOLO vote + geometry), ``gesture`` (dialog window), ``monitoring``. Extra modules come from
-  pending ``workers.modules.<camera>`` (``"package.module:Class"``), constructed as ``Class(ctx, extractor)``.
+  - ``commands``: ``debug``, ``dialog_window``, ``calibrate``, ``load_profile``, ``enroll``, ``rates``
+    (degradation rule), and anything a module declares. A command no module handles is only logged.
+* :class:`ModularPipeline` (the default) = the feature extractor (Face Landmarker, MobileGaze on the driver, eye-state
+  CNN) + an ordered list of :class:`PipelineModule`: ``detectors`` (DriverPipeline), ``calibration`` (driver only),
+  ``monitoring`` (CameraMonitor), ``hands`` (Gesture Recognizer as hand tracker), ``phone`` (YOLO26 + geometry +
+  owner vote), ``head_answer`` (AS8), ``identity`` (YuNet + SFace, ``enroll``), ``passenger_state`` (AP2, passenger
+  camera); the last six live in perception/modules.py. Extra modules come from ``workers.modules.<camera>``
+  (``"package.module:Class"``), constructed as ``Class(ctx, extractor)``; one that fails to construct or to run is
+  logged once and skipped, so it cannot stop the camera.
 * :class:`CameraWorker` is the main-process handle: start / stop / send, newest result and JPEG, and supervision:
   a dead process (or one silent for ``workers.stale_s``) is restarted with exponential backoff, and the camera is
   reported unavailable while it is down.
@@ -19,8 +22,9 @@
 Messages are plain dicts (picklable, cheap). ``kind="frame"`` carries the pipeline output plus ``t_capture``
 (``perf_counter``) and ``t_wall`` (``time.time()`` at capture); ``kind="status"`` is a heartbeat when no frame arrives
 (camera unplugged, frozen driver), so the main process always knows the state. The gaze calibration state rides on
-every driver frame (``calibration``: id, state, prompt, result): ``results`` keeps only the newest message, so a
-one-off "done" message could be lost; a persistent state cannot.
+every driver frame (``calibration``: id, state, prompt, result), and the enrollment state on every frame of that
+camera (``identity.enroll``): ``results`` keeps only the newest message, so a one-off "done" message could be lost; a
+persistent state cannot.
 """
 
 from __future__ import annotations
@@ -30,7 +34,6 @@ import importlib
 import multiprocessing as mp
 import queue
 import time
-from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from multiprocessing.queues import Queue
@@ -38,8 +41,8 @@ from multiprocessing.sharedctypes import Synchronized
 from multiprocessing.synchronize import Event
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from perception.config import PerceptionConfig, PhoneConfig
-from perception.features import FaceFeatures, FeatureFrame, HandFeatures, PhoneBox
+from perception.config import PerceptionConfig
+from perception.features import FaceFeatures, FeatureFrame
 from perception.log import get_logger
 
 if TYPE_CHECKING:
@@ -58,9 +61,7 @@ __all__ = [
     "CameraPipeline",
     "CameraWorker",
     "FrameInput",
-    "GestureHold",
     "ModularPipeline",
-    "PhoneVoter",
     "PipelineFactory",
     "PipelineModule",
     "WorkerOptions",
@@ -196,72 +197,6 @@ def resolve_factory(factory: PipelineFactory | str | None) -> PipelineFactory:
     return factory
 
 
-# --- small detectors that live with the camera ----------------------------------------------------------
-
-
-class PhoneVoter:
-    """AS7 / AP4 (detector part): phone in use if YOLO saw one in ``vote_min`` of the last ``vote_window`` runs."""
-
-    def __init__(self, cfg: PhoneConfig) -> None:
-        self.cfg = cfg
-        self._votes: deque[bool] = deque(maxlen=cfg.vote_window)
-        self._last: PhoneBox | None = None
-        self.in_use = False
-        self.conf = 0.0
-
-    def update(self, phones: list[PhoneBox] | None) -> None:
-        if phones is None:  # YOLO did not run on this frame: keep the last decision
-            return
-        best = max(phones, key=lambda b: b.score) if phones else None
-        self._votes.append(best is not None)
-        if best is not None:
-            self._last = best
-        self.in_use = sum(self._votes) >= self.cfg.vote_min
-        self.conf = round(best.score, 3) if best is not None else (self.conf if self.in_use else 0.0)
-        if not self.in_use:
-            self._last = best
-
-    def geometry(self, face: FaceFeatures, frame_w: int, frame_h: int) -> tuple[bool, str | None]:
-        """(near_face, side): side in the person's terms (the image is not mirrored: image right = their left)."""
-        if not self.in_use or self._last is None or not face.present or face.landmarks is None:
-            return False, None
-        from perception.driver_cam.face import face_box_px
-
-        box = face_box_px(face, frame_w, frame_h)
-        if box is None:
-            return False, None
-        fx, fy, fw, fh = box
-        px = (self._last.x1 + self._last.x2) / 2
-        py = (self._last.y1 + self._last.y2) / 2
-        dist = ((px - (fx + fw / 2)) ** 2 + (py - (fy + fh / 2)) ** 2) ** 0.5
-        near = dist <= self.cfg.near_face_ratio * fw
-        return near, ("left" if px > fx + fw / 2 else "right")
-
-
-class GestureHold:
-    """An allowed gesture with score >= ``min_score`` held for ``min_duration_s`` (AS9 / AP6)."""
-
-    def __init__(self, allowed: list[str], min_score: float, min_duration_s: float) -> None:
-        self.allowed = set(allowed)
-        self.min_score = min_score
-        self.min_duration_s = min_duration_s
-        self._current: str | None = None
-        self._since = 0.0
-
-    def update(self, t: float, hands: list[HandFeatures] | None) -> str | None:
-        if hands is None:
-            return self._current if self._current and t - self._since >= self.min_duration_s else None
-        seen = [
-            h.gesture
-            for h in hands
-            if h.gesture in self.allowed and (h.gesture_score or 0.0) >= self.min_score and h.gesture is not None
-        ]
-        gesture = seen[0] if seen else None
-        if gesture != self._current:
-            self._current, self._since = gesture, t
-        return gesture if gesture and t - self._since >= self.min_duration_s else None
-
-
 class _NullExtractor:
     """No models: every frame has no face (IPC / main-loop tests and CI without model files)."""
 
@@ -274,17 +209,11 @@ class _NullExtractor:
             t=round(t, 4), frame_id=frame.frame_id, camera=camera, face=FaceFeatures(present=False, conf=0.0)
         )
 
-    def set_phone_hz(self, rate_hz: float) -> None:
-        return None
-
-    def set_gesture(self, rate_hz: float | None) -> None:
-        return None
-
     def close(self) -> None:
         return None
 
 
-# --- built-in modules (the existing detectors, unchanged behaviour) -------------------------------------
+# --- built-in modules ---------------------------------------------------------------------------------------
 
 
 class DetectorsModule:
@@ -297,9 +226,20 @@ class DetectorsModule:
         from perception.driver_cam.pipeline import DriverPipeline
 
         self.pipeline: DriverPipeline = DriverPipeline(ctx.cfg, (ctx.width, ctx.height))
+        self.hands_seen_t: Callable[[], float | None] | None = None  # set by default_pipeline (hands module)
+        self._last_hands_t: float | None = None
+
+    def reset_image_state(self) -> None:
+        """Day <-> IR night switch: the EAR references and angle filters were learned on the other image."""
+        self.pipeline.reset_image_state()
 
     def update(self, ff: FeatureFrame, inp: FrameInput) -> dict[str, Any]:
-        state = self.pipeline.update(ff)
+        hands_seen: bool | None = None
+        if self.hands_seen_t is not None:  # the hand tracker ran on an earlier frame: "seen" when it saw a new hand
+            t_hand = self.hands_seen_t()
+            hands_seen = t_hand is not None and t_hand != self._last_hands_t
+            self._last_hands_t = t_hand
+        state = self.pipeline.update(ff, hands_seen=hands_seen)
         inp.shared["state"] = state
         return {"state": state.model_dump(mode="json")}
 
@@ -314,7 +254,7 @@ class CalibrationModule:
     """Gaze calibration (``calibrate`` command, driver camera): profile load at start, run, save (§3.4)."""
 
     name = "calibration"
-    commands = frozenset({"calibrate"})
+    commands = frozenset({"calibrate", "load_profile"})
 
     def __init__(self, ctx: CameraContext, detectors: DetectorsModule) -> None:
         from perception.calibration import Calibration, profile_path
@@ -342,7 +282,34 @@ class CalibrationModule:
             "profile": self.profile.name if self.profile else None,
         }
 
+    def load_profile(self, name: str) -> bool:
+        """Use ``profiles/<name>/calibration.json`` (a profile calibrated before, or the recognised driver)."""
+        from perception.calibration import Calibration, profile_path
+
+        if self.run is not None or (self.profile is not None and self.profile.name == name):
+            return False
+        try:
+            path = profile_path(name)
+            if not path.exists():
+                return False
+            self.profile = Calibration.load(self.ctx.cfg, path)
+        except (OSError, ValueError) as exc:
+            log.warning("gaze profile not loaded", extra={"fields": {"profile": name, "error": str(exc)}})
+            return False
+        self.detectors.pipeline.set_calibration(self.profile.model, self.profile.ear_baseline)
+        self.status = {**self.status, "profile": self.profile.name}
+        log.info("gaze profile loaded", extra={"fields": {"profile": self.profile.name}})
+        return True
+
+    def follow_identity(self, profile: str | None) -> None:
+        """The identity module recognised the driver: switch to their calibration if they have one."""
+        if profile:
+            self.load_profile(profile)
+
     def handle(self, cmd: dict[str, Any]) -> bool:
+        if cmd.get("cmd") == "load_profile":
+            self.load_profile(str(cmd.get("profile") or ""))
+            return True
         if cmd.get("cmd") != "calibrate":
             return False
         from perception.calibration import CalibrationRun, profile_path
@@ -403,98 +370,6 @@ class CalibrationModule:
         return None
 
 
-class PhoneModule:
-    """AS7 / AP4 detector part: 3-of-5 YOLO vote + near_face / side; applies the degraded YOLO rate."""
-
-    name = "phone"
-    commands: frozenset[str] = frozenset()
-
-    def __init__(self, ctx: CameraContext, extractor: Any) -> None:
-        self.ctx = ctx
-        self.extractor = extractor
-        self.voter = PhoneVoter(ctx.cfg.phone)
-
-    def update(self, ff: FeatureFrame, inp: FrameInput) -> dict[str, Any]:
-        self.voter.update(ff.phones)
-        near_face, side = self.voter.geometry(ff.face, self.ctx.width, self.ctx.height)
-        return {"phone": {"in_use": self.voter.in_use, "conf": self.voter.conf, "near_face": near_face, "side": side}}
-
-    def handle(self, cmd: dict[str, Any]) -> bool:
-        if cmd.get("cmd") == "rates" and "phone_hz" in cmd:
-            self.extractor.set_phone_hz(float(cmd["phone_hz"]))
-            return True
-        return False
-
-    def close(self) -> None:
-        return None
-
-
-class GestureModule:
-    """AS9 / AP6: Gesture Recognizer on only inside the dialog window; gesture held ``min_duration_s``."""
-
-    name = "gesture"
-    commands = frozenset({"dialog_window"})
-
-    def __init__(self, ctx: CameraContext, extractor: Any) -> None:
-        cfg = ctx.cfg
-        self.cfg = cfg
-        self.extractor = extractor
-        self.hold = GestureHold(list(cfg.gesture.allowed), cfg.gesture.min_score, cfg.gesture.min_duration_s)
-        self.dialog_until: float | None = None  # perf_counter
-
-    def handle(self, cmd: dict[str, Any]) -> bool:
-        if cmd.get("cmd") != "dialog_window":
-            return False
-        if cmd.get("open"):
-            self.dialog_until = cmd.get("until_perf") or (time.perf_counter() + 6.0)
-            self.extractor.set_gesture(self.cfg.rates.gaze_hz)
-        else:
-            self.dialog_until = None
-            self.extractor.set_gesture(None)
-        return True
-
-    def update(self, ff: FeatureFrame, inp: FrameInput) -> dict[str, Any]:
-        if self.dialog_until is not None and time.perf_counter() > self.dialog_until:
-            self.dialog_until = None
-            self.extractor.set_gesture(None)
-        return {"gesture": self.hold.update(inp.t, ff.hands), "dialog_open": self.dialog_until is not None}
-
-    def close(self) -> None:
-        return None
-
-
-class MonitoringModule:
-    """AS12 / AP5: camera frozen / covered / face lost (perception/monitoring.py) + mean luma."""
-
-    name = "monitoring"
-    commands: frozenset[str] = frozenset()
-
-    def __init__(self, ctx: CameraContext, extractor: Any) -> None:
-        from perception.monitoring import Monitor
-
-        self.monitor = Monitor(ctx.cfg.monitoring)
-
-    def update(self, ff: FeatureFrame, inp: FrameInput) -> dict[str, Any]:
-        from perception.monitoring import thumbnail
-        from perception.overlay import mean_luma
-
-        image = inp.frame.image
-        luma = mean_luma(image)
-        inp.shared["luma"] = luma
-        mon = self.monitor.update(inp.t, face_present=ff.face.present, thumb=thumbnail(image), luma=luma)
-        inp.shared["monitoring"] = mon
-        return {
-            "monitoring": {"ok": mon.ok, "reason": mon.reason, "face_missing_s": mon.face_missing_s},
-            "luma": round(luma, 1),
-        }
-
-    def handle(self, cmd: dict[str, Any]) -> bool:
-        return False
-
-    def close(self) -> None:
-        return None
-
-
 # --- the default pipeline -------------------------------------------------------------------------------
 
 
@@ -520,8 +395,6 @@ class ModularPipeline:
         self.debug = False
         self.commands = frozenset({"debug"}).union(*(m.commands for m in self.modules))
         for model, attr in (
-            ("phone", "phone_latency"),
-            ("gesture", "gesture_latency"),
             ("eye_state", "eye_state_latency"),
             ("gaze", "gaze_latency"),
         ):
@@ -602,7 +475,7 @@ class ModularPipeline:
                     draw(img, inp)
             return img
         img = inp.frame.image.copy()
-        mon = payload.get("monitoring") or {}
+        mon = payload.get("monitoring") or {}  # CameraMonitor result
         eyes = state.eyes.state if state is not None else ""
         label = f"{self.ctx.name} {eyes} {'' if mon.get('ok', True) else mon.get('reason') or ''}"
         cv2.putText(img, label, (16, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
@@ -621,26 +494,53 @@ def make_extractor(ctx: CameraContext) -> Any:
     if ctx.options.models and cfg.models.path(cfg.models.face_landmarker).exists():
         from perception.extractor import FeatureExtractor
 
-        # MobileGaze (gaze zones, AS5) on the driver camera only
-        return FeatureExtractor(cfg, camera_fps=ctx.fps, camera=ctx.name, gaze=ctx.is_driver, phone=True)
+        # MobileGaze (gaze zones, AS5) on the driver camera only. YOLO and the Gesture Recognizer run in their own
+        # modules (phone, hands) at time-based rates, so the extractor does not run them at runtime.
+        extractor = FeatureExtractor(cfg, camera_fps=ctx.fps, camera=ctx.name, gaze=ctx.is_driver, phone=False)
+        extractor.warmup(ctx.width, ctx.height)  # plan §8 rule 5: every model warmed up at start
+        return extractor
     if ctx.options.models:
         log.warning("model files missing: running without models", extra={"fields": {"camera": ctx.name}})
     return _NullExtractor()
 
 
 def default_pipeline(ctx: CameraContext, perf: PerfTracker) -> ModularPipeline:
-    """Built-in modules for the camera, then the extra ones from ``ctx.modules`` (pending ``workers.modules``)."""
+    """Built-in modules for the camera (order matters: later modules read ``inp.shared``), then the extra ones."""
+    from perception.modules import (
+        HandsModule,
+        HeadAnswerModule,
+        IdentityModule,
+        MonitorModule,
+        PassengerStateModule,
+        PhoneTrackerModule,
+    )
+
     extractor = make_extractor(ctx)
     detectors = DetectorsModule(ctx, extractor)
     modules: list[PipelineModule] = [detectors]
+    calibration: CalibrationModule | None = None
     if ctx.is_driver:
-        modules.append(CalibrationModule(ctx, detectors))
-    modules += [PhoneModule(ctx, extractor), GestureModule(ctx, extractor), MonitoringModule(ctx, extractor)]
+        calibration = CalibrationModule(ctx, detectors)
+        modules.append(calibration)
+    hands = HandsModule(ctx, extractor, perf)
+    detectors.hands_seen_t = lambda: hands.last_hand_t
+    modules += [
+        MonitorModule(ctx, extractor, on_mode_switch=detectors.reset_image_state),
+        hands,
+        PhoneTrackerModule(ctx, extractor, perf),
+        HeadAnswerModule(ctx, extractor),
+        IdentityModule(ctx, extractor, perf, on_profile=calibration.follow_identity if calibration else None),
+    ]
+    if not ctx.is_driver:
+        modules.append(PassengerStateModule(ctx, extractor))
     builtin = len(modules)
     for path in ctx.modules:
-        cls = _import(path)
-        modules.append(cls(ctx, extractor))
-        log.info("extra module loaded", extra={"fields": {"camera": ctx.name, "module": path}})
+        try:
+            cls = _import(path)
+            modules.append(cls(ctx, extractor))
+            log.info("extra module loaded", extra={"fields": {"camera": ctx.name, "module": path}})
+        except Exception:  # a broken extra module must not restart-loop the camera
+            log.exception("extra module not loaded (skipped)", extra={"fields": {"camera": ctx.name, "module": path}})
     return ModularPipeline(ctx, perf, extractor, modules, builtin=builtin)
 
 
@@ -676,6 +576,9 @@ def run_camera(
 
     configure_logging(options.log_level, json=False)
     cfg = PerceptionConfig.model_validate(cfg_data)
+    from perception.runtime import set_intra_op_threads
+
+    set_intra_op_threads(cfg.models.onnx_threads)  # before any model is loaded in this process
     cam_cfg = getattr(cfg.cameras, name)
     out = cfg.output
     source = SyntheticSource(cam_cfg.width, cam_cfg.height, cam_cfg.fps) if options.synthetic else None
@@ -716,7 +619,7 @@ def run_camera(
         debug = False
         t0 = first.t_capture
         last_id = first.frame_id - 1
-        last_processed = 0.0
+        next_due = 0.0
         last_status = 0.0
         last_jpeg = 0.0
         seq = 0
@@ -750,9 +653,11 @@ def run_camera(
                         put_latest(results, status(stats.connected, "no_new_frame"))
                     continue
                 last_id = frame.frame_id
-                if face_hz and now - last_processed < 1.0 / face_hz:
-                    continue  # passenger camera at its (degradable) rate
-                last_processed = now
+                if face_hz:  # passenger camera at its (degradable) rate; due times, so 30 fps / 10 Hz = every 3rd frame
+                    if now < next_due - 0.010:
+                        continue
+                    period = 1.0 / face_hz
+                    next_due = now + period if now - next_due > period else next_due + period
                 t_wall = time.time() - (time.perf_counter() - frame.t_capture)
                 inp = FrameInput(frame=frame, t=frame.t_capture - t0, t_wall=t_wall, debug=debug)
                 payload = pipeline.process(inp)

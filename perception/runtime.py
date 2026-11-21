@@ -24,7 +24,7 @@ import numpy.typing as npt
 from perception.log import get_logger
 from perception.perf import LatencyWindow
 
-__all__ = ["DEFAULT_PROVIDER_ORDER", "OnnxModel", "TensorSpec", "available_providers"]
+__all__ = ["DEFAULT_PROVIDER_ORDER", "OnnxModel", "TensorSpec", "available_providers", "set_intra_op_threads"]
 
 log = get_logger("perception.runtime")
 
@@ -48,6 +48,13 @@ _ORT_DTYPES: dict[str, npt.DTypeLike] = {
 }
 
 _dlls_preloaded = False
+_intra_op_threads = 0  # 0 = ONNX Runtime default (all physical cores)
+
+
+def set_intra_op_threads(n: int) -> None:
+    """Intra-op threads of every ONNX Runtime session created afterwards in this process (``models.onnx_threads``)."""
+    global _intra_op_threads
+    _intra_op_threads = max(0, int(n))
 
 
 @dataclass(frozen=True)
@@ -173,6 +180,8 @@ class OnnxModel:
         options = ort.SessionOptions()
         options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         options.log_severity_level = 3
+        if _intra_op_threads:
+            options.intra_op_num_threads = _intra_op_threads
         session = ort.InferenceSession(str(self.path), sess_options=options, providers=[provider])
         active = session.get_providers()[0]
         if active != provider:  # ORT silently falls back to CPU when a provider fails to initialize
