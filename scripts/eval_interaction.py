@@ -12,7 +12,7 @@ the run can be re-scored with --session. A session without these labels (e.g. an
 diagnostics only: answers outside windows, answers per labelled activity with a window forced open, phone vote vs. a
 `phone` label. Reports: docs/eval/interaction-<name>-<date>.md / .json. Replay is never used in the demo (R3).
 
-Module settings come from perception/config/pending/modules.yaml (until they move into perception.yaml).
+Module settings come from perception/config/perception.yaml (perception/module_config.py builds them).
 """
 
 from __future__ import annotations
@@ -34,7 +34,6 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import yaml
 
 from perception.config import REPO_ROOT, PerceptionConfig, load_config
 from perception.driver_cam.head_answer import HeadAnswerConfig, HeadAnswerDetector
@@ -42,10 +41,10 @@ from perception.features import HandFeatures, PhoneBox
 from perception.hands import HandsConfig, HandTracker
 from perception.labels import Interval, LabelEvent, LabelWriter, load_labels, to_intervals
 from perception.log import configure_logging
+from perception.module_config import hands_config, head_answer_config, phone_config
 from perception.phone import PhoneConfig, PhoneResult, PhoneTracker
 
 EVAL_DIR = REPO_ROOT / "docs" / "eval"
-PENDING = REPO_ROOT / "perception" / "config" / "pending" / "modules.yaml"
 WINDOW = "DriveMate interaction eval (q to abort)"
 FPS = 30.0
 Box = tuple[float, float, float, float]
@@ -87,14 +86,9 @@ class ModuleConfigs:
     phone: PhoneConfig = field(default_factory=PhoneConfig)
 
 
-def load_module_configs(path: Path) -> ModuleConfigs:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
-    data = data or {}
-    return ModuleConfigs(
-        hands=HandsConfig.from_mapping(data.get("hands") or {}),
-        head_answer=HeadAnswerConfig.from_mapping(data.get("head_answer") or {}),
-        phone=PhoneConfig.from_mapping(data.get("phone") or {}),
-    )
+def load_module_configs(cfg: PerceptionConfig) -> ModuleConfigs:
+    """The module settings the runtime uses (perception.yaml through perception/module_config.py)."""
+    return ModuleConfigs(hands=hands_config(cfg), head_answer=head_answer_config(cfg), phone=phone_config(cfg))
 
 
 # --- protocol -----------------------------------------------------------------------------------------------
@@ -566,7 +560,12 @@ def run_live(
                 live = f"ans={answer or '-'} gest={gesture or '-'} phone={phone.usage if phone.in_use else '-'}"
                 banner = f"{step.prompt}  {step.duration_s - elapsed:3.1f}s [{idx + 1}/{len(steps)}]  {live}"
                 img = draw_driver(
-                    frame.image, ff, st, fps=0.0, luma=mean_luma(frame.image), dark_luma=cfg.monitoring.dark_luma,
+                    frame.image,
+                    ff,
+                    st,
+                    fps=0.0,
+                    luma=mean_luma(frame.image),
+                    dark_luma=cfg.monitoring.dark_luma,
                     banner=banner,
                 )
                 cv2.imshow(WINDOW, img)
@@ -627,7 +626,7 @@ def render_markdown(name: str, meta: dict[str, Any], rep: Report, cfgs: ModuleCo
                 for k, v in by_label.items()
             ]
     lines += ["", "## Notes", ""] + [f"- {n}" for n in rep.notes]
-    lines += ["", "## Module settings (pending modules.yaml)", "", "```json", json.dumps(asdict(cfgs), indent=1), "```"]
+    lines += ["", "## Module settings (perception.yaml)", "", "```json", json.dumps(asdict(cfgs), indent=1), "```"]
     return "\n".join(lines) + "\n"
 
 
@@ -660,13 +659,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--profile", default=None, help="live: gaze calibration profile (needed for the lap situation)")
     p.add_argument("--out-dir", type=Path, default=EVAL_DIR)
     p.add_argument("--config", type=Path, default=None, help="perception.yaml")
-    p.add_argument("--modules-config", type=Path, default=PENDING)
     args = p.parse_args(argv)
     configure_logging("WARNING", json=False)
-    cfgs = load_module_configs(args.modules_config)
+    cfg = load_config(args.config)
+    cfgs = load_module_configs(cfg)
     if args.synthetic:
         return run_synthetic(cfgs, args.seed, args.name or f"synthetic-seed{args.seed}", args.out_dir)
-    cfg = load_config(args.config)
     if args.session:
         return run_session(cfg, cfgs, args.session, args.name or args.session.name, args.out_dir)
     return run_live(cfg, cfgs, args.name or "laptop", args.seed, args.profile, args.out_dir)

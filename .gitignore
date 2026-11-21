@@ -16,6 +16,10 @@ perception/models/
 profiles/*/face*.npy
 profiles/*/calibration.json
 
+# Perception recordings and diagnostics: FeatureFrames (landmarks), labels, plots. Local only, never committed
+# (docs/perception.md §5, data policy)
+data/
+
 # Media
 assistant/data/media/
 dashboard/public/sounds/music/

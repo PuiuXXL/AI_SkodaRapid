@@ -18,8 +18,17 @@ from tests.perception.driver_factory import FPS, H, W, face, frames
 OPEN = 0.30
 
 
-def _run(spec: Sequence[tuple[float, Mapping[str, object]]]) -> tuple[EyeTracker, list[EyeOutput]]:
-    tracker = EyeTracker(load_config().eyes, (W, H), (OPEN, OPEN))
+def _run(
+    spec: Sequence[tuple[float, Mapping[str, object]]], closed_min: float | None = None, enabled: bool = True
+) -> tuple[EyeTracker, list[EyeOutput]]:
+    """The CNN mechanism with the yaml thresholds; the yaml itself has the CNN off (live 2026-11-21), so these tests
+    switch it on explicitly."""
+    eyes = load_config().eyes
+    update: dict[str, object] = {"enabled": enabled}
+    if closed_min is not None:
+        update["closed_min"] = closed_min
+    eyes = eyes.model_copy(update={"cnn": eyes.cnn.model_copy(update=update)})
+    tracker = EyeTracker(eyes, (W, H), (OPEN, OPEN))
     return tracker, [tracker.update(ff) for ff in frames(spec)]
 
 
@@ -45,10 +54,14 @@ def test_cnn_open_vetoes_the_hard_squint() -> None:
 
 
 def test_cnn_closed_confirms_a_low_contrast_closure() -> None:
-    """EAR barely drops (ratio 0.6, in the squint band) and eyeBlink is weak, but the pixels show a closed eye."""
+    """The confirmation path (``eyes.cnn.closed_min`` < 1): EAR barely drops (ratio 0.6, in the squint band) and
+    eyeBlink is weak, but the pixels show a closed eye. The yaml turns it off (closed_min 1.0: live, hard squints read
+    0.6-0.97), so the mechanism is tested with an explicit 0.7."""
     closed = {"ear_left": OPEN * 0.6, "blink": 0.35, "cnn": [0.9, 0.92]}
-    _tracker, outs = _run([(2.0, {"ear_left": OPEN}), (2.0, closed)])
+    _tracker, outs = _run([(2.0, {"ear_left": OPEN}), (2.0, closed)], closed_min=0.7)
     assert outs[-1].state == "CLOSED" and outs[-1].closed_ms > 1500
+    _tracker, outs = _run([(2.0, {"ear_left": OPEN}), (2.0, closed)])  # yaml: no confirmation, it is a squint
+    assert outs[-1].state != "CLOSED"
 
 
 def test_cnn_is_bilateral_like_the_ear() -> None:
@@ -75,3 +88,12 @@ def test_eye_crop_and_input() -> None:
     assert x.shape == (1, 3, 32, 32) and x.dtype == np.float32
     assert float(x.min()) >= -0.51 and float(x.max()) <= 0.51  # (x - 127) / 255
     assert eye_crop(img, f, "left", 60.0) is None  # leaves the frame
+
+
+def test_disabled_cnn_ignores_recorded_probabilities() -> None:
+    """``eyes.cnn.enabled: false``: a recording made with the CNN on replays as EAR only (no veto of a closure)."""
+    closed = {"ear_left": 0.06, "blink": 0.9, "cnn": [0.0, 0.0]}  # shut eyes the CNN reads as open
+    _tracker, on = _run([(2.0, {"ear_left": OPEN}), (2.0, closed)])
+    _tracker, off = _run([(2.0, {"ear_left": OPEN}), (2.0, closed)], enabled=False)
+    assert on[-1].state != "CLOSED" and on[-1].cnn_closed == 0.0
+    assert off[-1].state == "CLOSED" and off[-1].cnn_closed is None

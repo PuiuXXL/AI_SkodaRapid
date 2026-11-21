@@ -4,6 +4,8 @@
     python scripts/benchmark.py --frames 100       # quicker
     python scripts/benchmark.py --synthetic        # no camera (numbers are then only indicative)
     python scripts/benchmark.py --providers CPUExecutionProvider
+    python scripts/benchmark.py --camera passenger  # the passenger camera -> docs/benchmark/<hostname>-passenger.md
+    python scripts/benchmark.py --dual             # perception.main on BOTH cameras, 60 s -> <hostname>-dual.md + .png
 
 Sit in front of the camera while it runs (face + a hand now and then), in the lighting you will demo in.
 Timings: "inference" = the model call only; "pre+post" = conversion/crop/decoding around it (measured separately,
@@ -16,6 +18,7 @@ import argparse
 import datetime as dt
 import importlib
 import importlib.metadata
+import itertools
 import json
 import platform
 import shutil
@@ -293,7 +296,7 @@ def bench_gaze(feed: FrameFeed, cfg: PerceptionConfig, n: int, provider: str, in
         face = yunet_largest(detector, frame.image)  # face box source, not timed
         box = (float(face[0]), float(face[1]), float(face[2]), float(face[3])) if face is not None else None
         t0 = time.perf_counter()
-        crop = crop_box(frame.image, box, expand=1.2) if box else None
+        crop = crop_box(frame.image, box, expand=cfg.gaze.crop_expand) if box else None
         if crop is None:
             h, w = frame.image.shape[:2]
             crop = frame.image[h // 4 : 3 * h // 4, w // 4 : 3 * w // 4]
@@ -420,7 +423,7 @@ def driver_loop(
             result = landmarker.detect_for_video(to_mp_image(frame.image), clock(frame))
             box = face_box_from_landmarks(result, frame.image.shape)
             if box is not None and t0 - last_gaze >= gaze_period:
-                crop = crop_box(frame.image, box, expand=1.2)
+                crop = crop_box(frame.image, box, expand=cfg.gaze.crop_expand)
                 if crop is not None:
                     gaze_pitch_yaw(gaze, gaze.run(gaze_input(crop, gaze_size)))
                     gaze_runs += 1
@@ -637,6 +640,166 @@ def render_markdown(
     return "\n".join(lines)
 
 
+# --- dual: the real runtime on both cameras -------------------------------------------------------------
+
+DUAL_PRINT = ("frames", "publish_hz", "span_s", "publish_gap_max_s", "e2e_ms_p95", "cameras")
+DUAL_MODELS = ("face", "eye_state", "gaze", "phone", "gesture", "sface", "monitoring_module", "e2e_worker")
+
+
+def _dual_stats(frames: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per-camera fps and per-model p50 / p95 (median of the rolling windows over the run), system load, e2e."""
+    out: dict[str, Any] = {"frames": len(frames), "cameras": {}, "models": {}, "system": {}}
+    if not frames:
+        return out
+    pub = [f["perf"]["publish_ts"] for f in frames if f["perf"].get("publish_ts")]
+    out["publish_hz"] = (len(pub) - 1) / (pub[-1] - pub[0]) if len(pub) > 1 and pub[-1] > pub[0] else None
+    out["span_s"] = pub[-1] - pub[0] if pub else None
+    gaps = [b - a for a, b in itertools.pairwise(pub)]
+    out["publish_gap_max_s"] = max(gaps) if gaps else None
+    for cam in ("driver", "passenger"):
+        rows = [f["perf"]["cameras"].get(cam) or {} for f in frames]
+        up = [r for r in rows if r.get("available")]
+        out["cameras"][cam] = {
+            "available_pct": 100.0 * len(up) / len(rows),
+            "capture_fps": percentile([r["capture_fps"] for r in up if r.get("capture_fps") is not None], 50),
+            "process_fps": percentile([r["process_fps"] for r in up if r.get("process_fps") is not None], 50),
+            "age_ms_p95": percentile([r["age_ms"] for r in up if r.get("age_ms") is not None], 95),
+            "dropped_frames": max((r.get("dropped_frames") or 0 for r in up), default=0),
+        }
+        stages = [(f["perf"].get("stages_ms") or {}).get(cam) or {} for f in frames]
+        for model in DUAL_MODELS:
+            p50 = [s[model]["p50"] for s in stages if model in s and s[model].get("p50") is not None]
+            p95 = [s[model]["p95"] for s in stages if model in s and s[model].get("p95") is not None]
+            if p50:
+                out["models"][f"{cam}.{model}"] = {
+                    "p50": percentile(p50, 50),
+                    "p95": percentile(p95, 50),
+                    "p95_max": max(p95),
+                }
+    e2e = [f["perf"]["e2e_ms_p95"] for f in frames if f["perf"].get("e2e_ms_p95") is not None]
+    out["e2e_ms_p95"] = percentile(e2e, 50) if e2e else None
+    out["e2e_ms_p95_max"] = max(e2e) if e2e else None
+    for key in ("cpu", "ram_mb", "gpu"):
+        vals = [f["perf"][key] for f in frames if f["perf"].get(key) is not None]
+        out["system"][key] = {"p50": percentile(vals, 50), "max": max(vals)} if vals else None
+    out["degrade_level_max"] = max(f["perf"].get("degrade_level") or 0 for f in frames)
+    return out
+
+
+def _dual_chart(frames: list[dict[str, Any]], path: Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    t0 = frames[0]["perf"]["publish_ts"]
+    t = [f["perf"]["publish_ts"] - t0 for f in frames]
+    fig, axes = plt.subplots(3, 1, figsize=(9, 7), sharex=True)
+    axes[0].plot(t, [f["perf"].get("e2e_ms_p95") for f in frames], color="#3266ad", label="e2e p95 (ms)")
+    axes[0].axhline(150, color="#b04040", linestyle="--", linewidth=1, label="target 150 ms")
+    axes[0].set_ylabel("ms")
+    axes[0].legend(loc="upper right", frameon=False)
+    for cam, colour in (("driver", "#3266ad"), ("passenger", "#d08a2c")):
+        fps = [(f["perf"]["cameras"].get(cam) or {}).get("process_fps") for f in frames]
+        axes[1].plot(t, fps, color=colour, label=f"{cam} processed fps")
+    axes[1].set_ylabel("fps")
+    axes[1].legend(loc="lower right", frameon=False)
+    axes[2].plot(t, [f["perf"].get("cpu") for f in frames], color="#555555", label="CPU %")
+    axes[2].plot(t, [f["perf"].get("gpu") for f in frames], color="#2c8a5a", label="GPU %")
+    axes[2].set_ylabel("%")
+    axes[2].set_xlabel("seconds")
+    axes[2].legend(loc="upper right", frameon=False)
+    for ax in axes:
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.grid(axis="y", alpha=0.3)
+    fig.suptitle("perception runtime, both cameras")
+    fig.tight_layout()
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
+def _dual_markdown(cfg: PerceptionConfig, stats: dict[str, Any], seconds: float, warmup: float, chart: str) -> str:
+    d, p = cfg.cameras.driver, cfg.cameras.passenger
+    e2e = stats.get("e2e_ms_p95")
+    verdict = "PASS" if e2e is not None and e2e < 150.0 and stats.get("degrade_level_max", 0) == 0 else "CHECK"
+    lines = [
+        f"# Perception runtime with both cameras on {socket.gethostname()}, {dt.date.today().isoformat()}",
+        "",
+        "Generated by `scripts/benchmark.py --dual`: `perception.main` itself (one process per camera, every module "
+        f"of the default pipeline), {seconds:.0f} s measured after {warmup:.0f} s of model start-up. Each published "
+        "frame's perf block is sampled; per-model values are the median of the rolling p50 / p95 windows.",
+        "",
+        f"- driver: `{d.device}` {d.width}x{d.height} {d.fourcc} @{d.fps}; passenger: `{p.device}` "
+        f"{p.width}x{p.height} {p.fourcc} @{p.fps}",
+        f"- frames published: {stats['frames']} ({_f(stats.get('publish_hz'))} Hz, target {cfg.output.publish_hz})",
+        f"- **e2e p95 {_f(e2e)} ms** (max {_f(stats.get('e2e_ms_p95_max'))}, target < 150 ms): **{verdict}**; "
+        f"degradation level max {stats.get('degrade_level_max')}",
+        "",
+        "## Cameras",
+        "",
+        "| camera | available % | capture fps | processed fps | result age p95 ms | dropped frames |",
+        "|---|---|---|---|---|---|",
+    ]
+    for cam, c in stats["cameras"].items():
+        lines.append(
+            f"| {cam} | {_f(c['available_pct'])} | {_f(c['capture_fps'])} | {_f(c['process_fps'])} | "
+            f"{_f(c['age_ms_p95'])} | {c['dropped_frames']} |"
+        )
+    lines += ["", "## Models (ms)", "", "| camera.model | p50 | p95 | p95 max |", "|---|---|---|---|"]
+    for name, m in stats["models"].items():
+        lines.append(f"| {name} | {_f(m['p50'], 2)} | {_f(m['p95'], 2)} | {_f(m['p95_max'], 2)} |")
+    lines += ["", "## System", "", "| metric | p50 | max |", "|---|---|---|"]
+    for key, v in stats["system"].items():
+        if v is not None:
+            lines.append(f"| {key} | {_f(v['p50'])} | {_f(v['max'])} |")
+    lines += ["", f"![runtime]({chart})", ""]
+    return "\n".join(lines)
+
+
+def run_dual(args: argparse.Namespace, cfg: PerceptionConfig) -> int:
+    """``perception.main`` on both cameras for ``--seconds``; the frames it would publish are collected here."""
+    import asyncio
+
+    from perception.main import Perception
+    from perception.worker import WorkerOptions
+
+    cfg = cfg.model_copy(
+        update={
+            "cameras": cfg.cameras.model_copy(
+                update={"passenger": cfg.cameras.passenger.model_copy(update={"enabled": True})}
+            )
+        }
+    )
+    lines: list[str] = []
+    app = Perception(
+        cfg,
+        cameras=["driver", "passenger"],
+        options=WorkerOptions(synthetic=args.synthetic),
+        ws=False,
+        mjpeg=False,
+        print_frames=True,
+        out=lines.append,
+    )
+    print(f"-> both cameras, {args.warmup:.0f} s start-up + {args.seconds:.0f} s measured ...", flush=True)
+    asyncio.run(app.run(seconds=args.warmup + args.seconds))
+    frames = [json.loads(line) for line in lines if line.startswith("{")]
+    if frames:
+        t_start = frames[0]["perf"]["publish_ts"] + args.warmup
+        frames = [f for f in frames if f["perf"]["publish_ts"] >= t_start]
+    stats = _dual_stats(frames)
+    host = socket.gethostname()
+    out_md = args.out or REPO_ROOT / "docs" / "benchmark" / f"{host}-dual.md"
+    out_md.parent.mkdir(parents=True, exist_ok=True)
+    chart = out_md.with_suffix(".png")
+    if frames:
+        _dual_chart(frames, chart)
+    out_md.write_text(_dual_markdown(cfg, stats, args.seconds, args.warmup, chart.name), encoding="utf-8")
+    out_md.with_suffix(".json").write_text(json.dumps(stats, indent=2, default=str), encoding="utf-8")
+    print(json.dumps({k: stats.get(k) for k in DUAL_PRINT}, default=str))
+    print(f"\nwrote {out_md}")
+    return 0 if frames else 1
+
+
 # --- main ----------------------------------------------------------------------------------------------
 
 
@@ -649,6 +812,11 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--providers", nargs="*", default=None, help="ONNX providers to test (default: all available)")
     p.add_argument("--out", type=Path, default=None, help="default: docs/benchmark/<hostname>.md")
     p.add_argument("--skip-loop", action="store_true")
+    p.add_argument(
+        "--dual", action="store_true", help="the real runtime on both cameras (docs/benchmark/<host>-dual.md)"
+    )
+    p.add_argument("--seconds", type=float, default=60.0, help="--dual: measured time")
+    p.add_argument("--warmup", type=float, default=15.0, help="--dual: model start-up time not measured")
     return p.parse_args(argv)
 
 
@@ -656,9 +824,12 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse(argv)
     configure_logging("WARNING", json=False)
     cfg = load_config(args.config)
+    if args.dual:
+        return run_dual(args, cfg)
     cam_cfg = getattr(cfg.cameras, args.camera)
     providers = args.providers or [p for p in DEFAULT_PROVIDER_ORDER if p in available_providers()]
-    out_md = args.out or REPO_ROOT / "docs" / "benchmark" / f"{socket.gethostname()}.md"
+    suffix = "" if args.camera == "driver" else f"-{args.camera}"  # one report per camera, the driver's keeps its name
+    out_md = args.out or REPO_ROOT / "docs" / "benchmark" / f"{socket.gethostname()}{suffix}.md"
     n = args.frames
     source = SyntheticSource(cam_cfg.width, cam_cfg.height, cam_cfg.fps) if args.synthetic else None
 

@@ -1,18 +1,10 @@
 """Can this camera still see its person? (plan AS12 / AP5, rule C7 "Nu te mai văd")
 
-P1 reports **whether** monitoring works and **why not**; P2's rule C7 decides what to say. Reasons, most specific
-first:
-
-* ``camera_unavailable``: the camera process is down or the device delivers no frames;
-* ``camera_frozen``: frames keep arriving but the image does not change (driver bug, USB stall) for
-  ``monitoring.frozen_frame_s``;
-* ``camera_covered``: no face for ``monitoring.face_lost_s`` and the image is dark (hand / cloth over the lens);
-* ``face_lost``: no face for ``monitoring.face_lost_s`` in a normally lit image (the person left the seat, turned
-  far away).
-
-``CameraMonitor`` (below) is the standalone successor with the finer reasons of AS12 / AP5 (``no_frames``,
-``frozen``, ``mode_switch``, ``occluded``, ``too_dark``, ``blurred``, ``face_lost``); ``Monitor`` stays until the worker
-is switched over (docs/notes/modules.md, "De integrat").
+P1 reports **whether** monitoring works and **why not**; P2's rule C7 decides what to say. :class:`CameraMonitor`
+gives the reason (``no_frames``, ``frozen``, ``mode_switch``, ``occluded``, ``too_dark``, ``blurred``,
+``face_lost``), image warnings while the face is seen, the colour / IR mode and a face confidence (R-FL3). The
+camera worker runs it per frame (perception/modules.py ``MonitorModule``); a camera whose worker is down is
+``camera_unavailable`` in the frame (perception/frame_builder.py).
 """
 
 from __future__ import annotations
@@ -26,22 +18,16 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 
-from perception.config import MonitoringConfig
-
 __all__ = [
     "CameraMonitor",
     "CameraMonitorConfig",
     "ImageStats",
-    "Monitor",
     "MonitorReason",
-    "MonitorState",
-    "MonitoringReason",
     "MonitoringResult",
     "image_stats",
     "thumbnail",
 ]
 
-MonitoringReason = Literal["camera_unavailable", "camera_frozen", "camera_covered", "face_lost"]
 _THUMB = (64, 36)
 
 
@@ -58,57 +44,7 @@ def thumbnail(image: npt.NDArray[np.uint8]) -> npt.NDArray[np.float32]:
     return grey.astype(np.float32)
 
 
-@dataclass(frozen=True)
-class MonitorState:
-    ok: bool
-    reason: MonitoringReason | None = None
-    face_missing_s: float = 0.0
-
-
-class Monitor:
-    def __init__(self, cfg: MonitoringConfig) -> None:
-        self.cfg = cfg
-        self._last_face_t: float | None = None
-        self._first_t: float | None = None
-        self._prev_thumb: npt.NDArray[np.float32] | None = None
-        self._still_since: float | None = None
-
-    def update(
-        self,
-        t: float,
-        *,
-        face_present: bool,
-        thumb: npt.NDArray[np.float32] | None = None,
-        luma: float | None = None,
-    ) -> MonitorState:
-        if self._first_t is None:
-            self._first_t = t
-        if face_present:
-            self._last_face_t = t
-        frozen = False
-        if thumb is not None:
-            if self._prev_thumb is not None and float(np.mean(np.abs(thumb - self._prev_thumb))) < (
-                self.cfg.frozen_pixel_diff
-            ):
-                self._still_since = self._still_since if self._still_since is not None else t
-                frozen = t - self._still_since >= self.cfg.frozen_frame_s
-            else:
-                self._still_since = None
-            self._prev_thumb = thumb
-        missing = t - (self._last_face_t if self._last_face_t is not None else self._first_t)
-        if frozen:
-            return MonitorState(False, "camera_frozen", round(missing, 2))
-        if missing >= self.cfg.face_lost_s:
-            dark = luma is not None and luma < self.cfg.dark_luma
-            return MonitorState(False, "camera_covered" if dark else "face_lost", round(missing, 2))
-        return MonitorState(True, None, round(missing, 2))
-
-    @staticmethod
-    def unavailable() -> MonitorState:
-        return MonitorState(False, "camera_unavailable")
-
-
-# --- CameraMonitor: standalone module (AS12 / AP5), finer reasons ----------------------------------------
+# --- CameraMonitor (AS12 / AP5) ------------------------------------------------------------------------
 
 MonitorReason = Literal["no_frames", "frozen", "mode_switch", "occluded", "too_dark", "blurred", "face_lost"]
 Mode = Literal["color", "mono"]

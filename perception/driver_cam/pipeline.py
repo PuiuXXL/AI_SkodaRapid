@@ -153,7 +153,14 @@ class DriverPipeline:
         if ear_baseline is not None:
             self.eyes.reference.set_calibrated(ear_baseline)
 
-    def _gaze(self, ff: FeatureFrame, head: HeadOutput, eyes_closed: bool) -> DriverGaze:
+    def reset_image_state(self) -> None:
+        """Day <-> IR night switch (camera monitor): EAR local references and head filters start over."""
+        self.eyes.reference.reset_local()
+        self.head.reset()
+
+    def _gaze(
+        self, ff: FeatureFrame, head: HeadOutput, eyes_closed: bool, hands_seen: bool | None = None
+    ) -> DriverGaze:
         gaze = self.gaze_smoother.update(ff.t, ff.gaze)
         x = self.gaze_features.build(ff, *zone_head_angles(head.yaw, head.raw_yaw, head.raw_pitch), gaze)
         self.last_zone_features = x
@@ -161,7 +168,8 @@ class DriverPipeline:
         if self.zone_model is not None and x is not None and not eyes_closed:
             result = self.zone_model.classify(x)
         zone = self.zones.update(ff.t, result, eyes_closed=eyes_closed and self.zone_model is not None)
-        hands_seen = bool(ff.hands) if ff.hands is not None else None
+        if hands_seen is None and ff.hands is not None:  # recordings: the hands came with the frame
+            hands_seen = bool(ff.hands)
         metrics = self.gaze_metrics.update(ff.t, zone, hands_seen)
         known = zone != "unknown"
         return DriverGaze(
@@ -183,16 +191,19 @@ class DriverPipeline:
             lap_pattern=metrics.lap_pattern,
         )
 
-    def update(self, ff: FeatureFrame) -> DriverState:
+    def update(self, ff: FeatureFrame, hands_seen: bool | None = None) -> DriverState:
+        """``hands_seen``: the runtime hand tracker saw a hand since the last frame (lap pattern); None = take
+        ``ff.hands`` (recordings and replays)."""
         t0 = time.perf_counter()
         eyes = self.eyes.update(ff)
         t1 = time.perf_counter()
-        closing = eyes.state == "CLOSED" or (eyes.ratio is not None and eyes.ratio < self.cfg.eyes.reopen_ratio)
-        head = self.head.update(ff.t, ff.face.head_matrix, closing)
+        # nodding needs the eye detector's CLOSED verdict: "ratio below reopen_ratio" is also true when looking down
+        # at the lap (the lids follow the gaze), which made every look-down a nod (all 4 sessions, 2026-11-21)
+        head = self.head.update(ff.t, ff.face.head_matrix, eyes.state == "CLOSED")
         t2 = time.perf_counter()
         mouth = self.mouth.update(ff.t, ff.face)
         t3 = time.perf_counter()
-        gaze = self._gaze(ff, head, eyes_closed=eyes.state == "CLOSED")
+        gaze = self._gaze(ff, head, eyes_closed=eyes.state == "CLOSED", hands_seen=hands_seen)
         t4 = time.perf_counter()
         self.last_eyes, self.last_head, self.last_mouth = eyes, head, mouth
         face = ff.face
