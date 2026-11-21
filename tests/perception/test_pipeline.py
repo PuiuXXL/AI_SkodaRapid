@@ -5,13 +5,19 @@ from pathlib import Path
 import pytest
 
 from perception.config import load_config
-from perception.evaluation import evaluate, run_pipeline
+from perception.evaluation import EvalResult, evaluate, run_pipeline
 from perception.labels import Interval, load_labels, to_intervals
 from perception.recorder import DATA_DIR, FeatureWriter
 from perception.replay import FeatureReplay
 from tests.perception.driver_factory import FPS, H, W, frames, rotation_matrix
 
 OPEN, CLOSED = 0.30, 0.06
+
+
+def test_eval_result_does_not_pass_without_measured_criteria() -> None:
+    assert not EvalResult().passed
+    assert not EvalResult(checks={"blink_detection": None}).passed
+    assert EvalResult(checks={"blink_detection": True, "yawn_detection": None}).passed
 
 
 def _synthetic_session() -> tuple[list[tuple[float, dict[str, object]]], list[Interval]]:

@@ -77,7 +77,8 @@ class EvalResult:
 
     @property
     def passed(self) -> bool:
-        return all(v for v in self.checks.values() if v is not None)
+        measured = [v for v in self.checks.values() if v is not None]
+        return bool(measured) and all(measured)
 
 
 def neutral_jitter(times: Sequence[float], values: Sequence[float], mask: Sequence[bool]) -> float:
