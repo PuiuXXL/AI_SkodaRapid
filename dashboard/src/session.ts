@@ -1,10 +1,12 @@
 import {useEffect, useState} from "react";
+import type {DashboardState, DashboardEvent, SessionData} from "./types";
+import {withState, appendEvent} from "./session-state";
 import example from "../../tests/assistant/fixtures/state_example.json";
 
 export const videoOrigin = import.meta.env.VITE_VIDEO_ORIGIN || "http://localhost:8001";
 const wsUrl = import.meta.env.VITE_UI_WS || "ws://localhost:8000/ws/ui";
 
-function sample(t) {
+function sample(t: number): DashboardState {
   const mirror = t%120 >= 95, wave = Math.sin(t/15);
   return {...example,ts:Date.now()/1000,seq:t,
     driver:{...example.driver,eyes:{...example.driver.eyes,ear:.27+.02*wave},
@@ -14,15 +16,8 @@ function sample(t) {
     perf:{cameras:{driver:{capture_fps:30,process_fps:24,dropped_frames:3},passenger:{capture_fps:25,process_fps:10,dropped_frames:1}},
       face_driver_ms_p50:9,face_passenger_ms_p50:8,e2e_ms_p95:95,cpu:61,ram_mb:2100,gpu:35}};
 }
-const empty = {state:{},history:[],log:[],socket:null,cue:0,speech:"",connection:"Se conectează"};
-function withState(old,state){
-  const gap=Number.isFinite(old.state.seq)&&Number.isFinite(state.seq)&&state.seq!==old.state.seq+1;
-  return {...old,state,history:[...old.history,...(gap?[null]:[]),state.assessment].slice(-120)};
-}
-function appendEvent(old,event) {
-  return {...old,log:[event,...old.log].slice(0,60),cue:old.cue+(event.type==="visual_cue"?1:0)};
-}
-export function useSession(live) {
+const empty: SessionData = {state:{},history:[],log:[],socket:null,cue:0,speech:"",connection:"Se conectează"};
+export function useSession(live: boolean) {
   const [data,set]=useState(empty);
   useEffect(()=>{
     if(!live){
@@ -35,12 +30,12 @@ export function useSession(live) {
         set(old=>{
           const next=withState(old,state);
           if(t%120!==95)return next;
-          return appendEvent(next,{type:"visual_cue",source:"REGULĂ",text:"Semnal discret de probă",ts:state.ts});
+          return appendEvent(next,{type:"visual_cue",source:"REGULĂ",text:"Semnal discret de probă",ts:state.ts!});
         });
       },100);
       return ()=>clearInterval(timer);
     }
-    let disposed=false, ws, retry, last=0;
+    let disposed=false, ws: WebSocket, retry: ReturnType<typeof setTimeout> | undefined, last=0;
     function connect(){
       ws=new WebSocket(wsUrl);
       ws.onopen=()=>{if(!disposed)set({...empty,socket:ws,connection:"Live · așteaptă date"});};
@@ -52,7 +47,7 @@ export function useSession(live) {
         }
         if(!["event","alarm","speak","media","speak_control"].includes(m?.type))return;
         const ev=typeof m.event==="object" && m.event ? m.event : m;
-        const event={...ev.data,...ev,type:typeof m.event==="string"?m.event:ev.type,ts:ev.ts??Date.now()/1000};
+        const event: DashboardEvent={...ev.data,...ev,type:typeof m.event==="string"?m.event:ev.type,ts:typeof ev.ts==="number"?ev.ts:Date.now()/1000};
         set(old=>({...appendEvent(old,event),speech:m.type==="speak" && typeof m.text==="string"?m.text:old.speech}));
       };
       ws.onclose=()=>{if(disposed)return;last=0;set({...empty,connection:"Live · reconectare"});retry=setTimeout(connect,1800);};

@@ -101,3 +101,20 @@ Din rădăcina proiectului: `cd dashboard`, apoi `npm ci` și `npm run dev`. Des
 | Date încă de convenit | Comparația cu ultima călătorie, pauzele efectuate, mediile de reacție pe călătorie și latența până la randarea în UI au nevoie de măsurători agregate sau câmpuri convenite cu P2. Contoarele și ultima reacție afișate astăzi au semnificațiile din exemplul existent. |
 
 Verificări efectuate: compilare Vite de producție și randare în Edge cu exemplul P3. Validarea fizică a camerelor și a vocii în Chrome, sincronizarea oculară și testul cu serviciile reale rămân pentru integrarea pe laptopul de demo.
+
+## Revizie vizuală · cameră și instrumente
+
+| Pas | Comportament |
+|---|---|
+| 1. Vizor rezervat camerei | Modul Simulat arată un cadru neutru și comanda „Treci în Live”. În Live, aceeași zonă păstrează proporțiile și găzduiește fluxul MJPEG sau starea de eroare cu reîncercare. Ideea modelului 3D a fost retrasă. |
+| 2. Privire de ansamblu | Atenția folosește o scară semicirculară cu 32 de segmente și scorul numeric. Oboseala, dezinteresul și istoricul lor rămân alături. Datele lipsă apar cu „—”. |
+| 3. Context și evenimente | Sub vizor apar viteza, durata și ETA din trip. Rezumatul afișează ultimele trei evenimente din jurnalul sesiunii, cu oră și sursă disponibilă. |
+| 4. Ecrane înguste | Vizorul și cardurile curg într-o singură coloană. La scroll, vizorul devine compact și ascunde sumarul călătoriei. Tranzițiile pentru detaliile modulare respectă preferința de mișcare redusă. |
+
+Interfețele P1–P3 rămân cele documentate pentru camera locală și starea primită prin WebSocket.
+
+### Referințe de proiectare
+
+- Direcție vizuală și ierarhie pentru instrumentar: [Frontend Design](https://agenticskills.io/skills/frontend-design) și [Refactoring UI](https://refactoringui.com/).
+- Layout și comportament: [Learn Responsive Design](https://web.dev/learn/design/), [Motion pentru React](https://motion.dev/docs/react) și [Animations.dev](https://animations.dev/).
+- Repere de compoziție pentru navigare și carduri: [Mobbin](https://mobbin.com/), [shadcn/ui Blocks](https://ui.shadcn.com/blocks) și [Godly](https://godly.design/). Land-book a răspuns cu HTTP 403 la consultare.
