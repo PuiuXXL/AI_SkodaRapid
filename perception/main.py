@@ -259,13 +259,19 @@ class Perception:
             for w in self.workers.values():
                 w.send({"cmd": "debug", "on": cmd.on}, persist=True)
             return "ok", None
+        if cmd.cmd == "dialog_window":
+            # the addressed seat's camera; no "to" and every close go to both (core's close carries no "to")
+            both = cmd.to is None or not cmd.open
+            names = [n for n in ("driver", "passenger") if both or n == target]
+            seconds = max(0.0, cmd.until - time.time()) if cmd.until else DIALOG_DEFAULT_S
+            sent = [n for n in names if n in self.workers]
+            for name in sent:
+                msg = {"cmd": "dialog_window", "open": cmd.open, "until_perf": time.perf_counter() + seconds}
+                self.workers[name].send(msg)
+            return ("ok", None) if sent else ("error", f"camera {target} not running")
         worker = self.workers.get(target)
         if worker is None:
             return "error", f"camera {target} not running"
-        if cmd.cmd == "dialog_window":
-            seconds = (cmd.until - time.time()) if cmd.until else DIALOG_DEFAULT_S
-            worker.send({"cmd": "dialog_window", "open": cmd.open, "until_perf": time.perf_counter() + seconds})
-            return "ok", None
         if cmd.cmd == "calibrate":
             profile = cmd.profile or cmd.name
             if not profile:

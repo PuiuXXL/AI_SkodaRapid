@@ -256,6 +256,7 @@ class EyeTracker:
         self._open_look_down = 0.0  # eyeLookDown on the last open frame
         self._cnn_open = False  # this frame: the eye-state CNN sees the eyes clearly open
         self._cnn_closed_now = False  # ... clearly closed
+        self._squint_veto_now = False  # ... eyeSquint >= squint_veto with the ratio in the squint band (R-FL4)
         self._minima: deque[float] = deque(maxlen=_RECENT_MINIMA)
         self._blinks: deque[float] = deque()
         self._first_t: float | None = None
@@ -357,10 +358,16 @@ class EyeTracker:
         out.cnn_closed = None if cnn is None else round(cnn, 4)
         cnn_open = cnn is not None and cnn < self.cfg.cnn.open_max
         cnn_closed = cnn is not None and cnn >= self.cfg.cnn.closed_min
-        # R-FL4: lids lowered (ratio in the band) but not meeting (eyeBlink low, or the CNN sees an open eye).
-        # eyeSquint is not used: person-dependent (0.49 at rest in the diag session), 0.71 with eyes squeezed shut.
-        squint_like = low <= r <= high and (out.eye_blink < self.cfg.blendshape_closed or cnn_open) and not cnn_closed
+        # R-FL4: lids lowered (ratio in the band) but not meeting (eyeBlink low, the CNN sees an open eye, or
+        # eyeSquint >= squint_veto). Only inside the band: squeezed-shut eyes (eyeSquint 0.71) sit below it.
+        squinting = (out.eye_squint or 0.0) >= self.cfg.squint_veto
+        squint_like = (
+            low <= r <= high
+            and (out.eye_blink < self.cfg.blendshape_closed or cnn_open or squinting)
+            and not cnn_closed
+        )
         self._cnn_open, self._cnn_closed_now = cnn_open, cnn_closed
+        self._squint_veto_now = squinting and r >= low  # a strong eyeBlink alone cannot confirm a closure then
 
         self._step(t, r, threshold, out.eye_blink, squint_like, out.relaxed, head_moving, out)
 
@@ -429,7 +436,7 @@ class EyeTracker:
                     and not self._cnn_open
                     and (
                         (r < cfg.slow_close_ratio and eye_blink >= cfg.blendshape_closed)
-                        or eye_blink >= cfg.blendshape_strong
+                        or (eye_blink >= cfg.blendshape_strong and not self._squint_veto_now)
                         or (self._cnn_closed_now and r < cfg.squint_ear_band[0])
                     )
                 )
@@ -454,7 +461,7 @@ class EyeTracker:
             # continuing a closure is more lenient than starting one: cutting a real closure resets closed_ms
             looks_closed = (
                 (r < low and eye_blink >= cfg.blendshape_closed)
-                or eye_blink >= cfg.blendshape_strong
+                or (eye_blink >= cfg.blendshape_strong and not self._squint_veto_now)
                 or (self._cnn_closed_now and r < cfg.squint_ear_band[1])
             ) and not self._cnn_open  # the pixels show an open eye: a hard squint, not a closure
             ep.closed_frames += looks_closed

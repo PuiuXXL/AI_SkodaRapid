@@ -150,14 +150,34 @@ class Calibration:
             acc[mode] = round(sum(self.model.loo_zones[i] == self.zones[i] for i in idx) / len(idx), 4) if idx else None
         return acc
 
-    def warnings(self) -> list[str]:
+    def warnings(self, owl_min_head_deg: float = 0.0) -> list[str]:
         conf = self.loo_confusion()
         out = [f"zone without enough samples: {z}" for z in self.missing]
         for a, b in WATCHED_CONFUSIONS:
             n = conf.get(a, {}).get(b, 0) + conf.get(b, {}).get(a, 0)
             if n:
                 out.append(f"{a} <-> {b}: {n} LOO confusions (recalibrate, or move the {b} target)")
+        road = self._owl_head("road")
+        if owl_min_head_deg > 0 and road is not None:
+            for zone in dict.fromkeys(self.zones):
+                head = self._owl_head(zone)
+                if zone == "road" or head is None:
+                    continue
+                moved = float(np.hypot(head[0] - road[0], head[1] - road[1]))
+                if moved < owl_min_head_deg:
+                    out.append(
+                        f"{zone}: the head moved only {moved:.0f} deg from the road in the OWL step (need "
+                        f"{owl_min_head_deg:.0f}): recalibrate and turn the head towards the target"
+                    )
         return out
+
+    def _owl_head(self, zone: str) -> tuple[float, float] | None:
+        """Median head (yaw, pitch) of the zone's OWL samples (head turned to the target), None without any."""
+        idx = [i for i, (z, m) in enumerate(zip(self.zones, self.modes, strict=True)) if z == zone and m == "owl"]
+        if not idx:
+            return None
+        med = np.median(self.samples[idx, :2], axis=0)
+        return float(med[0]), float(med[1])
 
     # --- (de)serialisation -------------------------------------------------------------------------------------
 

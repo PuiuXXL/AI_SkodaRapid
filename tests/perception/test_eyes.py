@@ -115,6 +115,15 @@ def test_same_ear_with_strong_eyeblink_is_closed() -> None:
     assert outs[-1].state == "CLOSED" and outs[-1].closed_ms > 2500
 
 
+def test_big_smile_with_high_eyesquint_is_not_closed() -> None:
+    """R-FL4: a big smile pushes eyeBlink up (0.7) but eyeSquint is high too: ratio in the band -> no closure."""
+    tracker = _tracker()
+    smile = {"ear_left": OPEN * 0.58, "blink": 0.7, "squint": tracker.cfg.squint_veto + 0.1}
+    outs = _run(tracker, [(2.0, {"ear_left": OPEN}), (3.0, smile), (2.0, {"ear_left": OPEN})])
+    assert "CLOSED" not in {o.state for o in outs[round(2.6 * FPS) : round(4.8 * FPS)]}
+    assert [e for e in tracker.events if e.kind == "closure"] == []
+
+
 def test_really_closed_eye_with_squint_is_still_closed() -> None:
     tracker = _tracker()
     outs = _run(tracker, [(2.0, {"ear_left": OPEN}), (2.0, {"ear_left": CLOSED, "squint": 0.9, "blink": 0.9})])

@@ -63,15 +63,25 @@ def test_good_frames_with_a_face_are_ok() -> None:
     assert r.confidence == 1.0 and r.luma is not None and r.ms >= 0.0
 
 
-def test_black_frame_without_face_is_occluded_after_face_lost_s() -> None:
+def test_black_frame_without_face_is_occluded_after_covered_s() -> None:
+    """AS12: a covered lens is reported after covered_s (1 s), well under the 2 s target (was face_lost_s + 1.5)."""
     mon = CameraMonitor()
     run(mon, 0.0, 1.0, scene, face=True)
     results = run(mon, 1.0, 3.5, black, face=False)
-    assert all(r.ok for t, r in results if t < 1.0 + 1.9)
+    assert all(r.ok for t, r in results if t < 1.0 + 0.95)
+    assert all(r.reason == "occluded" for t, r in results if t >= 1.0 + 1.05)
     assert results[-1][1].reason == "occluded" and not results[-1][1].ok
     assert not any(r.mode_switched for _, r in results)
     back = run(mon, 3.5, 4.0, scene, face=True)  # uncovered: no luma-jump "mode switch"
     assert back[-1][1].ok and not any(r.mode_switched for _, r in back)
+
+
+def test_a_hand_passing_in_front_of_the_lens_is_not_occluded() -> None:
+    mon = CameraMonitor()
+    run(mon, 0.0, 1.0, scene, face=True)
+    passing = run(mon, 1.0, 1.7, black, face=False)  # 0.7 s: shorter than covered_s
+    after = run(mon, 1.7, 3.0, scene, face=True)
+    assert all(r.ok for _, r in passing + after)
 
 
 def test_dark_structured_scene_without_face_is_too_dark() -> None:
@@ -87,6 +97,8 @@ def test_dark_scene_with_a_face_is_only_a_warning() -> None:
 
 def test_blurred_without_face_and_with_face() -> None:
     r = run(CameraMonitor(), 0.0, 3.0, blurred, face=False)[-1][1]
+    assert r.reason == "occluded"  # sharpness below covered_sharpness_max: the covered fast path
+    r = run(CameraMonitor(CameraMonitorConfig(covered_sharpness_max=0.0)), 0.0, 3.0, blurred, face=False)[-1][1]
     assert r.reason == "blurred"
     r = run(CameraMonitor(), 0.0, 3.0, blurred, face=True)[-1][1]
     assert r.ok and r.warnings == ("blurred",)

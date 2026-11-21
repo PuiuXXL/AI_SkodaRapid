@@ -233,6 +233,7 @@ class EyesConfig(_Section):
     head_motion_deg: PositiveFloat
     # R-FL4
     squint_ear_band: Annotated[list[Annotated[float, Field(gt=0, lt=1)]], Field(min_length=2, max_length=2)]
+    squint_veto: Fraction  # eyeSquint at or above this, ratio inside the band -> squint, never closed (1.0 = off)
     # PERCLOS P80
     closed_level_default: RatioOfRef
     perclos_closure: RatioOfRef
@@ -312,11 +313,23 @@ class GazeCalibrationConfig(_Section):
     modes: Annotated[list[Literal["owl", "lizard"]], Field(min_length=1)]
     road_factor: Annotated[float, Field(ge=1)]  # road gets this many times more data
     discard_s: Annotated[float, Field(ge=0)]  # dropped after every prompt (reaction time)
+    owl_min_head_deg: Annotated[float, Field(ge=0)]  # OWL zone head this close to the road -> calibration warning
     transition_s: Annotated[float, Field(ge=0)]  # "back to the road" between zones, not recorded
     min_samples_per_zone: PositiveInt
     quick_zones: Annotated[list[CalibratedZone], Field(min_length=1)]
     quick_s_per_zone: PositiveFloat
     quick_transition_s: Annotated[float, Field(ge=0)]
+
+
+class RearSeatConfig(_Section):
+    """AS13: face lost right after a growing yaw towards the passenger side -> rear_seat (switch demo.rear_seat)."""
+
+    min_yaw_deg: PositiveFloat
+    min_rise_deg: Annotated[float, Field(ge=0)]
+    rising_s: PositiveFloat
+    max_gap_s: PositiveFloat
+    max_s: PositiveFloat
+    right_sign: Literal[-1, 1]  # sign of the raw yaw when the head turns right (towards the passenger)
 
 
 class GazeConfig(_Section):
@@ -330,6 +343,8 @@ class GazeConfig(_Section):
     loo_exclude_s: Annotated[float, Field(ge=0)]  # blocked LOO: same-segment samples this close in time are left out
     min_conf: Fraction
     zone_min_frames: PositiveInt
+    rear_seat: RearSeatConfig
+    unknown_hold_s: Annotated[float, Field(ge=0)]  # a classifier "unknown" keeps the last zone this long (no flicker)
     away_margin_deg: Annotated[float, Field(ge=0)]
     on_road_zones: Annotated[list[CalibratedZone], Field(min_length=1)]
     mirror_zones: list[CalibratedZone]
@@ -417,6 +432,9 @@ class MonitoringConfig(_Section):
     no_frames_s: PositiveFloat  # no frame for this long -> no_frames
     occluded_std_max: Annotated[float, Field(ge=0)]  # luma std below this = uniform image (lens covered)
     blur_var_min: Annotated[float, Field(ge=0)]  # Laplacian variance below this = blurred
+    covered_s: PositiveFloat  # AS12 / AP5 fast path: no face + very dark / uniform / sharpless this long -> occluded
+    covered_luma_max: Annotated[float, Field(ge=0, le=255)]
+    covered_sharpness_max: Annotated[float, Field(ge=0)]
     mono_chroma_max: Annotated[float, Field(ge=0)]  # mean |R-G|, |B-G| below this = monochrome (IR night mode)
     mode_switch_luma_delta: PositiveFloat  # luma jump between frames, image still structured -> mode_switch
     mode_switch_hold_s: Annotated[float, Field(ge=0)]
@@ -444,7 +462,18 @@ class FiltersConfig(_Section):
     unknown_below_conf: Fraction
 
 
+class DemoConfig(_Section):
+    """Demo switches: a detection that misses its target is turned off here (its frame fields keep the defaults)."""
+
+    head_answer: bool  # AS8 yes / no from the head (HeadAnswerModule on both cameras)
+    posture_driver: bool  # PostureModule on the driver camera
+    posture_passenger: bool  # PostureModule on the passenger camera
+    nodding_triggers: bool  # AS4 driver.head.nodding may be true (false: always false in the frame)
+    rear_seat: bool  # AS13 rear_seat zone after a large right yaw with the face lost
+
+
 class PassengerConfig(_Section):
+    open_reset_frames: PositiveInt  # consecutive open frames needed to reset the closed time (noise immunity)
     asleep_closed_s: PositiveFloat  # AP2: eyes not seen open for this long (passenger present) -> awake = false
     asleep_closed_head_s: PositiveFloat  # ... or this long with the head dropped (plan AP2: eyes closed + head down)
     head_drop_deg: PositiveFloat  # head pitch this far below the passenger's upright pitch = dropped
@@ -532,6 +561,7 @@ class PerceptionConfig(_Section):
     monitoring: MonitoringConfig
     passenger: PassengerConfig
     posture: PostureConfig
+    demo: DemoConfig
     filters: FiltersConfig
     workers: WorkersConfig
     output: OutputConfig

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -142,6 +143,38 @@ def test_passenger_asleep_after_closed_eyes() -> None:
 )
 def test_commands_parse(raw: dict[str, Any], cmd: str) -> None:
     assert parse_command(raw).cmd == cmd
+
+
+def test_dialog_window_reaches_the_addressed_camera_and_every_close_reaches_both() -> None:
+    """AS8 / AP6: the window goes to the seat it is for (head answers and gestures are only counted there)."""
+    from perception.main import Perception
+    from perception.worker import WorkerOptions
+
+    app = Perception(
+        load_config(), cameras=["driver", "passenger"], options=WorkerOptions(synthetic=True, models=False),
+        ws=False, mjpeg=False,
+    )
+    sent: list[tuple[str, bool, float]] = []
+
+    def recorder(name: str) -> Callable[..., None]:
+        def send(cmd: dict[str, Any], persist: bool = False) -> None:
+            sent.append((name, cmd["open"], cmd["until_perf"] - time.perf_counter()))
+
+        return send
+
+    try:
+        for name, worker in app.workers.items():
+            worker.send = recorder(name)  # type: ignore[method-assign]
+        for to, opened, expect in (("passenger", True, ["passenger"]), (2, True, ["passenger"]),
+                                   ("driver", True, ["driver"]), (None, True, ["driver", "passenger"]),
+                                   (None, False, ["driver", "passenger"])):
+            sent.clear()
+            until = time.time() + 6.0 if opened else time.time()
+            app.handle_message({"type": "dialog_window", "open": opened, "to": to, "until": until})
+            assert [s[0] for s in sent] == expect
+            assert all(s[1] is opened and (5.5 < s[2] <= 6.0 if opened else s[2] <= 0.05) for s in sent)
+    finally:
+        app.system.close()
 
 
 def test_unknown_command_rejected() -> None:

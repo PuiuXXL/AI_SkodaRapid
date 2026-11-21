@@ -90,6 +90,19 @@ def test_head_drop_makes_the_passenger_asleep_sooner() -> None:
     assert cfg.asleep_closed_head_s < cfg.asleep_closed_s
 
 
+def test_isolated_open_frames_do_not_wake_a_sleeping_passenger() -> None:
+    """AP2: the closed time resets only after open_reset_frames open frames in a row (no head drop needed)."""
+    cfg = load_config().passenger
+    mod = PassengerStateModule(_ctx(), None)
+    t, _ = _play(mod, 0.0, 3.0)
+    for _ in range(round(cfg.asleep_closed_s + 1.0)):  # one noisy OPEN frame every second
+        t, out = _play(mod, t, 1.0 - 1.0 / FPS, eyes="CLOSED")
+        t, out = _play(mod, t, 1.0 / FPS, eyes="OPEN")
+    assert not out["awake"] and not out["head_dropped"]
+    _, out = _play(mod, t, cfg.open_reset_frames / FPS)  # really open: awake again
+    assert out["awake"]
+
+
 def test_frozen_passenger_camera_is_not_present() -> None:
     mod = PassengerStateModule(_ctx(), None)
     out = mod.update(_ff(0.0), _inp(0.0, _state(), SimpleNamespace(reason="frozen")))["passenger_state"]

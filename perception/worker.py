@@ -375,7 +375,7 @@ class CalibrationModule:
                 "profile": result.name,
                 "quick": run.quick,
                 "loo_accuracy": result.loo_accuracy(),
-                "warnings": result.warnings(),
+                "warnings": result.warnings(cfg.gaze.calibration.owl_min_head_deg),
                 "samples": run.summary(),
                 "path": str(path),
             }
@@ -558,10 +558,11 @@ def default_pipeline(ctx: CameraContext, perf: PerfTracker) -> ModularPipeline:
         MonitorModule(ctx, extractor, on_mode_switch=detectors.reset_image_state),
         hands,
         PhoneTrackerModule(ctx, extractor, perf),
-        HeadAnswerModule(ctx, extractor),
+        *([HeadAnswerModule(ctx, extractor)] if ctx.cfg.demo.head_answer else []),
         IdentityModule(ctx, extractor, perf, on_profile=calibration.follow_identity if calibration else None),
-        PostureModule(ctx, extractor, reference=calibration.posture_ref if calibration else None),
     ]
+    if ctx.cfg.demo.posture_driver if ctx.is_driver else ctx.cfg.demo.posture_passenger:
+        modules.append(PostureModule(ctx, extractor, reference=calibration.posture_ref if calibration else None))
     if not ctx.is_driver:
         modules.append(PassengerStateModule(ctx, extractor))
     builtin = len(modules)

@@ -94,7 +94,8 @@ face:                          # MediaPipe Face Landmarker, rules R-FL1..R-FL5 i
 
 rates:
   driver_face_every_frame: true  # the driver face is never degraded
-  passenger_face_hz: 30        # every frame (P1 decision 2026-11-21); the degrade ladder still halves it under load
+  passenger_face_hz: 15        # half the capture rate: at 30 Hz the CPU saturated with two faces and the degrade
+                               # ladder dropped the passenger to 3.6 Hz and the driver to 17 fps (live 2026-11-21)
   gaze_hz: 15
   phone_hz: 5
   pose_hz: 2                   # rear_seat confirmation only
@@ -102,7 +103,7 @@ rates:
   perf_window: 120             # samples kept per model for p50/p95
   degrade_e2e_p95_ms: 150      # above this: lower the passenger rate first, then YOLO (driver face: never)
   degrade_step: 0.5            # each step halves the rate being degraded
-  degrade_min_passenger_face_hz: 2.5
+  degrade_min_passenger_face_hz: 5.0   # below this the passenger card visibly lags (2.5 looked frozen live)
   degrade_min_phone_hz: 1.25
   degrade_recover_ratio: 0.7   # step back up when p95 < 0.7 x the limit
   degrade_hold_s: 3.0          # at least this long between two steps (no oscillation)
@@ -145,6 +146,8 @@ eyes:                          # docs/perception.md §3.2; values from docs/eval
   # R-FL4: squinting / smiling is not closed: ratio inside this band with eyeBlink < blendshape_closed (lids
   # lowered, not meeting). eyeSquint is NOT used: 0.49 at rest and 0.71 with the eyes squeezed shut (diag session).
   squint_ear_band: [0.50, 0.70] # [closed-plateau floor, drop_ratio]: lowered lids that would otherwise be closing
+  squint_veto: 0.60            # R-FL4: eyeSquint >= this with the ratio in the band = squint, not closed (rest 0.49,
+                               # squeezed shut 0.71 but those lids sit below the band). Start value: tune in B3
   # PERCLOS P80 (FHWA / Dinges): fraction of time with the eyes >= 80 % closed
   closed_level_default: 0.40   # ratio of a fully closed eye until measured (median of the last blink minima)
   perclos_closure: 0.80
@@ -177,7 +180,7 @@ speaking:
 head:
   nod:                         # fatigue head drop (with eyes closing)
     pitch_drop_deg: 15
-    window_s: 1.5
+    window_s: 3.0              # a drowsy nod falls slowly (18 deg in 2.5 s): 1.5 s saw only 11 deg (nod 1/5 live)
     closed_recent_s: 2.0       # a closure > blink_max_ms within this long arms the nod: with the head down the shut
                                # lids often read SQUINT (eval 2026-11-21); only a confirmed reopen disarms it
     max_gap_s: 0.5             # face lost this long keeps the pitch history (the falling head leaves the tracker)
@@ -185,7 +188,8 @@ head:
   answer:                      # AS8 yes / no, only while the dialog window is open (driver_cam/head_answer.py)
     min_reversals: 2           # zero crossings of the detrended angle within window_s
     window_s: 1.2
-    min_amplitude_deg: 6       # peak-to-peak; zero crossings use a Schmitt trigger at +- half of it
+    min_amplitude_deg: 4       # peak-to-peak; Schmitt trigger at +- half of it. 6 missed a normal 5 deg nod (0 live
+                               # answers 2026-11-21); 4 keeps mirror glance / lap look / talking bob silent (tests)
     slow_tau_s: 1.0            # slow mean (EMA time constant) subtracted: a step / slow drop never crosses zero
     dominance_ratio: 1.5       # both axes oscillating: the answer axis needs 1.5 x the RMS of the other
     max_closed_ms: 400         # eyes closed longer than this reset the count (a blink does not; a fatigue nod does)
@@ -202,7 +206,9 @@ gaze:                          # docs/perception.md §3.4. Starting values: tune
   max_age_ms: 250              # MobileGaze runs at rates.gaze_hz; an older result is not used (zone -> unknown)
   k: 5                         # distance-weighted kNN (1/d)
   feature_weights:             # applied to the z-scored groups: head yaw/pitch (2), MobileGaze yaw/pitch (2),
-    head: 1.0                  # eyeLook* blendshapes (8), iris offset x/y (2)
+    head: 2.0                  # eyeLook* blendshapes (8), iris offset x/y (2). Head 2.0 = 57 % of the distance (was
+                               # 25 %: the eyes decided alone and flickered); blocked LOO on the andrei calibration
+                               # 2026-11-21: 1.0 -> 53.9 %, 2.0 -> 55.7 %, head only 48.0 % (eyes-only glances need eyes)
     gaze: 1.0
     eye_look: 0.5              # 8 correlated features: half weight so they do not outvote head + gaze
     iris: 1.0
@@ -214,7 +220,16 @@ gaze:                          # docs/perception.md §3.4. Starting values: tune
   reject_factor: 1.5           # tau = p95 of the blocked-LOO kNN distances x this; mean distance > tau -> unknown
   loo_exclude_s: 0.5           # blocked LOO: same-segment calibration samples closer than this in time are left out
   min_conf: 0.6                # vote share below this -> unknown
-  zone_min_frames: 3           # a new zone is accepted after this many frames (~100 ms at 30 fps)
+  zone_min_frames: 5           # a new zone is accepted after this many frames (~170 ms at 30 fps; 3 flickered
+                               # 61 times / min live on 2026-11-21)
+  rear_seat:                   # AS13 (switch demo.rear_seat): face lost right after a growing right turn -> rear_seat
+    min_yaw_deg: 35            # |yaw| towards the passenger side on the last face frames (start value, tune in B3)
+    min_rise_deg: 10           # ... still growing by this much over rising_s (a turn, not a held pose)
+    rising_s: 0.6
+    max_gap_s: 0.3             # the last face frame must be this recent when the face goes
+    max_s: 3.0                 # plan: rear_seat for at most 3 s
+    right_sign: -1             # raw yaw sign when turning right (calibration: passenger / mirror_right yaw < 0)
+  unknown_hold_s: 0.6         # a classifier "unknown" keeps the last zone this long (live: 24 % unknown in short bursts)
   away_margin_deg: 15          # rejected AND head beyond the calibrated range by this much -> away (off-road)
   on_road_zones: [road]
   mirror_zones: [mirror_left, mirror_right, mirror_rear]
@@ -227,6 +242,8 @@ gaze:                          # docs/perception.md §3.4. Starting values: tune
     modes: [owl, lizard]       # head turned / eyes only
     road_factor: 3             # road gets 3x the data (it is where the driver looks most)
     discard_s: 0.3             # dropped after every prompt (reaction time)
+    owl_min_head_deg: 10       # OWL step: head (yaw, pitch) closer than this to the road -> warning "turn the head"
+                               # (the 17:12 calibration: 5.5-8 deg for 5 zones, so the eyes decided alone)
     transition_s: 1.5          # "back to the road" between zones, not recorded
     min_samples_per_zone: 15
     quick_zones: [road, mirror_left, mirror_right, mirror_rear]  # quick recalibration (~15 s)
@@ -293,14 +310,26 @@ monitoring:
   no_frames_s: 1.0             # no frame for this long -> no_frames
   occluded_std_max: 8.0        # luma std below this = uniform image (lens covered) (start, synthetic only)
   blur_var_min: 20.0           # Laplacian variance (160 px wide image) below this = blurred (start, synthetic only)
+  covered_s: 1.0               # AS12 / AP5: no face + (luma < covered_luma_max OR uniform OR sharpness <
+  covered_luma_max: 30.0       # covered_sharpness_max) this long -> occluded at once (was face_lost_s + 1.5 s = 3.5 s
+  covered_sharpness_max: 8.0   # live). A hand passing (< 1 s) does not trigger. Start values: tune in B3
   mono_chroma_max: 2.0         # mean |R-G|,|B-G| below this = monochrome (IR night mode) (start)
   mode_switch_luma_delta: 50.0 # luma jump between consecutive frames, image still structured -> mode_switch (start)
   mode_switch_hold_s: 1.5      # monitoring_ok=false this long after a day/night switch (0 = never)
   analysis_width: 160          # luma / std / blur / chroma measured on a frame resized to this width
 
+demo:                          # demo switches (docs/perception.md "Mod demo"): off = the frame keeps the defaults
+  head_answer: true            # AS8 yes / no from the head, both seats (only inside the dialog window)
+  posture_driver: true         # driver.posture vs. the calibration reference
+  posture_passenger: false     # passenger.posture: not in the scenario, 4 false events / 60 s live (auto reference)
+  nodding_triggers: true       # AS4: driver.head.nodding may be true (false: always false)
+  rear_seat: true              # AS13: face lost after a large right yaw -> zone rear_seat for at most 3 s
+
 passenger:
-  asleep_closed_s: 10          # AP2: eyes not seen open for this long while the passenger is there -> awake = false
-  asleep_closed_head_s: 5      # ... or this long with the head dropped (plan AP2: "ochi închiși + capul lăsat")
+  open_reset_frames: 3         # the closed time resets only after this many open frames in a row (one noisy OPEN
+                               # frame reset it live: asleep never reached in 16 s on 2026-11-21)
+  asleep_closed_s: 8           # AP2: eyes closed this long -> awake = false (target < 10 s); the head is not required
+  asleep_closed_head_s: 5      # ... the dropped head is a reinforcer: this long is enough with the head dropped
   head_drop_deg: 15            # pitch this far below the passenger's upright pitch = head dropped
   upright_window_s: 30         # upright pitch = median pitch with the eyes open over the last 30 s
 

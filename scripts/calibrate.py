@@ -46,7 +46,7 @@ def _report(cal: Calibration, run: CalibrationRun | None, path: Path) -> None:
     print("LOO confusion (rows = target):")
     for zone, row in cal.loo_confusion().items():
         print(f"  {zone:13s} " + "  ".join(f"{k}:{v}" for k, v in sorted(row.items(), key=lambda kv: -kv[1])))
-    for warning in cal.warnings():
+    for warning in cal.warnings(load_config().gaze.calibration.owl_min_head_deg):
         print(f"WARNING: {warning}")
 
 

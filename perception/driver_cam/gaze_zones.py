@@ -307,11 +307,14 @@ class ZoneModel:
 
 
 class ZoneTracker:
-    """Stable zone: a new candidate must persist ``min_frames`` frames; blinks hold the zone for ``blink_hold_s``."""
+    """Stable zone: a new candidate must persist ``min_frames`` frames; blinks hold the zone for ``blink_hold_s``;
+    a classifier ``unknown`` (rejected / low vote) keeps the last zone for ``unknown_hold_s`` before it is reported."""
 
-    def __init__(self, min_frames: int, blink_hold_s: float) -> None:
+    def __init__(self, min_frames: int, blink_hold_s: float, unknown_hold_s: float = 0.0) -> None:
         self.min_frames = max(1, min_frames)
         self.blink_hold_s = blink_hold_s
+        self.unknown_hold_s = unknown_hold_s
+        self._unknown_since: float | None = None
         self.zone = "unknown"
         self.conf = 0.0
         self.t_change: float | None = None
@@ -329,6 +332,12 @@ class ZoneTracker:
             return self.zone
         self._closed_since = None
         candidate = result.zone if result is not None else "unknown"
+        if candidate == "unknown" and self.zone != "unknown":
+            self._unknown_since = t if self._unknown_since is None else self._unknown_since
+            if t - self._unknown_since < self.unknown_hold_s:
+                return self.zone  # a short unsure stretch: the last zone holds (no flicker to unknown)
+        else:
+            self._unknown_since = None
         if candidate == self.zone:
             self._pending, self._count = None, 0
             if result is not None:
@@ -347,4 +356,4 @@ class ZoneTracker:
 
     def reset(self) -> None:
         self.zone, self.conf, self.t_change = "unknown", 0.0, None
-        self._pending, self._count, self._closed_since = None, 0, None
+        self._pending, self._count, self._closed_since, self._unknown_since = None, 0, None, None

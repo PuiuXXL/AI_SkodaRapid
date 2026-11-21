@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, replace
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
@@ -228,6 +228,7 @@ class FaceIdentifier:
         self._input_size: tuple[int, int] | None = None
         self._last_run: float | None = None
         self._last_reason: Reason = "held"
+        self._new_face = False  # the run due() started is for a new face (no_face then clears the identity)
         self._absent_since: float | None = None
         self._profile: str | None = None
         self._score: float | None = None
@@ -289,31 +290,47 @@ class FaceIdentifier:
         """Call on every frame; runs the models only when due. ``face_present`` = Face Landmarker sees a face
         (``None``: unknown, rely on YuNet alone)."""
         t0 = time.perf_counter()
+        if not self.due(t, face_present):
+            return self._result(False, "held", t0)
+        if image is None:
+            return self._result(False, "no_image", t0)
+        reason = self.finish(t, self.identify(image))
+        return self._result(True, reason, t0)
+
+    def due(self, t: float, face_present: bool | None = None) -> bool:
+        """Scheduling half of :meth:`update` (tracks absence): True = run :meth:`identify` now, then :meth:`finish`.
+        An async caller does not call it again while that run is pending."""
         cfg = self.cfg
         if face_present is False:
             self._absent_since = self._absent_since if self._absent_since is not None else t
             if t - self._absent_since >= cfg.lost_s:
                 self._profile, self._score, self._best = None, None, None
-            return self._result(False, "held", t0)
-        new_face = self._last_run is None or (self._absent_since is not None and t - self._absent_since >= cfg.lost_s)
+            return False
+        self._new_face = self._last_run is None or (
+            self._absent_since is not None and t - self._absent_since >= cfg.lost_s
+        )
         self._absent_since = None
-        due = (
-            new_face
+        return (
+            self._new_face
             or self._last_run is None
             or t - self._last_run >= cfg.recheck_s
             or (self._last_reason == "no_face" and t - self._last_run >= cfg.retry_s)
         )
-        if not due:
-            return self._result(False, "held", t0)
-        if image is None:
-            return self._result(False, "no_image", t0)
-        reason, profile, score, best = self.identify(image)
+
+    def finish(self, t: float, outcome: tuple[Reason, str | None, float | None, str | None]) -> Reason:
+        """Apply one :meth:`identify` outcome for the run that :meth:`due` started at ``t``."""
+        reason, profile, score, best = outcome
         self._last_run, self._last_reason = t, reason
-        if reason == "no_face" and not new_face:
+        if reason == "no_face" and not self._new_face:
             pass  # YuNet missed a face the landmarker sees: keep the identity, retry after retry_s
         else:
             self._profile, self._score, self._best = profile, score, best
-        return self._result(True, reason, t0)
+        return reason
+
+    def held(self, reason: Reason = "held", ms: float = 0.0, *, ran: bool = False) -> IdentityResult:
+        """The current (held) identity as a result, e.g. while an async run is pending."""
+        res = self._result(ran, reason, time.perf_counter())
+        return replace(res, ms=round(ms, 3)) if ms else res
 
     def _result(self, ran: bool, reason: Reason, t0: float) -> IdentityResult:
         return IdentityResult(

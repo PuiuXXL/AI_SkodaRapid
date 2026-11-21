@@ -30,6 +30,11 @@ from perception.config import PerceptionConfig
 from perception.contract import validate_frame
 from perception.log import get_logger
 from perception.perf import build_perf_block
+from perception.posture import POSTURE_STATES
+
+#: Proposed per-seat posture block with every state false: sent even when the posture module is off on that seat
+#: (demo.posture_*), so the frame shape never depends on the config; the module's frame_patch overrides it.
+POSTURE_DEFAULT: dict[str, bool] = dict.fromkeys(POSTURE_STATES, False)
 
 __all__ = ["Mapper", "build_frame", "build_valid_frame", "deep_merge", "fresh_result", "register_mapper"]
 
@@ -147,7 +152,13 @@ def _driver_block(cfg: PerceptionConfig, d: Mapping[str, Any], frame: dict[str, 
             "microsleep": False,  # P2 decides from closed_ms (docs/perception.md §8)
             "reliable": e["reliable"],
         },
-        "head": {"yaw": h["yaw"], "pitch": h["pitch"], "roll": h["roll"], "nodding": h["nodding"], "answer": None},
+        "head": {
+            "yaw": h["yaw"],
+            "pitch": h["pitch"],
+            "roll": h["roll"],
+            "nodding": bool(h["nodding"]) and cfg.demo.nodding_triggers,  # demo switch: never true when off
+            "answer": None,
+        },
         "gaze": {
             "zone": g["zone"],
             "conf": g["conf"],
@@ -184,6 +195,7 @@ def _driver_block(cfg: PerceptionConfig, d: Mapping[str, Any], frame: dict[str, 
             calibrated=g["calibrated"], off_road_60s_ms=g["off_road_60s_ms"], lap_pattern=g["lap_pattern"]
         )
         frame["driver"].update(face_too_small=bool(st["face"]["too_small"]), **_monitoring_extras(mon, d))
+    frame["driver"]["posture"] = dict(POSTURE_DEFAULT)  # patches apply in strict mode too: same shape either way
 
 
 def _passenger_block(cfg: PerceptionConfig, p: Mapping[str, Any], frame: dict[str, Any]) -> None:
@@ -209,6 +221,7 @@ def _passenger_block(cfg: PerceptionConfig, p: Mapping[str, Any], frame: dict[st
         frame["occupants"].append(_occupant(cfg, PASSENGER_ID, "front_right", "cam_passenger", p))
     if cfg.output.proposed_fields:
         frame["passenger"].update(_monitoring_extras(mon, p))
+    frame["passenger"]["posture"] = dict(POSTURE_DEFAULT)
 
 
 def _apply_modules(

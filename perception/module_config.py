@@ -122,4 +122,7 @@ def camera_monitor_config(cfg: PerceptionConfig) -> CameraMonitorConfig:
         mode_switch_hold_s=m.mode_switch_hold_s,
         min_face_width_px=float(cfg.face.min_face_width_px),
         analysis_width=m.analysis_width,
+        covered_s=m.covered_s,
+        covered_luma_max=m.covered_luma_max,
+        covered_sharpness_max=m.covered_sharpness_max,
     )

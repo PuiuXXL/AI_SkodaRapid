@@ -14,7 +14,9 @@ Perception turns the two cameras into a `PerceptionFrame` stream at 15 Hz. **P1 
 
 ## 1. Runtime
 
-- **Python 3.11**, the same version for all four modules (as in plan §3), with a single shared `.venv`.
+- **Python 3.11**, the same version for all four modules (as in plan §3), with a single shared `.venv`. The perception
+  CI (`.github/workflows/perception.yml`) runs on 3.12 (P1 decision 2026-11-21): the code still targets 3.11 (ruff /
+  mypy in pyproject), 3.12 checks it forward; `scripts/ci_local.ps1` runs the same steps locally.
   - MediaPipe does not ship reliable wheels for 3.13+, so 3.13/3.14 are out.
   - 3.12 would also work for perception, but core loads P3 and P4 code in the same process, and one interpreter
     version for the whole team avoids integration surprises. The speed difference does not matter here: the models do the heavy work.
@@ -559,46 +561,55 @@ The demo runs on a laptop webcam and a phone. A production version of the same p
 carries it, and how P4 can show it. "Proposed" fields are sent now (`output.proposed_fields: true`) and listed in
 the CONTRACT texts below; with `false` only the plan §7 fields are sent.
 
-| Detection (plan 4.A) | `PerceptionFrame` field | Seat | Status (live scene check 2026-11-21) | How P4 can show it |
-|---|---|---|---|---|
-| AS1 face landmarks, blendshapes | not in the frame (raw) | driver, passenger | done | MJPEG `/video/<cam>`; key D -> `debug` overlay |
-| AS2 eyes: EAR, blink, PERCLOS | `driver.eyes.ear`, `blink_ms`, `perclos_60s`, `eye_used`, `reliable`, `blink_count`* | driver | done (blinks 10/10) | EAR number, PERCLOS gauge, last blink |
-| AS2 eye state, closure time | `driver.eyes.state`, `closed_ms`, `long_closure` | driver | done (2 s closures continuous) | OPEN / CLOSED / SQUINT badge, closed_ms counter |
-| AS2 microsleep | `driver.eyes.microsleep` (always false from P1) | driver | P2 decides from `closed_ms` | P2's alert |
-| AS2 blink rate, reference | `driver.eyes.blink_rate`, `open_baseline` | driver | done | blinks / min on the fatigue panel |
-| R-FL4 squint / smile | `driver.eyes.squint` | driver | limitation: hard squint / big smile can read closed (3/6) | amber "squint" tag |
-| AS3 yawn | `driver.yawn` | driver | done (3/3) | yawn icon + log event |
-| AS4 head pose, fatigue nod | `driver.head.yaw`, `pitch`, `roll`, `nodding` | driver | angles done; nod 1/5 live (to tune) | angle dials, NODDING badge |
-| AS5 gaze zone | `driver.gaze.zone`, `conf`, `source`, `calibrated` | driver | done; accuracy depends on the calibration (S2 / S4 failed: road <-> mirror_left, passenger <-> mirror_right) | zone on a cabin sketch |
-| AS6 VATS, entropy | `driver.gaze.vats_60s`, `entropy_60s`, `off_road_ms`, `off_road_60s_ms` | driver | done (entropy 2.17 -> 1.19) | counters by the zone |
-| AS7 driver phone | `driver.phone.in_use`, `conf`, `source`, `near_face`, `side`, `usage`, `foreign_seen`, `driver.gaze.lap_pattern` | driver | done (YOLO26s@640, 3-of-5 vote, 0.03 s after in place; passenger's phone never the driver's) | phone icon + usage |
-| AS8 head yes / no | `driver.head.answer` | driver | wired to the dialog window; 0 answers live (to diagnose) | answer chip |
-| AS9 gestures | `driver.gesture`, `gesture_score` | driver | done (👍 ✋ live) | 👍 👎 ✋ icon |
-| AS10 identity | `occupants[seat=driver].profile`, `profile_score` | driver | done (< 3 s) | name on the occupant card |
-| AS11 speaking | `driver.speaking` | driver | done | mic icon |
-| AS12 camera covered, face lost | `driver.monitoring_ok`, `monitoring_reason`, `monitoring_warnings`, `face_conf` | driver | done, but covered -> 3.5 s via `face_lost` (occlusion rule not tuned live) | red banner + reason |
-| AS14 unreliable eyes | `driver.eyes.reliable` | driver | done | eye widgets greyed |
-| R-FL3 face too small | `driver.face_too_small` | driver | done (>= 250 px at the 720p processing size) | "move closer" warning |
-| Posture | `driver.posture`* {`leaning_forward`, `leaning_side`, `slumped`, `out_of_position`} | driver | done (vs. the calibration's `posture_ref`) | posture tag |
-| AP1 passenger present + identity | `passenger.present`, `occupants[seat=front_right]` | passenger | done (< 3 s) | passenger card + name |
-| AP2 passenger asleep | `passenger.awake`, `eyes_closed_s` | passenger | wake-up done; asleep not reached in 16 s live (to diagnose) | asleep tag + timer |
-| AP3 passenger speaking | `passenger.speaking` | passenger | done | mic icon |
-| AP4 passenger phone | `passenger.holding_phone` | passenger | done (54 % of frames while shown) | phone icon |
-| AP5 passenger camera covered / absent | `passenger.monitoring_ok`, `monitoring_reason`, `face_conf` | passenger | done | grey card + reason |
-| AP6 passenger gestures / answer | `passenger.gesture`, `passenger.answer` | passenger | 👍 done; ✋ and yes not detected live (to diagnose) | icon / chip on the passenger card |
-| Passenger posture | `passenger.posture`* | passenger | done; 4 false events in 60 s (automatic reference, to tune) | posture tag |
-| Camera selection | `driver/passenger.monitoring_reason = "camera_fallback"`* | both | done (dev fallback off by default) | "fallback camera" note |
-| J1 performance | `perf.cameras.*` (`available`, `capture_ts`, `age_ms`, `dropped_results`), `perf.*_ms_p50`, `e2e_ms_p95`, `degrade_level`, `stages_ms`, `publish_ts` | both | done (both cameras 720p30 captured and processed at ~30 fps, e2e p95 66 ms, live 2026-11-21) | performance panel |
+| Item (plan 4.A) | `PerceptionFrame` field | Seat | Part A (code + tests, 2026-11-21) | Live GO / NO-GO (part B) | Demo switch |
+|---|---|---|---|---|---|
+| AS1 landmarks, blendshapes | not in the frame (raw) | both | done | GO (MJPEG `/video/<cam>`, key D) | — |
+| AS2 eyes: EAR, blink, PERCLOS, closure | `driver.eyes.ear`, `blink_ms`, `perclos_60s`, `state`, `closed_ms`, `long_closure`, `blink_count`* | driver | two tiers (blink ends at the first open frame, closure after 2 open frames, face gaps <= 200 ms) | pending B (targets 3/3, 9/10) | — |
+| R-FL4 squint / smile | `driver.eyes.squint`, `state` | driver | eyeSquint >= `eyes.squint_veto` inside the squint band vetoes "closed" | pending B (target 0/6) | — |
+| AS3 yawn | `driver.yawn` | driver | done | pending B (3/3) | — |
+| AS4 fatigue nod | `driver.head.nodding` | driver | slow drop: `head.nod.window_s` 3.0 (18 deg in 2.5 s), face gaps, lap look excluded (eyes open) | pending B (>= 4/5) | `demo.nodding_triggers` |
+| AS5 gaze zones | `driver.gaze.zone`, `conf`, `source`, `calibrated` | driver | head weight 2.0, unknown hold 0.6 s, calibration warns on OWL steps without a head turn | pending B (owl >= 95 %, lizard >= 90 %) after recalibration | — |
+| AS6 VATS, entropy | `driver.gaze.vats_60s`, `entropy_60s`, `off_road_ms`, `off_road_60s_ms` | driver | done (tests) | pending B | — |
+| AS7 driver phone, lap pattern | `driver.phone.*`, `driver.gaze.lap_pattern` | driver | done (vote 3/5, near_face / side, passenger's phone foreign) | pending B (>= 95 %) | — |
+| AS8 head yes / no | `driver.head.answer`, `passenger.answer` | both | window routed to the addressed seat (close to both), `min_amplitude_deg` 4 (5 deg nods) | pending B (>= 9/10, 0 outside) | `demo.head_answer` |
+| AS9 / AP6 gestures | `driver.gesture`, `passenger.gesture` | both | done (window or raised hand) | pending B (>= 95 %) | — |
+| AS10 / AP1 identity | `occupants[].profile`, `profile_score` | both | SFace on its own thread (loop never waits), embeddings per camera | pending B (< 3 s) | — |
+| AS11 / AP3 speaking | `driver.speaking`, `passenger.speaking` | both | done (hold 800 ms, B9) | pending B | — |
+| AS12 / AP5 camera covered | `*.monitoring_ok`, `monitoring_reason = occluded` | both | fast path: no face + very dark / uniform / sharpless for 1 s (a hand passing < 1 s: nothing) | pending B (< 2 s) | — |
+| AS13 rear-seat glance (S) | `driver.gaze.zone = rear_seat`, `source = body` | driver | face lost right after a growing right turn -> rear_seat <= 3 s | pending B | `demo.rear_seat` |
+| AS14 unreliable eyes (S) | `driver.eyes.reliable` | driver | done (state UNKNOWN, no PERCLOS / nod) | GO | — |
+| AP2 passenger asleep | `passenger.awake`, `eyes_closed_s` | passenger | reset only after 3 open frames in a row; closed 8 s is enough, head drop shortens to 5 s | pending B (< 10 s) | — |
+| AP4 passenger phone | `passenger.holding_phone` | passenger | done | pending B | — |
+| Posture | `driver.posture`*, `passenger.posture`* (always sent, defaults when off) | both | done; passenger off by default | pending B | `demo.posture_driver`, `demo.posture_passenger` |
+| Camera selection | `monitoring_reason = "camera_fallback"`* | both | done | GO | — |
+| J1 performance | `perf.cameras.*`, `perf.*_ms_p50`, `e2e_ms_p95`, `degrade_level`, `stages_ms`, `publish_ts` | both | every P1 perf field filled (`pose_ms_p50` stays null: no pose model in the runtime) | pending B (face >= 20 fps, both cameras) | — |
 
-\* not yet in `shared/contracts.py` (contract 2.1): see below. Everything else above is already in contract 2.1.
+\* proposed, not yet in `shared/contracts.py` (contract 2.1): see the CONTRACT block. Everything else is in contract 2.1.
+The frame shape never depends on the config: a module switched off keeps its fields at the contract defaults.
+
+### Demo mode (`demo:` in perception.yaml)
+
+A detection that misses its target after two live iterations goes under a switch, off by default, and is marked NO-GO
+here with the reason. Switching takes effect at the next start, without code changes.
+
+| Switch | Default | Off means |
+|---|---|---|
+| `demo.head_answer` | true | no HeadAnswerModule on either camera: `driver.head.answer` / `passenger.answer` stay null |
+| `demo.posture_driver` | true | no posture on the driver camera: `driver.posture` all false |
+| `demo.posture_passenger` | false | (default) `passenger.posture` all false: not in the scenario, false events with the automatic reference |
+| `demo.nodding_triggers` | true | `driver.head.nodding` always false (the head angles are still sent) |
+| `demo.rear_seat` | true | AS13 rule off: a lost face stays `unknown` |
+
+Checks: `scripts/demo_check.py` (GO / NO-GO per AS / AP item, ~8 min) and `scripts/scene_check.py` (plan §9 scenes
+1-9 + A + AS13 + N); CI locally: `scripts/ci_local.ps1` (same steps as the workflow).
 
 ### CONTRACT texts for the group (one block; the only P1 fields still missing from contract 2.1)
 
 All optional with a default, written by P1; `extra="allow"` keeps them valid until P2 adds them.
 
 ```
-CONTRACT: driver.posture, {"leaning_forward": bool, "leaning_side": bool, "slumped": bool, "out_of_position": bool} (default all false), P1, postura față de referința din calibrare (centrul / lățimea feței + unghiurile capului), fiecare ținută >= posture.min_duration_s; dashboard + context pentru atenție
-CONTRACT: passenger.posture, același tip (default all false), P1, postura pasagerului față de referința automată (primele posture.auto_ref_s secunde cu fața văzută)
+CONTRACT: driver.posture, {"leaning_forward": bool, "leaning_side": bool, "slumped": bool, "out_of_position": bool} (default all false), P1, postura față de referința din calibrare (centrul / lățimea feței + unghiurile capului), fiecare ținută >= posture.min_duration_s; trimisă mereu (valorile implicite când demo.posture_driver e oprit); dashboard + context pentru atenție
+CONTRACT: passenger.posture, același tip (default all false), P1, postura pasagerului față de referința automată; trimisă mereu, oprită implicit (demo.posture_passenger)
 CONTRACT: driver.eyes.blink_count, int (default 0), P1, număr monoton de clipiri de la pornire: un consumator la 15 Hz nu poate rata o clipire de 150 ms (blink_ms nu se schimbă între două clipiri de aceeași durată)
 CONTRACT: MONITORING_REASONS += "camera_fallback", P1, driver/passenger.monitoring_reason când camera rulează pe camera de rezervă de dezvoltare (cameras.dev_fallback), nu pe cea configurată
 ```

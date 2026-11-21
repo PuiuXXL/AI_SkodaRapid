@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 import statistics
+import time
 from collections import deque
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -381,6 +382,14 @@ class IdentityModule:
         self.enroller: Any = None
         self.enroll: dict[str, Any] = {"id": 0, "state": "idle"}
         self._profile: str | None = None
+        # async (like the phone): YuNet + SFace (~200 ms) run on one background thread, the face pipeline never waits
+        self._pool: Any = None
+        self._future: Any = None
+        self._future_t = 0.0
+        if self.enabled:
+            from concurrent.futures import ThreadPoolExecutor
+
+            self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"identity-{ctx.name}")
 
     def handle(self, cmd: dict[str, Any]) -> bool:
         if cmd.get("cmd") != "enroll":
@@ -441,10 +450,11 @@ class IdentityModule:
         if not self.enabled:
             return {"identity": {"profile": None, "reason": "no_models", "enroll": self.enroll}}
         if self.enroller is not None:
+            self._collect()  # the background run shares the YuNet / SFace objects: finish it before enrolling
             self._enroll_step(inp)
             res = None
         else:
-            res = self.identifier.update(inp.t, self._small(inp.frame.image), face_present=ff.face.present)
+            res = self._identify(inp, ff.face.present)
             if res.ran and self.perf is not None:
                 self.perf.add("sface", res.ms)  # YuNet + SFace (contract perf.sface_ms_p50)
             if res.profile != self._profile:
@@ -454,6 +464,30 @@ class IdentityModule:
         inp.shared["identity"] = res
         out = res.to_dict() if res is not None else {"profile": self._profile, "reason": "enrolling"}
         return {"identity": {**out, "enroll": self.enroll}}
+
+    def _timed_identify(self, image: Image) -> tuple[Any, float]:
+        t0 = time.perf_counter()
+        outcome = self.identifier.identify(image)
+        return outcome, (time.perf_counter() - t0) * 1000.0
+
+    def _collect(self) -> Any:
+        """Wait for the pending background run (if any) and apply it; returns its result or None."""
+        if self._future is None:
+            return None
+        outcome, ms = self._future.result()
+        self._future = None
+        reason = self.identifier.finish(self._future_t, outcome)
+        return self.identifier.held(reason, ms, ran=True)
+
+    def _identify(self, inp: FrameInput, face_present: bool) -> Any:
+        """Submit a due run and return at once: the held identity, or the finished run's result when it is ready."""
+        idf = self.identifier
+        if self._future is not None:
+            return self._collect() if self._future.done() else idf.held()
+        if idf.due(inp.t, face_present):
+            self._future_t = inp.t
+            self._future = self._pool.submit(self._timed_identify, self._small(inp.frame.image))
+        return idf.held()
 
     def draw(self, img: Image, inp: FrameInput) -> None:
         res = inp.shared.get("identity")
@@ -465,7 +499,8 @@ class IdentityModule:
             _text(img, f"{self.ctx.name}: {who}{score}", (img.shape[1] - 360, 120), GREEN if res.profile else GREY)
 
     def close(self) -> None:
-        return None
+        if self._pool is not None:
+            self._pool.shutdown(wait=True, cancel_futures=True)
 
 
 # --- passenger asleep (AP2) ------------------------------------------------------------------------------
@@ -544,6 +579,7 @@ class PassengerStateModule:
         self._upright: deque[tuple[float, float]] = deque()
         self._last_pitch: tuple[float, float] | None = None
         self._asleep = False
+        self._open_run = 0  # consecutive open frames (the closed time resets only after open_reset_frames)
 
     def update(self, ff: FeatureFrame, inp: FrameInput) -> dict[str, Any]:
         p, t = self.cfg.passenger, inp.t
@@ -555,9 +591,13 @@ class PassengerStateModule:
             if state.head.raw_pitch is not None:
                 self._last_pitch = (t, state.head.raw_pitch)
             if state.eyes.reliable and state.eyes.state in ("OPEN", "SQUINT"):
-                self._last_open = t
+                self._open_run += 1
+                if self._open_run >= p.open_reset_frames:  # one noisy "open" frame does not wake a sleeper
+                    self._last_open = t
                 if state.head.raw_pitch is not None:
                     self._upright.append((t, state.head.raw_pitch))
+            else:
+                self._open_run = 0
         while self._upright and t - self._upright[0][0] > p.upright_window_s:
             self._upright.popleft()
         if self._last_open is None and self._last_face is not None:

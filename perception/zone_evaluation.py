@@ -327,7 +327,7 @@ def reclassify(cfg: PerceptionConfig, calibration: Calibration, replay: ZoneRepl
         calibration.segments,
         calibration.times,
     ).model
-    tracker = ZoneTracker(cfg.gaze.zone_min_frames, cfg.eyes.blink_max_ms / 1000.0)
+    tracker = ZoneTracker(cfg.gaze.zone_min_frames, cfg.eyes.blink_max_ms / 1000.0, cfg.gaze.unknown_hold_s)
     s = replay.series
     out = ZoneSeries()
     for i, t in enumerate(s.t):

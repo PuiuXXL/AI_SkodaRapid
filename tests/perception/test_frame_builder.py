@@ -303,3 +303,14 @@ def test_fallback_camera_is_reported(cfg: PerceptionConfig, state: dict[str, Any
     usb = {"device": "1", "via": "usb", "name": "Logi C615 HD WebCam"}
     frame = _build(cfg, driver=_msg(state, "driver", now, time.time(), capture=usb), now_perf=now)
     assert frame["driver"]["monitoring_reason"] is None
+
+
+def test_nodding_switch_and_posture_defaults_keep_the_frame_shape(cfg: PerceptionConfig, state: dict[str, Any]) -> None:
+    nodding = {**state, "head": {**state["head"], "nodding": True}}
+    now = time.perf_counter()
+    on = _build(cfg, driver=_msg(nodding, "driver", now, time.time()), now_perf=now)
+    off_cfg = cfg.model_copy(update={"demo": cfg.demo.model_copy(update={"nodding_triggers": False})})
+    off = _build(off_cfg, driver=_msg(nodding, "driver", now, time.time()), now_perf=now)
+    assert on["driver"]["head"]["nodding"] is True and off["driver"]["head"]["nodding"] is False
+    states = ("leaning_forward", "leaning_side", "slumped", "out_of_position")
+    assert on["driver"]["posture"] == dict.fromkeys(states, False)

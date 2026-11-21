@@ -138,14 +138,18 @@ class _MediaPipeRecognizer:
         mp_image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=image)
         return self._recognizer.recognize_for_video(mp_image, timestamp_ms)
 
+    def close(self) -> None:
+        self._recognizer.close()
+
 
 class HandTracker:
     """Gesture Recognizer + hold logic for one camera.
 
     Args:
         cfg: module configuration.
-        recognizer: an object with ``recognize_for_video(mp_image, timestamp_ms)`` (MediaPipe API); created from
-            ``cfg.model`` on first use when omitted. Tests pass a fake.
+        recognizer: an object with ``recognize_for_video(rgb, timestamp_ms)`` taking an RGB numpy image (the real
+            one wraps MediaPipe and builds ``mp.Image`` itself); created from ``cfg.model`` on first use when
+            omitted. Tests pass a fake.
     """
 
     def __init__(self, cfg: HandsConfig | None = None, *, recognizer: Any = None) -> None:
