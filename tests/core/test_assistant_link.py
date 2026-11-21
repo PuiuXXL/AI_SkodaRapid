@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from p2_helpers import FakeClient, Rig
 
-from assistant.client import AssistantClient
+from assistant.client import AnswerInfo, AssistantClient
 from core import messages_timing, validator
 from core.reminders import pick_stop
 from core.settings import th
@@ -338,3 +338,35 @@ async def test_high_kss_makes_core_pick_the_stop() -> None:
 async def test_pick_stop_needs_a_stop_in_range() -> None:
     state = c.State.model_validate({"trip": {"next_poi": {"id": "far", "category": "fuel", "dist_km": 500}}})
     assert pick_stop(state) is None
+
+
+
+async def test_llm_status_follows_the_provider_not_a_safety_veto() -> None:
+    """No API key: integrations.llm is "off" from the start, and a vetoed or muted answer never turns it into "ok"."""
+    rig = Rig(scene=5, assistant=AssistantClient())  # offline provider (no key)
+    rig.run(0.2)
+    assert rig.state.integrations.llm == "off"
+    event = c.Event(type="driver_speech", ts=rig.t)
+    for reason in ("policy:safety_veto", "policy:muted", "ok"):  # "ok" here would be a provider claiming success
+        rig.link.client.last_result = AnswerInfo(reason=reason)
+        rig.link._record(event, rig.t)
+        rig.run(0.2)
+        assert rig.state.integrations.llm == "off", reason
+
+
+async def test_a_policy_decision_keeps_the_last_llm_status() -> None:
+    client = FakeClient({"driver_speech": [speak("Pun ceva energic.")]})
+    rig = Rig(scene=5, assistant=client)
+    rig.run(0.5)
+    say(rig, "pune ceva muzică")
+    await rig.link.drain()
+    rig.run(0.2)
+    assert rig.state.integrations.llm == "ok"
+    client.last_result = AnswerInfo(reason="timeout")
+    rig.link._record(c.Event(type="driver_speech", ts=rig.t), rig.t)
+    rig.run(0.2)
+    assert rig.state.integrations.llm == "down"
+    client.last_result = AnswerInfo(reason="policy:safety_veto")  # a veto does not mean the LLM recovered
+    rig.link._record(c.Event(type="driver_speech", ts=rig.t), rig.t)
+    rig.run(0.2)
+    assert rig.state.integrations.llm == "down"

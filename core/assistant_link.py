@@ -95,6 +95,13 @@ class AssistantLink:
         engine.add_tick_listener(self.on_tick)
         engine.add_reset_listener(self.reset)
         engine.safety.arbiter.on_interrupt.append(self.on_safety_interrupt)
+        # integrations.llm from the start: "off" when P3's code or its LLM provider (e.g. no API key) is missing,
+        # instead of "unknown" / "ok" until the first answer happens to report it.
+        provider = self._provider_status()
+        if not self.available:
+            engine.llm_status = "off"
+        elif provider is not None:
+            engine.llm_status = provider
         self.reset(0.0)
 
     # --- state of the link ---------------------------------------------------------------------------------------
@@ -222,6 +229,11 @@ class AssistantLink:
             if event_type == "fatigue_high" and self.engine.safe_contact is not None:
                 self.engine.safe_contact.fatigue_dialog_started(now, state.assessment.fatigue)
 
+    def _provider_status(self) -> str | None:
+        """``"ok"`` / ``"off"`` from P3's LLM provider (``AssistantClient.provider.available``); None if unknown."""
+        available = getattr(getattr(self.client, "provider", None), "available", None)
+        return None if available is None else ("ok" if available else "off")
+
     def _record(self, event: Event, now: float) -> None:
         """LLM latency for the performance panel (J1) and its status for ``integrations.llm``."""
         info = getattr(self.client, "last_result", None)
@@ -233,7 +245,13 @@ class AssistantLink:
         if info.llm_total_ms is not None:
             perf["llm_total_ms"] = round(info.llm_total_ms, 1)
         if info.reason != "llm_disabled":  # the director's switch is shown by the engine itself
-            self.engine.llm_status = LLM_STATUS.get(info.reason, "ok")
+            # A policy decision (veto, mute, rate limit) says nothing about the LLM's health: keep the last status.
+            # Anything else that is not a known failure means the LLM answered, unless the provider is unavailable.
+            status = LLM_STATUS.get(info.reason) or (None if str(info.reason).startswith("policy:") else "ok")
+            if self._provider_status() == "off":
+                status = "off"
+            if status is not None:
+                self.engine.llm_status = status
         for raw, reason in info.rejected:
             kind = raw.get("type") if isinstance(raw, dict) else getattr(raw, "type", "?")
             self.engine.log_event("action_rejected", now, source="LLM", text=f"{kind} respins de asistent: {reason}",
