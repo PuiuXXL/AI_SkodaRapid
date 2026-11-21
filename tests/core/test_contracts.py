@@ -130,6 +130,7 @@ VALID_ACTIONS: dict[str, dict[str, Any]] = {
     "show_on_screen": {"text": "Mesaj de la Mihai"},
     "set_preference": {"key": "voice_volume", "value": 0.6},
     "stay_silent": {"reason": "conversation"},
+    "search_media": {"query": "metal energic", "kind": "music"},
 }
 
 
@@ -168,6 +169,24 @@ def test_each_action_parses_to_its_typed_model(action_type: str) -> None:
 def test_invalid_actions_are_rejected(data: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         c.parse_action(data)
+
+
+def test_youtube_media_fields() -> None:
+    """D11 (P3): search_media stays inside the assistant; core gets a choice question and a yt: track."""
+    assert set(c.ACTION_TYPES) >= c.ASSISTANT_INTERNAL_ACTIONS
+    assert c.ACTION_ALLOWED_LEVELS["search_media"] == {"P4"}
+    options = [{"track_id": "yt:abc123", "title": "Enter Sandman", "channel": "Metallica", "duration_s": 331}]
+    ask = c.parse_action({"type": "ask", "question": "Am găsit: A, B sau C. Care?", "expects": "choice",
+                          "options": options})
+    assert isinstance(ask, c.AskAction) and ask.options == options
+    with pytest.raises(ValidationError, match="options"):
+        c.parse_action({"type": "ask", "question": "Care?", "expects": "choice"})
+    play = c.Action(type="play_media", track_id="yt:abc123", title="Enter Sandman").typed()
+    assert isinstance(play, c.PlayMediaAction) and play.title == "Enter Sandman"
+    assert c.State.model_validate({"media": {"playing": True, "source": "youtube"}}).media.source == "youtube"
+    media = c.parse_ui_message({"type": "media", "action": "play", "url": "/media/yt/abc123.m4a", "loop": False})
+    assert isinstance(media, c.UiMedia) and media.loop is False
+    assert "volume" in c.NO_CONFIRMATION_PREFERENCES
 
 
 def test_flat_action_keeps_p3_extras() -> None:

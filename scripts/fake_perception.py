@@ -52,7 +52,48 @@ from shared.contracts import PerceptionCommand, PerceptionFrame, to_wire  # noqa
 DRIVER_ID = 1
 PASSENGER_ID = 2
 
-[float, float], ...] = ((0.0, 1.0), (3.5, 4.5), (7.0, 8.0))
+MODES: dict[str, str] = {
+    "1": "normal",
+    "2": "privire în oglindă",
+    "3": "telefon",
+    "4": "privire spre pasager x3 + pasagerul cu telefon",
+    "5": "privire fixă + reacții lente",
+    "6": "căscat + clipit lent + pasager adormit",
+    "7": "ochi închiși",
+    "8": "capul căzut / nu răspunde",
+    "9": "cameră acoperită",
+}
+ANSWER_KEYS = {"y": "yes", "n": "no"}
+GESTURE_KEYS = {"h": "Open_Palm", "g": "Thumb_Up", "b": "Thumb_Down"}
+
+#: Head angles (yaw, pitch) in degrees when looking at each zone. Positive yaw = towards the passenger.
+ZONE_HEAD: dict[str, tuple[float, float]] = {
+    "road": (0.0, 0.0),
+    "mirror_left": (-45.0, -5.0),
+    "mirror_right": (40.0, -5.0),
+    "mirror_rear": (15.0, 10.0),
+    "cluster": (0.0, -20.0),
+    "infotainment": (20.0, -20.0),
+    "lap": (5.0, -35.0),
+    "passenger": (50.0, -5.0),
+}
+MIRRORS = {"mirror_left", "mirror_right", "mirror_rear"}
+MIRROR_GLANCE_MAX_MS = 2000.0  # P1: perception.yaml gaze.mirror_glance_max_ms
+VATS_MAX_MS = 2000.0  # P1: gaze.vats_max_glance_s
+WINDOW_S = 60.0  # P1: PERCLOS, VATS and entropy window
+FACE_LOST_S = 2.0  # P1: monitoring.face_lost_s
+BLINK_MAX_MS = 500.0  # P1: eyes.blink_max_ms
+ANSWER_HOLD_S = 1.0  # how long a head answer / gesture stays in the frames
+MIRROR_GLANCE_S = 1.8  # key 2: under the mirror limit (no DriveMate alert), over the naive threshold (A/B)
+
+#: Normal scanning, as (start s, end s, zone) inside a 10 s cycle: gives a realistic gaze entropy.
+NORMAL_SCAN: tuple[tuple[float, float, str], ...] = (
+    (3.0, 3.6, "mirror_rear"),
+    (6.0, 6.6, "cluster"),
+    (8.0, 8.7, "mirror_left"),
+)
+#: Key 4: three glances at the passenger within ~8 s.
+PASSENGER_GLANCES: tuple[tuple[float, float], ...] = ((0.0, 1.0), (3.5, 4.5), (7.0, 8.0))
 
 
 @dataclass

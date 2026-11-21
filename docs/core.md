@@ -62,6 +62,12 @@ capture_ts / age_ms / dropped_results`, `perf.degrade_level / stages_ms / publis
 Adopted from P3's proposals (`docs/assistant.md` sections 3-5): the event types (`EVENT_TYPES`), the `/ws/ui` and
 `/ws/phone` message formats, the `Action` extras (`source`, `clip_id`, `needs_confirmation`, `streamed`, `volume`).
 
+Adopted from P3's YouTube media (D11, plan v2.2, `docs/assistant.md` section 6.1), all optional: `search_media` in
+`ActionType` (internal to the assistant, listed in `ASSISTANT_INTERNAL_ACTIONS`: core's validator rejects it if it
+ever arrives), `Action.query / kind / options / title`, `ask.expects = "choice"` (a choice question must carry
+`options`), `play_media.title` with `track_id = "yt:<id>"`, `media.source` (`catalog` / `youtube`), `loop` on the
+`media` message, and `NO_CONFIRMATION_PREFERENCES = {"volume"}` (volume runs without "Bine?").
+
 Added by P2:
 - `safety.sos {state, since_ts, countdown_s}`: where the unresponsive-driver state machine is (C4, C5), for the
   dashboard and the Contact page;

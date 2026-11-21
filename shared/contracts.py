@@ -441,8 +441,9 @@ class Media(ContractModel):
     track_id: str | None = None
     title: str | None = None
     volume: float | None = None
-    reason: str | None = None  # disengagement / request / quiz_offer
+    reason: str | None = None  # disengagement (D8, counts for D6) / driver_request / quiz_offer
     kid_safe: bool = False
+    source: str | None = None  # P3 addition (D11): "catalog" (local mp3) or "youtube"
 
 
 class Intervention(ContractModel):
@@ -598,16 +599,24 @@ ActionType = Literal[
     "speak", "ask", "suggest_media", "play_media", "stop_media", "read_message",
     "reply_message", "create_reminder", "complete_reminder", "suggest_stop",
     "delegate", "show_on_screen", "set_preference", "stay_silent",
+    "search_media",  # P3 addition (D11): internal to the assistant, see ASSISTANT_INTERNAL_ACTIONS
 ]
 ACTION_TYPES: tuple[str, ...] = (
     "speak", "ask", "suggest_media", "play_media", "stop_media", "read_message",
     "reply_message", "create_reminder", "complete_reminder", "suggest_stop",
     "delegate", "show_on_screen", "set_preference", "stay_silent",
+    "search_media",
 )
+
+#: Actions the assistant resolves inside ``handle_event`` (D11: ``search_media`` becomes an ``ask`` with
+#: ``expects="choice"``). They never reach core: if one does, core's validator (C8) rejects it.
+ASSISTANT_INTERNAL_ACTIONS: frozenset[str] = frozenset({"search_media"})
 
 #: Who an utterance is addressed to.
 Addressee = Literal["driver", "passenger", "rear", "all"]
-Expects = Literal["yes_no", "kss", "free"]
+#: ``choice`` (D11) only comes from the assistant's rules, never from the LLM, and always with ``options``.
+Expects = Literal["yes_no", "kss", "free", "choice"]
+MediaKind = Literal["music", "podcast"]
 
 _ANY_LEVEL: frozenset[str] = frozenset(SAFETY_LEVELS)
 _P3_P4: frozenset[str] = frozenset({"P3", "P4"})
@@ -629,6 +638,7 @@ ACTION_ALLOWED_LEVELS: dict[str, frozenset[str]] = {
     "show_on_screen": _ANY_LEVEL,
     "set_preference": frozenset({"P4"}),
     "stay_silent": _ANY_LEVEL,
+    "search_media": frozenset({"P4"}),  # D11, comfort; internal to the assistant
 }
 
 #: Section 6, column "Cere confirmare". ``read_message`` needs one only when passengers are present.
@@ -636,6 +646,9 @@ ACTION_NEEDS_CONFIRMATION: frozenset[str] = frozenset({
     "suggest_media", "reply_message", "create_reminder", "complete_reminder", "suggest_stop", "set_preference",
 })
 ACTION_CONFIRM_IF_PASSENGERS: frozenset[str] = frozenset({"read_message"})
+#: ``set_preference`` keys that run without "Bine?" (D11): the driver asked explicitly ("mai încet") and it is undone
+#: just as easily. Every other preference still needs a confirmation.
+NO_CONFIRMATION_PREFERENCES: frozenset[str] = frozenset({"volume"})
 
 
 class Action(ContractModel):
@@ -649,6 +662,13 @@ class Action(ContractModel):
         needs_confirmation: core runs the action only after a "yes" (voice, nod or thumbs-up).
         streamed: this speak / ask was already sent to TTS while the LLM was streaming; do not say it twice.
         volume: for ``play_media``.
+
+    YouTube media (P3, D11, ``docs/assistant.md`` section 6.1):
+        query, kind: for ``search_media`` (internal to the assistant, never reaches core).
+        options: for ``ask`` with ``expects="choice"``: the search results
+            (``[{track_id, title, full_title, channel, duration_s, offered}]``).
+        title: for ``play_media``: the short spoken title; ``track_id`` may be ``"yt:<video id>"``, played from
+            ``assistant.music.track_url(track_id)`` (``/media/yt/<id>.m4a``).
     """
 
     type: ActionType
@@ -656,7 +676,11 @@ class Action(ContractModel):
     text: str | None = None
     question: str | None = None
     expects: Expects | None = None
+    options: list[dict[str, Any]] | None = None
     track_id: str | None = None
+    title: str | None = None
+    query: str | None = None
+    kind: MediaKind | None = None
     volume: float | None = None
     reason: str | None = None
     msg_id: str | None = None
@@ -694,12 +718,19 @@ class SpeakAction(_TypedActionBase):
 
 
 class AskAction(_TypedActionBase):
-    """Ask a question; core opens the dialog window after ``speak_done``."""
+    """Ask a question; core opens the dialog window after ``speak_done``. A ``choice`` question carries its options."""
 
     type: Literal["ask"] = "ask"
     to: Addressee = "driver"
     question: str
     expects: Expects
+    options: list[dict[str, Any]] | None = None
+
+    @model_validator(mode="after")
+    def _choice_has_options(self) -> AskAction:
+        if self.expects == "choice" and not self.options:
+            raise ValueError("an ask with expects='choice' needs options")
+        return self
 
 
 class SuggestMediaAction(_TypedActionBase):
@@ -711,9 +742,12 @@ class SuggestMediaAction(_TypedActionBase):
 
 
 class PlayMediaAction(_TypedActionBase):
+    """Play a catalog track (``t07``) or a YouTube result (``yt:<video id>``, D11)."""
+
     type: Literal["play_media"] = "play_media"
     track_id: str
     volume: float | None = None
+    title: str | None = None
 
 
 class StopMediaAction(_TypedActionBase):
@@ -787,11 +821,19 @@ class StaySilentAction(_TypedActionBase):
     reason: str
 
 
+class SearchMediaAction(_TypedActionBase):
+    """D11: search YouTube. Internal to the assistant (see ASSISTANT_INTERNAL_ACTIONS); core never executes it."""
+
+    type: Literal["search_media"] = "search_media"
+    query: str
+    kind: MediaKind = "music"
+
+
 TypedAction = Annotated[
     (
         SpeakAction | AskAction | SuggestMediaAction | PlayMediaAction | StopMediaAction | ReadMessageAction
         | ReplyMessageAction | CreateReminderAction | CompleteReminderAction | SuggestStopAction | DelegateAction
-        | ShowOnScreenAction | SetPreferenceAction | StaySilentAction
+        | ShowOnScreenAction | SetPreferenceAction | StaySilentAction | SearchMediaAction
     ),
     Field(discriminator="type"),
 ]
@@ -812,6 +854,7 @@ ACTION_MODELS: dict[str, type[_TypedActionBase]] = {
     "show_on_screen": ShowOnScreenAction,
     "set_preference": SetPreferenceAction,
     "stay_silent": StaySilentAction,
+    "search_media": SearchMediaAction,
 }
 
 _TYPED_ACTION: TypeAdapter[TypedAction] = TypeAdapter(TypedAction)
@@ -959,10 +1002,11 @@ class UiMedia(ContractModel):
 
     type: Literal["media"] = "media"
     action: Literal["play", "stop", "volume"]
-    url: str | None = None  # /media/<track_id>.mp3
+    url: str | None = None  # assistant.music.track_url(track_id): /media/<id>.mp3 or /media/yt/<id>.m4a (D11)
     volume: float | None = None
     track_id: str | None = None
     title: str | None = None
+    loop: bool | None = None  # assistant.music.loops(track_id): catalog tracks loop, YouTube results do not
 
 
 # --- browser -> core -------------------------------------------------------------------------------------------------
@@ -1178,6 +1222,7 @@ __all__ = [
     "ACTION_NEEDS_CONFIRMATION",
     "ACTION_TYPES",
     "ALL_EVENT_TYPES",
+    "ASSISTANT_INTERNAL_ACTIONS",
     "CAUSE_LABELS",
     "CONTRACT_VERSION",
     "CORE_EVENT_TYPES",
@@ -1186,6 +1231,7 @@ __all__ = [
     "GESTURES",
     "LLM_VETO_LEVELS",
     "MONITORING_REASONS",
+    "NO_CONFIRMATION_PREFERENCES",
     "SAFETY_LEVELS",
     "UI_COMMANDS",
     "AbCounter",
@@ -1216,6 +1262,7 @@ __all__ = [
     "Intervention",
     "LastInput",
     "Media",
+    "MediaKind",
     "Message",
     "Occupant",
     "Passenger",
@@ -1246,6 +1293,7 @@ __all__ = [
     "Safety",
     "SafetyLevel",
     "Scorecard",
+    "SearchMediaAction",
     "SendReply",
     "SendSms",
     "SetPreferenceAction",
