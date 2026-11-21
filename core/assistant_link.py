@@ -59,6 +59,8 @@ log = logging.getLogger("drivemate.core.assistant")
 #: P3's ``AnswerInfo.reason`` -> ``integrations.llm``.
 LLM_STATUS = {"no_llm": "off", "llm_disabled": "off", "llm_error": "down", "timeout": "down", "invalid_json": "down"}
 GESTURE_STOP = "Open_Palm"
+#: Causes answered by delegation / attention to the cabin (D2): their effect is measured (D6).
+DELEGATE_CAUSES = frozenset({"passenger_showing_phone", "passenger_talk", "child_activity"})
 
 
 class AssistantLink:
@@ -165,8 +167,10 @@ class AssistantLink:
             self.engine.log_event("assistant_action", now, source=held[0].source,
                                   text="Așteaptă confirmarea: " + ", ".join(a.type for a in held),
                                   action_type="held", event_type=event.type)
-        for action in immediate:
-            self.execute(action, now, confirmed=False, event_type=event.type)
+        executed = [a for a in immediate if self.execute(a, now, confirmed=False, event_type=event.type)]
+        if (event.type == "cause_detected" and event.data.get("label") in DELEGATE_CAUSES
+                and any(a.type in ("speak", "ask", "delegate") for a in executed)):
+            self._intervention("delegate", now)  # D2, D6: did the glances at the passenger fall?
         if event.type == "kss_answer" and int(event.data.get("value", 0)) >= int(th("assistant", "kss_break_min")):
             stop = pick_stop(self.engine.state)
             if stop is not None:
@@ -209,7 +213,7 @@ class AssistantLink:
             if not action.streamed:
                 self._send_speech(action, now)
         elif kind == "play_media" and action.track_id:
-            text = self._play(action, state, event_type)
+            text = self._play(action, state, event_type, now)
         elif kind == "stop_media":
             self.engine.hub.broadcast_ui(to_wire(UiMedia(action="stop")))
             state.media.playing = False
@@ -252,7 +256,12 @@ class AssistantLink:
                                           "ts": now}
         self.speaking, self.paused = message["id"], False
 
-    def _play(self, action: Action, state: State, event_type: str) -> str:
+    def _intervention(self, kind: str, now: float) -> None:
+        scores = self.engine.scores
+        if scores is not None:
+            scores.intervention.start(kind, now)
+
+    def _play(self, action: Action, state: State, event_type: str, now: float) -> str:
         music = self._music
         track_id = str(action.track_id)
         volume = action.volume if action.volume is not None else music.volume_for(state)
@@ -264,6 +273,8 @@ class AssistantLink:
         media.source = "catalog" if music.loops(track_id) else "youtube"
         disengaged = event_type == "disengagement_high" or action.reason == "disengagement"
         media.reason = "disengagement" if disengaged else (action.reason or "driver_request")
+        if disengaged:
+            self._intervention("music", now)  # D6: does D fall with the music on? (requested music: not measured)
         return f"Muzică: {action.title or track_id}."
 
     def _preference(self, action: Action, state: State) -> str:

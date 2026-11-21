@@ -1,9 +1,9 @@
 """F2: when a message may be delivered (REGULĂ). Defer, ask, or read.
 
 * **defer** (``deferred_reason``): a safety alert is active (``messages.defer_levels``), the risk is high
-  (``defer_min_risk``), the speed is high (``defer_min_speed_kmh``) or a distraction cause is being handled
-  (``defer_on_cause``). The voice says "Ți-l citesc imediat ce e liniște." once; the message is checked again every
-  ``retry_s``.
+  (``defer_min_risk``), the speed is high (``defer_min_speed_kmh``) or a distraction cause from the cabin is being
+  handled (``defer_causes``: the passenger, the child; a message is never deferred because of itself). The voice
+  says "Ți-l citesc imediat ce e liniște." once; the message is checked again every ``retry_s``.
 * **ask**: someone else could hear it (passenger present or a rear occupant): "Mesaj personal de la Mihai. Îl citesc
   tare?" (the assistant phrases it; reading waits for a yes).
 * **read**: the driver is alone.
@@ -35,6 +35,6 @@ def decide(state: State) -> tuple[Delivery, str | None]:
         return "defer", "high_risk"
     if state.trip.speed_kmh >= float(th("messages", "defer_min_speed_kmh")):
         return "defer", "high_speed"
-    if th("messages", "defer_on_cause") and state.cause.label:
+    if state.cause.label in th("messages", "defer_causes"):
         return "defer", "distraction"
     return ("ask" if others_present(state) else "read"), None
