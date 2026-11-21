@@ -158,3 +158,23 @@ added after the camera ones. Message texts stay in core: the `/ws/ui` state has 
 
 Checked end to end (core + `fake_perception.py` + a `/ws/ui` client): 10.3 states/s, 15 frames/s, scene 8 on the
 highway, eyes closed up to 1.9 s, covered camera -> `monitoring_ok=false` (`occluded`), no invalid or dropped message.
+
+## 3. Safety (`core/safety/`, plan C): deterministic, no LLM
+
+| File | Rule |
+|---|---|
+| `sos.py` | **C3, C4, C5.** `normal -> alarm (P1) -> asking (P1) -> countdown (P0) -> sos_sent (P0)`. Alarm when `driver.eyes.closed_ms >= safety.microsleep.closed_ms` (eyes reliable) or `driver.head.nodding`, **on the frame itself** (fast path, not at the next tick). After `sos.ask_after_alarm_s`: the "Ești bine?" clip + a dialog window. No answer (or "nu"): the passenger instructions clip by name, the countdown, the alarm again every `realarm_s` after the instructions, then the report to every SOS channel. Any yes (voice, nod, thumbs up) cancels before the end. One alarm per closure: the eyes must open before the next one. |
+| `alarm.py` | `alarm` message with `alarm_<driver>.mp3`; `alarm_ms` = core detection -> `alarm_played` from the browser, both on core's clock -> `safety.alarm_ms_last`, `perf.alarm_ms_last`, event `alarm_played` (`on_target` vs `safety.alarm_target_ms`). |
+| `monitoring.py` | **C7.** `safety.monitoring_ok` false for `lost_after_ms` -> P2 + "Nu te mai văd" clip + the reason in the log, repeated every `repeat_s`; "Te văd din nou" when it is back. Silent until the camera has seen the driver once in this trip, and never over a more critical alert. |
+| `arbiter.py` | **C1, C8 veto.** Every rule raises / clears its alert; `safety.level` = the most critical, `safety.alert`, `llm_allowed` = level not in P0-P2. A rise to a more critical level sends `speak_control: stop` and `media: stop` before the rule's own sound. |
+| `answers.py` | Yes / no from the voice (phrases in `templates.yaml`, the first one in the sentence wins), the nod (`head.answer`), the gesture (`Thumb_Up` / `Thumb_Down`). |
+| `../dialog_window.py` | Opens the window on both sides: `dialog_window` to P1 (nods and gestures) and `interaction.dialog_window_open` for the voice (no wake word needed). |
+| `../clips.py` | Picks P3's clips (`clips.json`) by name: `alarm_<driver>`, `passenger_instructions_<passenger>_<driver>`; default names while P1 does not recognise the person. |
+
+**SOS channels** (`core.safety.default_sos_channels`): `contact_page` (P4's `integrations.contact_app.push_sos`
+when it exists), `call` (Twilio) and `sms` (the driver's phone through the bridge) report `not_connected` until the
+phone part is wired. A channel that fails is logged as `error: ...` and the others still run (C9).
+
+Checked end to end (core + `fake_perception.py` + a client playing the browser): scene 8 (eyes closed -> stop +
+alarm in 31-36 ms detection -> `alarm_played`, "Ești bine?" -> "Da" -> normal, LLM allowed again) and scene 9 (head
+drop -> alarm -> no answer -> "Maria, Andrei nu răspunde..." -> 10 s countdown with re-alarms -> SOS report).

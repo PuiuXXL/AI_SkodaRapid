@@ -45,6 +45,7 @@ from shared.contracts import (
     State,
     Trip,
     UiCommand,
+    UiSpeak,
     parse_browser_message,
     parse_perception_message,
     parse_phone_event,
@@ -91,6 +92,9 @@ class Engine:
         self._browser_listeners: list[BrowserListener] = []
         self._frame_listeners: list[FrameListener] = []
         self._tick_listeners: list[TickListener] = []
+        self._reset_listeners: list[Callable[[float], None]] = []
+        self._utterance_counter = 0
+        self.safety: Any = None  # core.safety.Safety, attached by it
 
     # --- plug-in points for the next steps ----------------------------------------------------------------------
 
@@ -105,6 +109,28 @@ class Engine:
     def add_tick_listener(self, listener: TickListener) -> None:
         """Called on every tick with the state being built, before it is published (scores, rules)."""
         self._tick_listeners.append(listener)
+
+    def add_reset_listener(self, listener: Callable[[float], None]) -> None:
+        """Called after a director reset (a new trip), with ``now``."""
+        self._reset_listeners.append(listener)
+
+    # --- voice ---------------------------------------------------------------------------------------------------
+
+    def say(self, clip_id: str | None, text: str, *, to: str = "driver", is_question: bool = False,
+            expects: str | None = None, prefix: str = "c") -> str:
+        """Play a fixed text through P3's voice: the pre-generated clip when there is one, else the browser's TTS.
+
+        Returns the utterance id (it comes back in ``speak_done``).
+        """
+        from core.clips import clip_url  # here, not at the top: clips.py reads P3's clips.json once
+
+        self._utterance_counter += 1
+        utterance_id = f"{prefix}{self._utterance_counter}"
+        message = UiSpeak.model_validate({"id": utterance_id, "to": to, "is_question": is_question,
+                                          "expects": expects, "text": text,
+                                          "clip_url": clip_url(clip_id) if clip_id else None})
+        self.hub.broadcast_ui(to_wire(message))
+        return utterance_id
 
     # --- events --------------------------------------------------------------------------------------------------
 
@@ -228,6 +254,8 @@ class Engine:
         self.declared.clear()
         self.notifications.clear()
         self.core_perf = dict.fromkeys(CORE_PERF_FIELDS)
+        for listener in self._reset_listeners:
+            listener(now)
         self.log_event("reset", now, text="Călătorie nouă.")
 
     # --- phone bridge (P3) ---------------------------------------------------------------------------------------

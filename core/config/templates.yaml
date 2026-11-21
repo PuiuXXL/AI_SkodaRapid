@@ -57,6 +57,24 @@ explanations:                   # principle 4, D5: one sentence per alert, in th
   unresponsive: "Nu ai răspuns {s} s după alarmă."
   monitoring_lost: "Camera nu te mai vede: {reason_text}."
 
+# Pre-generated clips (P3: integrations/audio_clips.py, dashboard/public/sounds/clips/clips.json), played by the voice.
+# Names are profile names (occupants[].profile), lower case.
+clips:
+  url: "/sounds/clips/{clip_id}.mp3"
+  alarm: "alarm_{driver}"                                   # "ANDREI!"
+  are_you_ok: "are_you_ok"                                  # "Ești bine?"
+  passenger_instructions: "passenger_instructions_{passenger}_{driver}"   # "Maria, Andrei nu răspunde. ..."
+  monitoring_lost: "monitoring_lost"                        # "Nu te mai văd. Monitorizarea e întreruptă."
+  confirm_ok: "confirm_ok"                                  # "Ok."
+  default_driver: "andrei"      # while P1 does not recognise the driver yet (occupants[].profile = null)
+  default_passenger: "maria"
+
+# Deterministic yes / no for "Ești bine?" (C4): no LLM on the safety path. Compared after lower case, without
+# diacritics and punctuation; the phrase that starts first in the sentence wins ("da, nu-i nimic" = yes).
+answers:
+  "yes": ["da", "sunt bine", "e bine", "bine", "ok", "okay", "sunt ok", "sunt treaz", "totul e bine", "nicio problema"]
+  "no": ["nu", "nu sunt bine", "nu e bine", "nu ma simt bine", "ajutor", "rau"]
+
 # zone_text for explanations.off_road, by driver.gaze.zone
 zones:
   lap: "în jos"

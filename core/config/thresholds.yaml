@@ -40,9 +40,11 @@ safety:
 
 sos:                            # P0 (C4, C5): alarm -> "Ești bine?" -> countdown -> SOS on three channels (F6)
   ask_after_alarm_s: 1.5        # pause between the alarm clip and "Ești bine?"
+  ask_clip_s: 1.5               # length of the "Ești bine?" clip: the answer window starts after it
   answer_window_s: 6            # time to answer "Ești bine?" (voice / nod / thumbs up) before the countdown
   countdown_s: 10               # countdown before the call; any "yes" (voice / nod / thumbs up) cancels it
-  realarm_s: 3                  # the alarm is replayed this often while waiting for an answer
+  instructions_clip_s: 6        # length of the passenger instructions clip (no alarm over it)
+  realarm_s: 3                  # during the countdown, after the instructions, the alarm is replayed this often
 
 dialog:
   window_s: 6                   # E1: dialog window opened at speak_done of a question (interaction.dialog_window_open)

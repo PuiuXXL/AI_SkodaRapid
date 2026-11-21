@@ -27,6 +27,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from core.engine import Engine
 from core.hub import Hub, Peer
+from core.safety import Safety
 from core.settings import th
 from core.simulation import load_simulator
 
@@ -99,6 +100,8 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         engine = Engine(Hub(), simulator, simulator_name, contact_app=contact_router is not None)
     else:
         contact_router = None
+    if engine.safety is None:
+        Safety(engine)  # C: alarm, SOS, "Nu te mai văd", arbiter
     assistant_router = _optional_router("assistant.router")
     hub = engine.hub
 

@@ -5,40 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from p2_helpers import T0, RecordingHub
 
 from core.engine import Engine
-from core.hub import Hub
 from core.settings import th
 from core.simulation import FUEL, FakeSimulator
 from scripts.fake_perception import FakePerception
 from shared import contracts as c
-
-T0 = 1_000_000.0
-
-
-class RecordingHub(Hub):
-    """A hub without sockets: remembers what core sent."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.ui_sent: list[dict[str, Any]] = []
-        self.perception_sent: list[dict[str, Any]] = []
-        self.phone_sent: list[dict[str, Any]] = []
-
-    def broadcast_ui(self, message: dict[str, Any]) -> bool:
-        self.ui_sent.append(message)
-        return True
-
-    def send_perception(self, message: dict[str, Any]) -> bool:
-        self.perception_sent.append(message)
-        return True
-
-    def send_phone(self, message: dict[str, Any]) -> bool:
-        self.phone_sent.append(message)
-        return True
-
-    def events(self, type_: str) -> list[dict[str, Any]]:
-        return [m["event"] for m in self.ui_sent if m["type"] == "event" and m["event"]["type"] == type_]
 
 
 class Clock:

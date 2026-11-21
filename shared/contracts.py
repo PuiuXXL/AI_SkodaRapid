@@ -556,6 +556,7 @@ CORE_EVENT_TYPES: tuple[str, ...] = (
     "visual_cue",             # C2: discrete signal, the UI flashes a light / border
     "alert",                  # an alert was raised                          data: level, alert
     "alarm",                  # C3: the alarm clip was sent                  data: alarm_id, clip
+    "alarm_played",           # C3: the browser played it                    latency_ms = alarm_ms, data: on_target
     "are_you_ok",             # C4: "Ești bine?" asked
     "sos_countdown",          # C5: countdown started                        data: countdown_s
     "sos_cancelled",          # C5: cancelled                                channel: voice / nod / gesture
