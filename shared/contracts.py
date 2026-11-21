@@ -580,6 +580,8 @@ CORE_EVENT_TYPES: tuple[str, ...] = (
     "action_rejected",        # C8: an LLM action was rejected               data: action, reason
     "input",                  # E3: an answer / request arrived              channel, data: value, from
     "llm_toggled",            # C6: director switched the LLM                data: enabled
+    "safe_contact_skipped",   # C10: the contact is not told   data: reason (no_contact / no_consent / cooldown)
+    "assistant_unmuted",      # C10: the silence after a refusal is over
     "message_queued",         # a new message entered the queue (phone / Contact page / panel)   data: msg_id
     "perception_connected",   # P1 connected to /ws/perception
     "perception_disconnected",

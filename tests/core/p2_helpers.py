@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from assistant.client import AnswerInfo
 from core.assistant_link import AssistantLink
 from core.engine import Engine
 from core.hub import Hub
+from core.safe_contact import NoticeChannel, SafeContactRule
 from core.safety import Safety
 from core.safety.sos import SosChannel
 from core.scoring import Scores
@@ -51,12 +53,15 @@ class Rig:
     """Engine + Safety + FakePerception, run in fake time: frames at 15 Hz, ticks at 10 Hz."""
 
     def __init__(self, scene: int = 8, sos_channels: dict[str, SosChannel] | None = None,
-                 assistant: Any = None) -> None:
+                 assistant: Any = None, profiles_root: Path | None = None,
+                 contact_channels: dict[str, NoticeChannel] | None = None) -> None:
         self.t = T0
         self.hub = RecordingHub()
         self.engine = Engine(self.hub, FakeSimulator(clock=lambda: self.t))  # the trip moves in fake time too
         self.safety = Safety(self.engine, sos_channels)
         self.scores = Scores(self.engine)
+        # profiles from a test folder only: the repo's profiles/ never leaks into a test
+        self.contact = SafeContactRule(self.engine, contact_channels, profiles_root or Path("/nonexistent-profiles"))
         self.link = AssistantLink(self.engine, client=assistant, clock=lambda: self.t) if assistant else None
         self.fake = FakePerception(now=T0)
         self.patch: Any = None  # optional (frame dict, t) -> None, to shape what "P1" reports
@@ -120,10 +125,12 @@ class FakeClient:
         self.replies = replies or {}  # event type -> list[Action] or (event, state) -> list[Action]
         self.early = early or {}
         self.events: list[Any] = []
+        self.states: list[Any] = []  # the state each event was answered with
         self.last_result = AnswerInfo(source="LLM", reason=reason, llm_ttft_ms=420.0, llm_total_ms=900.0)
 
-    async def handle_event(self, event: Any, state: Any, on_early_speech: Any = None) -> list[Any]:
+    async def handle_event(self, event: Any, state: Any, on_early_speech: Any = None, now: Any = None) -> list[Any]:
         self.events.append(event)
+        self.states.append(state)
         for action in self.early.get(event.type, []):
             if on_early_speech is not None:
                 on_early_speech(action)

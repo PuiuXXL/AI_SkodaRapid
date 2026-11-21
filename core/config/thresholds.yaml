@@ -53,6 +53,10 @@ assistant:                      # C: core <-> P3's assistant (core/assistant_lin
   greet_after_s: 2              # trip_start once the driver has been seen this long (scene 1: "Salut Andrei")
   kss_break_min: 7              # a KSS answer at or above -> core picks a stop and sends stop_suggested (D3, K3)
   yield_zones: [mirror_left, mirror_right, mirror_rear]   # D4: the voice pauses while the driver looks here
+  # An initiative (fatigue_high, disengagement_high, cause_detected) the assistant skipped by policy (one per 30 s,
+  # a safety alert, a conversation) is sent again after retry_s while its condition still holds. Never when muted.
+  retry_s: 10
+  max_retries: 3
 
 # C8: thumbs down adjusts only P3-P4 thresholds, inside fixed limits. Microsleep, distraction, SOS: never.
 tuning:
@@ -193,6 +197,8 @@ refusal_mute_min: 15            # C10, D10: after a refusal the assistant is sil
 safe_contact:                   # C10: trusted contact
   fatigue_min: 0.6              # F at or above + a refusal in the fatigue dialog -> SMS + yellow notice
   cooldown_min: 30              # at most one message per cooldown
+  dialog_s: 90                  # the fatigue dialog lasts this long after fatigue_high (a refusal in it counts)
+  profile_check_s: 2            # profiles/<driver>/profile.json is re-read when it changes (P4's profile page)
 
 # --- Demo overrides (merged over the values above when demo_mode: true) ------------------------------------------
 # Only keys that exist above are allowed here (core/settings.py checks it).

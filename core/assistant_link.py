@@ -61,6 +61,9 @@ LLM_STATUS = {"no_llm": "off", "llm_disabled": "off", "llm_error": "down", "time
 GESTURE_STOP = "Open_Palm"
 #: Causes answered by delegation / attention to the cabin (D2): their effect is measured (D6).
 DELEGATE_CAUSES = frozenset({"passenger_showing_phone", "passenger_talk", "child_activity"})
+#: Initiatives sent again when the assistant skipped them by policy (not when it is muted after a refusal).
+RETRY_EVENTS = frozenset({"fatigue_high", "disengagement_high", "cause_detected"})
+RETRY_REASONS = frozenset({"policy:rate_limited", "policy:safety_veto", "policy:conversation"})
 
 
 class AssistantLink:
@@ -111,6 +114,7 @@ class AssistantLink:
         self.deferred_next: dict[str, float] = {}
         self.deferred_said: set[str] = set()
         self.handled_messages: set[str] = set()  # read or replied hands-free (scorecard)
+        self.retries: dict[str, tuple[float, int, dict[str, Any]]] = {}  # event type -> (due, attempt, data)
         self.last_inputs: tuple[Any, ...] = (None, None, None, None)
 
     def on_safety_interrupt(self) -> None:
@@ -150,6 +154,8 @@ class AssistantLink:
     async def process(self, event: Event) -> list[Action]:
         """Send one event to the assistant and execute what it returns."""
         snapshot = self.engine.state.model_copy(deep=True)  # the state keeps changing while the LLM answers
+        if event.data.get("once_while_muted"):  # C10: the one stop proposal after the contact's answer
+            snapshot.assistant.muted_until, snapshot.assistant.mute_reason = None, None
 
         def on_early(action: Action) -> None:
             now = self.clock()
@@ -157,10 +163,13 @@ class AssistantLink:
             if reason is None:
                 self._send_speech(action, now)
 
-        actions: list[Action] = await self.client.handle_event(event, snapshot, on_early_speech=on_early)
+        # the assistant's policies (one initiative per 30 s) run on core's clock
+        actions: list[Action] = await self.client.handle_event(event, snapshot, on_early_speech=on_early,
+                                                               now=self.clock())
         now = self.clock()
         self.processed += 1
         self._record(event, now)
+        self._schedule_retry(event, now)
         immediate = self.dialog.register(actions, now)
         held = [a for a in actions if a.needs_confirmation]
         if held:
@@ -168,6 +177,12 @@ class AssistantLink:
                                   text="Așteaptă confirmarea: " + ", ".join(a.type for a in held),
                                   action_type="held", event_type=event.type)
         executed = [a for a in immediate if self.execute(a, now, confirmed=False, event_type=event.type)]
+        rule = self.engine.safe_contact
+        if rule is not None:  # C10 after "Ok, te las în pace." (keyword / gesture path, or the LLM's own silence)
+            if event.type == "driver_refused":
+                rule.on_refusal(now, str(event.data.get("channel") or "voice"))
+            elif any(a.type == "stay_silent" and a.reason == "driver_refused" for a in executed):
+                rule.on_refusal(now, "llm")
         if (event.type == "cause_detected" and event.data.get("label") in DELEGATE_CAUSES
                 and any(a.type in ("speak", "ask", "delegate") for a in executed)):
             self._intervention("delegate", now)  # D2, D6: did the glances at the passenger fall?
@@ -176,6 +191,35 @@ class AssistantLink:
             if stop is not None:
                 self.submit("stop_suggested", now, **stop)
         return actions
+
+    def _schedule_retry(self, event: Event, now: float) -> None:
+        info = getattr(self.client, "last_result", None)
+        if event.type not in RETRY_EVENTS or info is None or info.reason not in RETRY_REASONS:
+            return
+        attempt = int(event.data.get("retry", 0)) + 1
+        if attempt <= int(th("assistant", "max_retries")):
+            data = {k: v for k, v in event.data.items() if k != "retry"}
+            self.retries[event.type] = (now + float(th("assistant", "retry_s")), attempt, data)
+
+    def _still_true(self, event_type: str, data: dict[str, Any], state: State) -> bool:
+        """The situation behind a skipped initiative still holds (F / D still raised, the same cause)."""
+        if event_type == "fatigue_high":
+            return state.assessment.fatigue >= float(th("fatigue", "low"))
+        if event_type == "disengagement_high":
+            return state.assessment.disengagement >= float(th("disengagement", "low"))
+        return state.cause.label == data.get("label")
+
+    def _retry(self, state: State, now: float) -> None:
+        muted = state.assistant.muted_until is not None and now < state.assistant.muted_until
+        for event_type, (due, attempt, data) in list(self.retries.items()):
+            if now < due:
+                continue
+            del self.retries[event_type]
+            if muted or not self._still_true(event_type, data, state):
+                continue
+            self.submit(event_type, now, **data, retry=attempt)
+            if event_type == "fatigue_high" and self.engine.safe_contact is not None:
+                self.engine.safe_contact.fatigue_dialog_started(now, state.assessment.fatigue)
 
     def _record(self, event: Event, now: float) -> None:
         """LLM latency for the performance panel (J1) and its status for ``integrations.llm``."""
@@ -295,6 +339,11 @@ class AssistantLink:
         if message.ts:
             self.engine.core_perf["msg_to_voice_ms"] = round((now - message.ts) * 1000.0, 1)
         self._hands_free(message.id, state)
+        rule = self.engine.safe_contact
+        if rule is not None and rule.is_contact_reply(message):  # F8: then one stop proposal, even while silent
+            stop = rule.reply_read(message, now)
+            if stop is not None:
+                self.submit("stop_suggested", now, **stop)
         return f"Mesaj citit: {message.from_}."
 
     def _reply(self, action: Action, state: State, now: float) -> str:
@@ -335,9 +384,16 @@ class AssistantLink:
         for action in result.speak:
             self.execute(action, now, confirmed=True)
         for follow_up in result.events:
-            self.submit(follow_up.type, now, **follow_up.data)
+            data = dict(follow_up.data)
+            if follow_up.type == "driver_refused":
+                data.setdefault("channel", result.channel)  # ✋ / 👎 / voice, for the log of C10
+            self.submit(follow_up.type, now, **data)
 
-    def _fatigue_dialog(self, state: State) -> bool:
+    def _fatigue_dialog(self, state: State, now: float) -> bool:
+        """Inside the fatigue conversation a refusal counts (C10, D10)."""
+        rule = self.engine.safe_contact
+        if rule is not None:
+            return bool(rule.fatigue_dialog(state, now))
         return state.assessment.fatigue >= float(th("safe_contact", "fatigue_min"))
 
     def on_browser(self, message: Any, now: float) -> None:
@@ -355,12 +411,12 @@ class AssistantLink:
         state = self.engine.state
         if self.dialog.has_pending(now):
             result = self.dialog.handle([self._input("voice", message.text, now)], now, state=state,
-                                        fatigue_dialog=self._fatigue_dialog(state))
+                                        fatigue_dialog=self._fatigue_dialog(state, now))
             if result.handled:
                 self.apply(result, now)
                 return
-        if self._fatigue_dialog(state) and self._is_refusal(message.text):
-            self.submit("driver_refused", now, text=message.text)
+        if self._fatigue_dialog(state, now) and self._is_refusal(message.text):
+            self.submit("driver_refused", now, text=message.text, channel="voice")
         else:
             self.submit("driver_speech", now, text=message.text)
 
@@ -389,7 +445,7 @@ class AssistantLink:
                 inputs.append(self._input("nod" if index in (0, 2) else "gesture", value, now))
         if self.dialog.has_pending(now):
             result = self.dialog.handle(inputs, now, state=self.engine.state,
-                                        fatigue_dialog=self._fatigue_dialog(self.engine.state))
+                                        fatigue_dialog=self._fatigue_dialog(self.engine.state, now))
             if result.handled:
                 self.apply(result, now)
             return
@@ -410,6 +466,7 @@ class AssistantLink:
         self._greet(state, now)
         self._messages(state, now)
         self._yield(state, now)
+        self._retry(state, now)
         window = self.engine.safety.dialog.is_open(now)
         state.interaction.state = ("paused" if self.paused else "speaking" if self.speaking
                                    else "listening" if window else "idle")
@@ -452,8 +509,8 @@ class AssistantLink:
                                           msg_id=message.id, reason=reason)
                 continue
             self.offered.add(message.id)
-            contact = state.safe_contact
-            from_contact = bool(contact.name) and contact.notified_ts is not None and message.from_ == contact.name
+            rule = self.engine.safe_contact
+            from_contact = rule is not None and rule.is_contact_reply(message)
             self.submit("safe_contact_reply" if from_contact else "message_received", now, msg_id=message.id,
                         delivery=delivery)
 

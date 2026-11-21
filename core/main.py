@@ -28,6 +28,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from core.assistant_link import AssistantLink
 from core.engine import Engine
 from core.hub import Hub, Peer
+from core.safe_contact import SafeContactRule
 from core.safety import Safety
 from core.scoring import Scores
 from core.settings import th
@@ -105,7 +106,9 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     if engine.safety is None:
         Safety(engine)  # C: alarm, SOS, "Nu te mai văd", distractions, arbiter, A/B
     if engine.scores is None:
-        Scores(engine)  # B: reaction, F, D, attention, risk, conversation, blind meters
+        Scores(engine)  # B: reaction, F, D, attention, risk, conversation, blind meters, cause, interventions
+    if engine.safe_contact is None:
+        SafeContactRule(engine)  # C10: the trusted contact, from profiles/<driver>/profile.json
     if engine.assistant is None:
         AssistantLink(engine)  # the slow path: P3's assistant, after the safety rules
     assistant_router = _optional_router("assistant.router")
