@@ -218,3 +218,12 @@ def test_vote_on_the_labelled_phone_in_a_real_session() -> None:
         if label.start <= ff.t <= label.end:
             inside.append(r.in_use)
     assert any(inside)
+
+
+def test_degenerate_face_box_does_not_make_every_phone_foreign() -> None:
+    """A zero-width face box (degenerate landmarks) used to make near_face impossible and foreign always true."""
+    from perception.features import PhoneBox
+    from perception.phone import PhoneTracker
+
+    g = PhoneTracker().geometry(PhoneBox(x1=560, y1=300, x2=640, y2=430, score=0.8), (640.0, 200.0, 0.0, 330.0), ())
+    assert g.foreign is False and g.side is None

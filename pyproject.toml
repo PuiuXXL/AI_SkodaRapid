@@ -7,6 +7,8 @@ line-length = 120
 include = [
     "perception/**/*.py",
     "tests/perception/**/*.py",
+    "tests/contract/**/*.py",       # perception <-> core golden messages (P1 + P2 boundary)
+    "tests/integration/**/*.py",    # perception.main <-> core.main end to end
     "scripts/benchmark.py",
     "scripts/preview.py",
     "scripts/label_session.py",

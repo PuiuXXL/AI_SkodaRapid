@@ -1,0 +1,98 @@
+{
+  "ts": 1795000000.0,
+  "seq": 43,
+  "occupants": [],
+  "driver": {
+    "eyes": {
+      "ear": null,
+      "eye_used": null,
+      "perclos_60s": 0.0,
+      "blink_ms": null,
+      "microsleep": false,
+      "reliable": false,
+      "closed_ms": 0.0,
+      "state": "UNKNOWN",
+      "squint": false,
+      "long_closure": false,
+      "blink_rate": null,
+      "open_baseline": null
+    },
+    "head": {
+      "yaw": null,
+      "pitch": null,
+      "roll": null,
+      "nodding": false,
+      "answer": null
+    },
+    "gaze": {
+      "zone": "unknown",
+      "conf": 0.0,
+      "source": null,
+      "off_road_ms": 0.0,
+      "vats_60s": 0,
+      "entropy_60s": null,
+      "calibrated": false,
+      "off_road_60s_ms": 0.0,
+      "lap_pattern": false
+    },
+    "yawn": false,
+    "speaking": false,
+    "phone": {
+      "in_use": false,
+      "conf": 0.0,
+      "source": null,
+      "near_face": false,
+      "side": null,
+      "usage": null,
+      "foreign_seen": false
+    },
+    "gesture": null,
+    "monitoring_ok": false,
+    "monitoring_reason": "no_frames",
+    "monitoring_warnings": [],
+    "face_too_small": false,
+    "face_conf": null,
+    "camera_mode": null,
+    "gesture_score": null
+  },
+  "passenger": {
+    "present": false,
+    "awake": true,
+    "eyes_closed_s": 0.0,
+    "speaking": false,
+    "holding_phone": false,
+    "gesture": null,
+    "answer": null,
+    "monitoring_reason": null,
+    "monitoring_ok": true,
+    "monitoring_warnings": [],
+    "camera_mode": null,
+    "face_conf": null
+  },
+  "perf": {
+    "cameras": {
+      "driver": {
+        "capture_fps": 0.0,
+        "process_fps": 0.0,
+        "dropped_frames": 0,
+        "available": false,
+        "capture_ts": null,
+        "age_ms": null,
+        "dropped_results": 0
+      }
+    },
+    "face_driver_ms_p50": null,
+    "face_passenger_ms_p50": null,
+    "pose_ms_p50": null,
+    "phone_ms_p50": null,
+    "gesture_ms_p50": null,
+    "sface_ms_p50": null,
+    "e2e_ms_p95": 64.2,
+    "cpu": 35.5,
+    "ram_mb": 758.2,
+    "gpu": 0.0,
+    "degrade_level": 0,
+    "stages_ms": {},
+    "publish_ts": 1795000000.0
+  }
+}
