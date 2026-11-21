@@ -7,18 +7,26 @@
   (``dropped``), measures ``capture_fps``, and reconnects by itself.
 * :meth:`LatestFrameCamera.wait_new` never returns the same frame twice to a consumer that passes back the last
   ``frame_id`` it got.
+* Formats: the requested FOURCC / size / fps are passed **at open time** (DirectShow under OpenCV 5 ignores a FOURCC
+  set after opening and falls back to YUY2, 10 fps at 720p over USB 2). Mono formats (GREY / Y8 / Y16) are
+  converted to 3-channel BGR uint8 (:func:`to_bgr8`), so every consumer keeps seeing the same image type.
+* Devices: ``cameras.<name>.device`` is an OpenCV index, a path / URL, or a stable USB selector
+  ``usb:<vid>:<pid>[:<serial>]`` resolved at every open (:func:`resolve_device`; DirectShow enumeration on Windows,
+  sysfs on Linux), so the camera keeps its role when indices shift after re-plugging.
 """
 
 from __future__ import annotations
 
 import math
+import re
 import sys
 import threading
 import time
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from types import TracebackType
-from typing import Protocol
+from typing import Any, Protocol
 
 import cv2
 import numpy as np
@@ -29,15 +37,28 @@ from perception.log import get_logger
 from perception.perf import RateMeter
 
 __all__ = [
+    "CameraDevice",
     "CameraOpenError",
     "CaptureInfo",
     "CaptureStats",
+    "DShowControl",
     "Frame",
     "FrameSource",
     "LatestFrameCamera",
     "OpenCVSource",
     "SyntheticSource",
     "decode_synthetic_id",
+    "dshow_apply",
+    "dshow_controls",
+    "dshow_settings",
+    "effective_bits",
+    "is_mono",
+    "list_devices",
+    "match_device",
+    "normalize_fourcc",
+    "parse_usb_selector",
+    "resolve_device",
+    "to_bgr8",
 ]
 
 Image = npt.NDArray[np.uint8]
@@ -65,6 +86,9 @@ class CaptureInfo:
     width: int
     height: int
     fps: float
+    raw_format: str = "uint8x3"  # dtype x channels of the frame as the backend delivered it, before to_bgr8
+    mono: bool = False  # grey image (mono format, or a camera that switched to night / IR mode)
+    device: str = ""  # the device actually opened (index / path), after resolving a usb: selector
 
 
 @dataclass(frozen=True)
@@ -87,6 +111,540 @@ class FrameSource(Protocol):
     def read(self) -> Image | None: ...
 
     def close(self) -> None: ...
+
+
+# --- formats -------------------------------------------------------------------------------------------
+
+# Same pixel format, different names per platform (V4L2 vs DirectShow / Media Foundation).
+_FOURCC_ALIASES: dict[str, str] = {
+    "YUYV": "YUY2",
+    "YUY2": "YUY2",
+    "GREY": "GREY",
+    "GRAY": "GREY",
+    "Y800": "GREY",
+    "Y8": "GREY",
+    "Y16": "Y16",
+    "MJPG": "MJPG",
+    "MJPEG": "MJPG",
+}
+
+
+def normalize_fourcc(code: str) -> str:
+    """Canonical FOURCC name for comparisons (``YUYV`` == ``YUY2``, ``Y800`` == ``Y8`` == ``GREY``)."""
+    key = code.strip().upper()
+    return _FOURCC_ALIASES.get(key, key)
+
+
+def effective_bits(raw: npt.NDArray[Any]) -> int:
+    """Significant bits of a 16-bit mono frame (10 / 12 / 14 / 16; 8 for 8-bit data or an all-dark frame)."""
+    if raw.dtype.itemsize < 2 or raw.size == 0:
+        return 8
+    peak = int(raw.max())
+    for bits in (8, 10, 12, 14):
+        if peak < (1 << bits):
+            return bits
+    return 16
+
+
+def to_bgr8(raw: npt.NDArray[Any], bits: int | None = None) -> Image:
+    """Any frame the backend delivers -> HxWx3 BGR uint8.
+
+    * HxWx3 uint8 (the normal colour case) is returned as is (no copy).
+    * Mono 8-bit (GREY / Y8: HxW or HxWx1) is replicated to 3 channels.
+    * Mono 16-bit (Y16; often 10 or 12 significant bits in a 16-bit container) is shifted down to 8 bits. ``bits`` is
+      the depth to scale from; pass a value kept across frames (see :func:`effective_bits`) so brightness does not
+      jump from frame to frame. ``None`` = derive it from this frame.
+    * HxWx4 (BGRA) loses its alpha channel.
+    """
+    arr = np.asarray(raw)
+    if arr.ndim == 3 and arr.shape[2] == 1:
+        arr = arr[:, :, 0]
+    if arr.dtype.itemsize >= 2:
+        depth = bits if bits is not None else effective_bits(arr)
+        arr = (arr.astype(np.uint32) >> max(0, depth - 8)).clip(0, 255).astype(np.uint8)
+    elif arr.dtype != np.uint8:
+        arr = arr.astype(np.uint8)
+    if arr.ndim == 2:
+        return np.asarray(cv2.cvtColor(arr, cv2.COLOR_GRAY2BGR), dtype=np.uint8)
+    if arr.ndim == 3 and arr.shape[2] == 4:
+        return np.asarray(cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR), dtype=np.uint8)
+    return arr
+
+
+def _raw_format(raw: npt.NDArray[Any]) -> str:
+    channels = 1 if raw.ndim == 2 else int(raw.shape[2])
+    return f"{raw.dtype.name}x{channels}"
+
+
+def is_mono(image: Image, tolerance: float = 1.0) -> bool:
+    """True if a BGR image is grey: channel differences below ``tolerance`` grey levels on a sparse sample.
+
+    A colour camera never reaches this (sensor noise and white balance keep the channels apart); a camera in night /
+    IR mode, or a mono format replicated to 3 channels, does.
+    """
+    sample = image[::8, ::8].astype(np.int16)
+    if sample.ndim != 3 or sample.shape[2] < 3:
+        return True
+    diff_br = float(np.abs(sample[..., 0] - sample[..., 2]).mean())
+    diff_bg = float(np.abs(sample[..., 0] - sample[..., 1]).mean())
+    return max(diff_br, diff_bg) < tolerance
+
+
+# --- devices -------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CameraDevice:
+    """One capture device as the platform backend numbers it.
+
+    ``index`` is the OpenCV index for the default backend (the DirectShow order on Windows, ``N`` of ``/dev/videoN``
+    on Linux). ``vid`` / ``pid`` are lower-case hex; ``serial`` is ``None`` when the device has none or the platform
+    does not expose it (Windows composite webcams: the interface path carries an instance id, not the serial).
+    """
+
+    index: int
+    name: str
+    path: str
+    vid: str | None = None
+    pid: str | None = None
+    serial: str | None = None
+    stable_path: str | None = None  # Linux: /dev/v4l/by-id/... symlink pointing at this node
+
+
+_USB_SELECTOR = re.compile(r"^usb:(?P<vid>[0-9a-fA-F]{4}):(?P<pid>[0-9a-fA-F]{4})(?::(?P<serial>\S+))?$")
+_WIN_PATH_IDS = re.compile(r"vid_(?P<vid>[0-9a-f]{4})&pid_(?P<pid>[0-9a-f]{4})(?P<rest>[^#]*)#(?P<instance>[^#]+)")
+
+
+def parse_usb_selector(device: str) -> tuple[str, str, str | None] | None:
+    """``"usb:046d:082c"`` / ``"usb:046d:082c:1D727050"`` -> (vid, pid, serial); anything else -> ``None``."""
+    m = _USB_SELECTOR.match(device.strip())
+    if m is None:
+        return None
+    return m["vid"].lower(), m["pid"].lower(), m["serial"]
+
+
+def match_device(selector: str, devices: Sequence[CameraDevice]) -> CameraDevice:
+    """The single device matching a ``usb:`` selector.
+
+    Raises:
+        CameraOpenError: malformed selector, no match, or several matches (add the serial to the selector).
+    """
+    parsed = parse_usb_selector(selector)
+    if parsed is None:
+        raise CameraOpenError(f"not a usb selector: {selector!r} (expected usb:<vid>:<pid>[:<serial>])")
+    vid, pid, serial = parsed
+    hits = [d for d in devices if d.vid == vid and d.pid == pid]
+    if serial is not None:
+        hits = [d for d in hits if d.serial is not None and d.serial.lower() == serial.lower()]
+    if not hits:
+        seen = ", ".join(f"{d.index}:{d.name} ({d.vid}:{d.pid})" for d in devices) or "none"
+        raise CameraOpenError(f"no camera matches {selector!r}; devices: {seen}")
+    if len(hits) > 1:
+        names = ", ".join(f"{d.index}:{d.name} serial={d.serial}" for d in hits)
+        raise CameraOpenError(f"{selector!r} matches {len(hits)} cameras ({names}); add :<serial> to the selector")
+    return hits[0]
+
+
+def _win_ids(path: str) -> tuple[str | None, str | None, str | None]:
+    m = _WIN_PATH_IDS.search(path.lower())
+    if m is None:
+        return None, None, None
+    # A non-composite device's instance id is its serial; a composite interface (&mi_xx) has a generated id with '&'.
+    serial = None if "&mi_" in m["rest"] or "&" in m["instance"] else m["instance"]
+    return m["vid"], m["pid"], serial
+
+
+@dataclass(frozen=True)
+class DShowControl:
+    """One DirectShow camera control (IAMVideoProcAmp / IAMCameraControl), as the driver reports it."""
+
+    name: str
+    minimum: int
+    maximum: int
+    step: int
+    default: int
+    value: int | None
+    auto: bool | None  # current mode; None = unreadable
+    can_auto: bool
+    can_manual: bool
+
+
+# name -> (interface, property id). VideoProcAmp ids are the KSPROPERTY_VIDEOPROCAMP ids, which the DirectShow
+# kernel-streaming proxy passes through unchanged; that is how power-line frequency (13) is reachable on Windows.
+_DSHOW_PROPS: dict[str, tuple[str, int]] = {
+    "brightness": ("procamp", 0),
+    "contrast": ("procamp", 1),
+    "saturation": ("procamp", 3),
+    "sharpness": ("procamp", 4),
+    "gamma": ("procamp", 5),
+    "white_balance": ("procamp", 7),
+    "backlight_compensation": ("procamp", 8),
+    "gain": ("procamp", 9),
+    "power_line_frequency": ("procamp", 13),  # 0 = off, 1 = 50 Hz, 2 = 60 Hz
+    "zoom": ("camctl", 3),
+    "exposure": ("camctl", 4),  # log2(seconds): -6 = 1/64 s
+    "focus": ("camctl", 6),
+    "low_light_compensation": ("camctl", 19),
+}
+_DSHOW_FLAG_AUTO = 1
+_DSHOW_FLAG_MANUAL = 2
+_POWER_LINE_MENU = {0: 0, 50: 1, 60: 2}  # same menu values as V4L2 power_line_frequency
+
+
+def dshow_settings(controls: CameraControls) -> list[tuple[str, int | None, bool]]:
+    """``cameras.<name>.controls`` -> DirectShow writes ``(control, value, auto)``; ``value None`` = keep the current.
+
+    Auto modes come first (a driver ignores manual values while the matching auto mode is on). ``null`` controls are
+    left out, i.e. untouched, exactly like ``camera_setup.sh`` on Linux.
+    """
+    out: list[tuple[str, int | None, bool]] = []
+    if controls.power_line_hz is not None:
+        out.append(("power_line_frequency", _POWER_LINE_MENU[controls.power_line_hz], False))
+    if controls.autofocus is True:
+        out.append(("focus", None, True))
+    elif controls.autofocus is False or controls.focus is not None:
+        out.append(("focus", controls.focus, False))
+    if controls.auto_exposure is True:
+        out.append(("exposure", None, True))
+    elif controls.auto_exposure is False or controls.exposure_ms is not None:
+        exp = None if controls.exposure_ms is None else round(math.log2(controls.exposure_ms / 1000.0))
+        out.append(("exposure", exp, False))
+    if controls.auto_white_balance is True:
+        out.append(("white_balance", None, True))
+    elif controls.auto_white_balance is False or controls.white_balance_k is not None:
+        out.append(("white_balance", controls.white_balance_k, False))
+    if controls.gain is not None:
+        out.append(("gain", controls.gain, False))
+    return out
+
+
+class _DShow:  # pragma: no cover - needs Windows + DirectShow
+    """Minimal raw-COM access to DirectShow video input devices through ctypes (no comtypes dependency).
+
+    Devices come in the system device enumerator's order, which is the order OpenCV's CAP_DSHOW uses for indices.
+    """
+
+    def __init__(self) -> None:
+        import ctypes
+        from ctypes import c_ubyte, c_ulong, c_ushort, c_void_p
+
+        self.ct = ctypes
+
+        class GUID(ctypes.Structure):
+            _fields_ = (("d1", c_ulong), ("d2", c_ushort), ("d3", c_ushort), ("d4", c_ubyte * 8))
+
+        class VARIANT(ctypes.Structure):
+            _fields_ = (("vt", c_ushort), ("r1", c_ushort), ("r2", c_ushort), ("r3", c_ushort), ("v1", c_void_p),
+                        ("v2", c_void_p))  # fmt: skip
+
+        self.GUID, self.VARIANT = GUID, VARIANT
+        self.ole32 = ctypes.OleDLL("ole32")
+        self.oleaut32 = ctypes.WinDLL("oleaut32")
+        self.iid = {
+            "dev_enum": self.guid("{62BE5D10-60EB-11d0-BD3B-00A0C911CE86}"),
+            "create_dev_enum": self.guid("{29840822-5B84-11D0-BD3B-00A0C911CE86}"),
+            "video_inputs": self.guid("{860BB310-5D01-11d0-BD3B-00A0C911CE86}"),
+            "property_bag": self.guid("{55272A00-42CB-11CE-8135-00AA004BB851}"),
+            "base_filter": self.guid("{56A86895-0AD4-11CE-B03A-0020AF0BA770}"),
+            "procamp": self.guid("{C6E13360-30AC-11d0-A18C-00A0C9118956}"),
+            "camctl": self.guid("{C6E13370-30AC-11d0-A18C-00A0C9118956}"),
+        }
+        self.initialized = False
+        try:
+            self.ole32.CoInitializeEx(None, 0)  # COINIT_MULTITHREADED
+            self.initialized = True
+        except OSError:
+            pass  # already initialised in another mode on this thread: COM is usable as is
+
+    def close(self) -> None:
+        if self.initialized:
+            self.ole32.CoUninitialize()
+            self.initialized = False
+
+    def guid(self, text: str) -> Any:
+        g = self.GUID()
+        self.ole32.CLSIDFromString(self.ct.c_wchar_p(text), self.ct.byref(g))
+        return g
+
+    def method(self, obj: Any, index: int, *argtypes: Any) -> Any:
+        ct = self.ct
+        vtbl = ct.cast(obj, ct.POINTER(ct.POINTER(ct.c_void_p))).contents
+        fn = ct.WINFUNCTYPE(ct.HRESULT, ct.c_void_p, *argtypes)(vtbl[index])
+        return lambda *args: fn(obj, *args)
+
+    def release(self, obj: Any) -> None:
+        ct = self.ct
+        if obj:
+            vtbl = ct.cast(obj, ct.POINTER(ct.POINTER(ct.c_void_p))).contents
+            ct.WINFUNCTYPE(ct.c_ulong, ct.c_void_p)(vtbl[2])(obj)
+
+    def monikers(self) -> list[Any]:
+        """Device monikers in enumeration order (the caller releases them), skipping those without a property bag."""
+        ct = self.ct
+        dev_enum, enum_monikers = ct.c_void_p(), ct.c_void_p()
+        out: list[Any] = []
+        try:
+            self.ole32.CoCreateInstance(
+                ct.byref(self.iid["dev_enum"]), None, 1, ct.byref(self.iid["create_dev_enum"]), ct.byref(dev_enum)
+            )
+            self.method(dev_enum, 3, ct.POINTER(self.GUID), ct.POINTER(ct.c_void_p), ct.c_ulong)(
+                ct.byref(self.iid["video_inputs"]), ct.byref(enum_monikers), 0
+            )
+            if not enum_monikers:  # S_FALSE: no video input device at all
+                return out
+            next_moniker = self.method(enum_monikers, 3, ct.c_ulong, ct.POINTER(ct.c_void_p), ct.POINTER(ct.c_ulong))
+            while True:
+                moniker, fetched = ct.c_void_p(), ct.c_ulong(0)
+                next_moniker(1, ct.byref(moniker), ct.byref(fetched))
+                if fetched.value == 0:
+                    break
+                if self.properties(moniker) is None:
+                    self.release(moniker)  # OpenCV does not count these either
+                    continue
+                out.append(moniker)
+        finally:
+            self.release(enum_monikers)
+            self.release(dev_enum)
+        return out
+
+    def properties(self, moniker: Any) -> dict[str, str] | None:
+        ct = self.ct
+        bag = ct.c_void_p()
+        try:
+            self.method(moniker, 9, ct.c_void_p, ct.c_void_p, ct.POINTER(self.GUID), ct.POINTER(ct.c_void_p))(
+                None, None, ct.byref(self.iid["property_bag"]), ct.byref(bag)
+            )  # IMoniker::BindToStorage
+        except OSError:
+            return None
+        props: dict[str, str] = {}
+        read = self.method(bag, 3, ct.c_wchar_p, ct.POINTER(self.VARIANT), ct.c_void_p)
+        for key in ("FriendlyName", "DevicePath"):
+            var = self.VARIANT()
+            try:
+                read(key, ct.byref(var), None)
+                if var.vt == 8 and var.v1:  # VT_BSTR
+                    props[key] = ct.wstring_at(var.v1)
+            except OSError:
+                pass
+            finally:
+                self.oleaut32.VariantClear(ct.byref(var))
+        self.release(bag)
+        return props
+
+    def interfaces(self, moniker: Any) -> tuple[Any, dict[str, Any]]:
+        """(IBaseFilter, {"procamp": IAMVideoProcAmp, "camctl": IAMCameraControl}) for one device; release all."""
+        ct = self.ct
+        flt = ct.c_void_p()
+        self.method(moniker, 8, ct.c_void_p, ct.c_void_p, ct.POINTER(self.GUID), ct.POINTER(ct.c_void_p))(
+            None, None, ct.byref(self.iid["base_filter"]), ct.byref(flt)
+        )  # IMoniker::BindToObject
+        found: dict[str, Any] = {}
+        for key in ("procamp", "camctl"):
+            itf = ct.c_void_p()
+            try:
+                self.method(flt, 0, ct.POINTER(self.GUID), ct.POINTER(ct.c_void_p))(
+                    ct.byref(self.iid[key]), ct.byref(itf)
+                )  # IUnknown::QueryInterface
+                found[key] = itf
+            except OSError:
+                continue
+        return flt, found
+
+    def read_control(self, itf: Any, prop: int, name: str) -> DShowControl | None:
+        ct = self.ct
+        lp = ct.POINTER(ct.c_long)
+        lo, hi, step, default, caps, value, flags = (ct.c_long() for _ in range(7))
+        try:
+            self.method(itf, 3, ct.c_long, lp, lp, lp, lp, lp)(
+                prop, ct.byref(lo), ct.byref(hi), ct.byref(step), ct.byref(default), ct.byref(caps)
+            )
+        except OSError:
+            return None  # not supported by this camera
+        current: int | None = None
+        auto: bool | None = None
+        try:
+            self.method(itf, 5, ct.c_long, lp, lp)(prop, ct.byref(value), ct.byref(flags))
+            current, auto = value.value, bool(flags.value & _DSHOW_FLAG_AUTO)
+        except OSError:
+            pass
+        return DShowControl(
+            name, lo.value, hi.value, step.value, default.value, current, auto,
+            can_auto=bool(caps.value & _DSHOW_FLAG_AUTO), can_manual=bool(caps.value & _DSHOW_FLAG_MANUAL),
+        )  # fmt: skip
+
+    def write_control(self, itf: Any, prop: int, value: int, auto: bool) -> None:
+        ct = self.ct
+        flag = _DSHOW_FLAG_AUTO if auto else _DSHOW_FLAG_MANUAL
+        self.method(itf, 4, ct.c_long, ct.c_long, ct.c_long)(prop, value, flag)
+
+
+def _with_dshow_device(index: int, action: Callable[[_DShow, dict[str, Any]], Any]) -> Any:  # pragma: no cover
+    """Run ``action(com, interfaces)`` on DirectShow device ``index``; COM objects are released afterwards."""
+    com = _DShow()
+    monikers: list[Any] = []
+    try:
+        monikers = com.monikers()
+        if not 0 <= index < len(monikers):
+            raise CameraOpenError(f"no DirectShow device with index {index} ({len(monikers)} found)")
+        flt, itfs = com.interfaces(monikers[index])
+        try:
+            return action(com, itfs)
+        finally:
+            for itf in itfs.values():
+                com.release(itf)
+            com.release(flt)
+    finally:
+        for moniker in monikers:
+            com.release(moniker)
+        com.close()
+
+
+def _list_dshow_devices() -> list[CameraDevice]:  # pragma: no cover - needs Windows + DirectShow
+    """Video input devices in DirectShow order (= OpenCV's CAP_DSHOW indices)."""
+    com = _DShow()
+    devices: list[CameraDevice] = []
+    try:
+        for index, moniker in enumerate(com.monikers()):
+            props = com.properties(moniker) or {}
+            com.release(moniker)
+            path = props.get("DevicePath", "")
+            vid, pid, serial = _win_ids(path)
+            devices.append(CameraDevice(index, props.get("FriendlyName", "?"), path, vid, pid, serial))
+    finally:
+        com.close()
+    return devices
+
+
+def dshow_controls(index: int) -> list[DShowControl]:  # pragma: no cover - needs Windows + DirectShow
+    """Read-only: every supported control of DirectShow device ``index`` with range, default, value and mode."""
+
+    def read_all(com: _DShow, itfs: dict[str, Any]) -> list[DShowControl]:
+        out: list[DShowControl] = []
+        for name, (group, prop) in _DSHOW_PROPS.items():
+            if group in itfs and (ctrl := com.read_control(itfs[group], prop, name)) is not None:
+                out.append(ctrl)
+        return out
+
+    result: list[DShowControl] = _with_dshow_device(index, read_all)
+    return result
+
+
+def dshow_apply(
+    index: int, settings: Sequence[tuple[str, int | None, bool]]
+) -> tuple[dict[str, str], list[str]]:  # pragma: no cover - needs Windows + DirectShow
+    """Write :func:`dshow_settings` to DirectShow device ``index``. Returns (applied, skipped with reasons).
+
+    The Windows camera driver keeps these values after the process exits (docs/perception.md §2.1).
+    """
+
+    def write_all(com: _DShow, itfs: dict[str, Any]) -> tuple[dict[str, str], list[str]]:
+        applied: dict[str, str] = {}
+        skipped: list[str] = []
+        for name, value, auto in settings:
+            group, prop = _DSHOW_PROPS[name]
+            ctrl = com.read_control(itfs[group], prop, name) if group in itfs else None
+            if ctrl is None:
+                skipped.append(f"{name}: not supported by this camera")
+                continue
+            if auto and not ctrl.can_auto:
+                skipped.append(f"{name}: no auto mode")
+                continue
+            target = value if value is not None else (ctrl.value if ctrl.value is not None else ctrl.default)
+            if not ctrl.minimum <= target <= ctrl.maximum:
+                skipped.append(f"{name}={target}: outside [{ctrl.minimum}..{ctrl.maximum}]")
+                continue
+            try:
+                com.write_control(itfs[group], prop, target, auto)
+            except OSError as exc:
+                skipped.append(f"{name}={target}: rejected ({exc})")
+                continue
+            after = com.read_control(itfs[group], prop, name)
+            mode = "?" if after is None or after.auto is None else ("auto" if after.auto else "manual")
+            applied[name] = f"{after.value if after else target} ({mode})"
+        return applied, skipped
+
+    result: tuple[dict[str, str], list[str]] = _with_dshow_device(index, write_all)
+    return result
+
+
+def _read_text(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def _list_v4l2_devices(
+    sys_root: Path = Path("/sys/class/video4linux"), by_id_root: Path = Path("/dev/v4l/by-id")
+) -> list[CameraDevice]:
+    """Capture nodes (``index`` file == 0, the first node of each camera) from sysfs, with USB ids and by-id links."""
+    by_id: dict[str, str] = {}
+    if by_id_root.is_dir():
+        for link in sorted(by_id_root.iterdir()):
+            target = link.resolve().name if link.is_symlink() else None
+            if target and link.name.endswith("-index0"):
+                by_id[target] = str(link)
+    devices: list[CameraDevice] = []
+    nodes = sorted(sys_root.glob("video*"), key=lambda p: int(p.name[5:]) if p.name[5:].isdigit() else 1 << 30)
+    for node in nodes:
+        if not node.name[5:].isdigit() or _read_text(node / "index") not in (None, "0"):
+            continue
+        usb: Path | None = None
+        for candidate in ((node / "device").resolve(), *(node / "device").resolve().parents):
+            if (candidate / "idVendor").exists():
+                usb = candidate
+                break
+        vid = _read_text(usb / "idVendor") if usb else None
+        pid = _read_text(usb / "idProduct") if usb else None
+        serial = _read_text(usb / "serial") if usb else None
+        devices.append(
+            CameraDevice(
+                index=int(node.name[5:]),
+                name=_read_text(node / "name") or node.name,
+                path=f"/dev/{node.name}",
+                vid=vid.lower() if vid else None,
+                pid=pid.lower() if pid else None,
+                serial=serial,
+                stable_path=by_id.get(node.name),
+            )
+        )
+    return devices
+
+
+def list_devices() -> list[CameraDevice]:
+    """Capture devices of this machine in the default backend's order (empty where enumeration is unsupported)."""
+    if _PLATFORM == "win32":
+        try:
+            return _list_dshow_devices()
+        except OSError as exc:  # pragma: no cover - COM failure
+            log.warning("DirectShow device enumeration failed", extra={"fields": {"error": str(exc)}})
+            return []
+    if _PLATFORM.startswith("linux"):
+        return _list_v4l2_devices()
+    return []
+
+
+def resolve_device(device: int | str, backend: str = "auto") -> int | str:
+    """Config ``device`` -> what ``cv2.VideoCapture`` takes: an index, a path / URL, or a resolved usb selector.
+
+    A ``usb:`` selector becomes the DirectShow index on Windows and ``/dev/videoN`` on Linux.
+
+    Raises:
+        CameraOpenError: the selector matches no camera, or several.
+    """
+    if isinstance(device, int):
+        return device
+    if device.isdigit():
+        return int(device)
+    if parse_usb_selector(device) is None:
+        return device
+    if _PLATFORM == "win32" and backend not in ("auto", "dshow"):
+        log.warning(
+            "usb selector resolves to a DirectShow index; other backends may number cameras differently",
+            extra={"fields": {"device": device, "backend": backend}},
+        )
+    found = match_device(device, list_devices())
+    return found.path if _PLATFORM.startswith("linux") else found.index
 
 
 # --- OpenCV source -------------------------------------------------------------------------------------
@@ -154,51 +712,95 @@ def _apply_controls_opencv(cap: cv2.VideoCapture, controls: CameraControls, name
 
 
 class OpenCVSource:
-    """Real camera through ``cv2.VideoCapture``. Requested format/size/fps are set before the first read."""
+    """Real camera through ``cv2.VideoCapture``.
+
+    The requested FOURCC / size / fps are passed as open-time parameters (the only way DirectShow under OpenCV 5
+    honours MJPG); if the backend refuses them, the camera is reopened and they are set one by one as before.
+    Frames are normalised by :func:`to_bgr8`, so mono formats (GREY / Y8 / Y16) arrive as 3-channel BGR uint8.
+    """
 
     def __init__(self, cfg: CameraConfig, name: str = "camera") -> None:
         self._cfg = cfg
         self._name = name
         self._cap: cv2.VideoCapture | None = None
         self._first: Image | None = None
+        self._bits: int = 8  # significant bits of a 16-bit mono stream, kept across frames (stable brightness)
 
-    def open(self) -> CaptureInfo:
+    def _open_capture(self, device: int | str) -> cv2.VideoCapture:
         cfg = self._cfg
-        device: int | str = int(cfg.device) if isinstance(cfg.device, str) and cfg.device.isdigit() else cfg.device
-        cap = cv2.VideoCapture(device, _backend_flag(cfg.backend))
+        api = _backend_flag(cfg.backend)
+        fourcc = int(cv2.VideoWriter.fourcc(*cfg.fourcc))
+        params = [
+            cv2.CAP_PROP_FOURCC, fourcc,
+            cv2.CAP_PROP_FRAME_WIDTH, cfg.width,
+            cv2.CAP_PROP_FRAME_HEIGHT, cfg.height,
+            cv2.CAP_PROP_FPS, cfg.fps,
+        ]  # fmt: skip
+        cap = cv2.VideoCapture(device, api, params)
+        if cap.isOpened():
+            return cap
+        cap.release()
+        # Fallback: backends / sources that reject open-time parameters (some URLs, virtual cameras).
+        cap = cv2.VideoCapture(device, api)
         if not cap.isOpened():
             cap.release()
             raise CameraOpenError(f"{self._name}: cannot open device {cfg.device!r} (backend {cfg.backend})")
+        log.info(
+            "open-time format parameters refused, setting them after open", extra={"fields": {"camera": self._name}}
+        )
         # Order matters: FOURCC first, otherwise some drivers fall back to YUYV and cap the frame rate.
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc(*cfg.fourcc))
+        cap.set(cv2.CAP_PROP_FOURCC, fourcc)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.height)
         cap.set(cv2.CAP_PROP_FPS, cfg.fps)
+        return cap
+
+    def open(self) -> CaptureInfo:
+        cfg = self._cfg
+        device = resolve_device(cfg.device, cfg.backend)
+        cap = self._open_capture(device)
+        # Never set FOURCC / size again here: on DirectShow a second FOURCC set resets the stream to YUY2.
         cap.set(cv2.CAP_PROP_BUFFERSIZE, cfg.buffer_size)
         if _PLATFORM == "win32":
             _apply_controls_opencv(cap, cfg.controls, self._name)
 
-        ok, img = cap.read()
-        if not ok or img is None:
+        ok, raw = cap.read()
+        if not ok or raw is None:
             cap.release()
             raise CameraOpenError(f"{self._name}: device {cfg.device!r} opened but delivered no frame")
+        raw_arr = np.asarray(raw)
+        self._bits = effective_bits(raw_arr)
+        img = to_bgr8(raw_arr, self._bits)
+        fps = float(cap.get(cv2.CAP_PROP_FPS))
+        if fps <= 0:
+            # DirectShow opened with open-time parameters reports -1. Model cadences are derived from this value
+            # (every_n_frames), so fall back to the requested rate; the measured rate is CaptureStats.capture_fps.
+            log.info("backend reports no frame rate, assuming the requested one", extra={"fields": {"fps": cfg.fps}})
+            fps = float(cfg.fps)
         info = CaptureInfo(
             backend=str(cap.getBackendName()),
             fourcc=_fourcc_to_str(cap.get(cv2.CAP_PROP_FOURCC)),
             width=int(img.shape[1]),
             height=int(img.shape[0]),
-            fps=float(cap.get(cv2.CAP_PROP_FPS)),
+            fps=fps,
+            raw_format=_raw_format(raw_arr),
+            mono=is_mono(img),
+            device=str(device),
         )
         requested = (cfg.fourcc, cfg.width, cfg.height, float(cfg.fps))
         obtained = (info.fourcc, info.width, info.height, round(info.fps, 2))
-        same = requested[:3] == obtained[:3] and abs(info.fps - cfg.fps) < 0.5
+        same = (
+            normalize_fourcc(cfg.fourcc) == normalize_fourcc(info.fourcc)
+            and (cfg.width, cfg.height) == (info.width, info.height)
+            and abs(info.fps - cfg.fps) < 0.5
+        )
         if not same:
             log.warning(
                 "camera format differs from request",
                 extra={"fields": {"camera": self._name, "requested": requested, "obtained": obtained}},
             )
         self._cap = cap
-        self._first = np.asarray(img, dtype=np.uint8)
+        self._first = img
         return info
 
     def read(self) -> Image | None:
@@ -208,7 +810,12 @@ class OpenCVSource:
         if self._cap is None:
             return None
         ok, raw = self._cap.read()
-        return np.asarray(raw, dtype=np.uint8) if ok and raw is not None else None
+        if not ok or raw is None:
+            return None
+        raw_arr = np.asarray(raw)
+        if raw_arr.dtype.itemsize >= 2:
+            self._bits = max(self._bits, effective_bits(raw_arr))
+        return to_bgr8(raw_arr, self._bits)
 
     def close(self) -> None:
         if self._cap is not None:
