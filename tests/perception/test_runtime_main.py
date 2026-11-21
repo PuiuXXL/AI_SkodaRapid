@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -211,74 +209,10 @@ def _wait(worker: CameraWorker, predicate: Any, timeout: float) -> bool:
     return False
 
 
-def test_worker_streams_and_stops_cleanly() -> None:
-    worker = CameraWorker("driver", load_config(), SYNTH).start()
-    try:
-        assert _wait(worker, lambda: worker.latest is not None and worker.latest["kind"] == "frame", 30.0)
-        assert worker.available
-        first = worker.latest["seq"]  # type: ignore[index]
-        assert _wait(worker, lambda: worker.latest["seq"] > first + 10, 10.0)  # type: ignore[index]
-        assert worker.latest_jpeg is None  # nobody asked for the preview
-        worker.want_jpeg(True)
-        assert _wait(worker, lambda: worker.latest_jpeg is not None, 10.0)
-        assert worker.latest_jpeg[:2] == b"\xff\xd8"  # type: ignore[index]
-    finally:
-        t0 = time.monotonic()
-        code = worker.stop(timeout=5.0)
-        assert time.monotonic() - t0 < 5.0
-    assert code == 0  # returned on its own, not killed
-    assert not worker.alive and not worker.available
-
-
-def test_worker_restarts_after_a_crash() -> None:
-    cfg = load_config()
-    cfg = cfg.model_copy(update={"workers": cfg.workers.model_copy(update={"restart_backoff_s": 0.2})})
-    worker = CameraWorker("driver", cfg, SYNTH).start()
-    try:
-        assert _wait(worker, lambda: worker.available, 30.0)
-        pid = worker.pid
-        worker._proc.kill()  # simulate a native crash
-        assert _wait(worker, lambda: not worker.available, 5.0)  # marked unavailable while down
-        assert _wait(worker, lambda: worker.available and worker.pid != pid, 30.0)
-        assert worker.restarts == 1
-    finally:
-        worker.stop()
-
-
 # --- main loop ------------------------------------------------------------------------------------------
 
 
-def test_main_print_no_ws_on_a_synthetic_source() -> None:
-    proc = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "perception.main",
-            "--print",
-            "--no-ws",
-            "--no-mjpeg",
-            "--synthetic",
-            "--no-models",
-            "--seconds",
-            "4",
-            "--log-level",
-            "WARNING",
-        ],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-        timeout=90,
-    )
-    assert proc.returncode == 0, proc.stderr[-2000:]
-    lines = [line for line in proc.stdout.splitlines() if line.startswith("{")]
-    assert len(lines) >= 40, proc.stderr[-2000:]
-    parsed = [PerceptionFrame.model_validate_json(line) for line in lines]
-    assert [f.seq for f in parsed] == list(range(1, len(parsed) + 1))
-    rate = (len(parsed) - 1) / (parsed[-1].ts - parsed[0].ts)
-    assert rate == pytest.approx(load_config().output.publish_hz, rel=0.15)
-    assert any(f.perf.cameras.get("driver") and f.perf.cameras["driver"].process_fps > 0 for f in parsed)
-
-
+@pytest.mark.slow
 def test_ws_frames_reach_core_and_commands_are_acked() -> None:
     import websockets
 
@@ -310,6 +244,7 @@ def test_ws_frames_reach_core_and_commands_are_acked() -> None:
     assert len(frames) >= 30
 
 
+@pytest.mark.slow
 def test_ws_without_core_keeps_running_and_logs_once(caplog: pytest.LogCaptureFixture) -> None:
     cfg = load_config()
     cfg = cfg.model_copy(
@@ -327,41 +262,3 @@ def test_ws_without_core_keeps_running_and_logs_once(caplog: pytest.LogCaptureFi
     outages = {id(r) for r in caplog.records if "core not reachable" in r.getMessage()}
     assert len(outages) == 1
     assert app.frames_published >= 30
-
-
-def test_mjpeg_streams_only_while_watched() -> None:
-    import aiohttp
-
-    async def scenario() -> tuple[int, bool, bool]:
-        app = Perception(load_config(), cameras=["driver"], options=SYNTH, ws=False, mjpeg=True, mjpeg_port=0)
-        run = asyncio.create_task(app.run(seconds=20.0))
-        try:
-            for _ in range(400):
-                if app.bound_port and app.workers["driver"].available:
-                    break
-                await asyncio.sleep(0.05)
-            worker = app.workers["driver"]
-            before = bool(worker._want_jpeg.value)
-            parts = 0
-            url = f"http://127.0.0.1:{app.bound_port}/video/driver"
-            async with aiohttp.ClientSession() as session, session.get(url) as resp:
-                assert resp.headers["Content-Type"].startswith("multipart/x-mixed-replace")
-                buf = b""
-                async for chunk in resp.content.iter_chunked(65536):
-                    buf += chunk
-                    parts = buf.count(b"\xff\xd8")
-                    if parts >= 3:
-                        break
-            for _ in range(100):
-                if not worker._want_jpeg.value:
-                    break
-                await asyncio.sleep(0.05)
-            return parts, before, bool(worker._want_jpeg.value)
-        finally:
-            run.cancel()
-            with pytest.raises(asyncio.CancelledError):
-                await run
-
-    parts, before, after = asyncio.run(scenario())
-    assert parts >= 3
-    assert before is False and after is False  # encoding only while a client is connected

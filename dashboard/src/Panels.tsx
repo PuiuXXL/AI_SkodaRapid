@@ -25,6 +25,28 @@ export function Detail({title,children}: {title: string; children: ReactNode}){
 }
 export function Panel({id,label,title,children}: {id: string; label: string; title: string; children: ReactNode}){return <section id={id}><small>{label}</small><h2>{title}</h2>{children}</section>}
 
+export function VisionDiagnostics({s,connection}: StateProps & {connection:string}){
+ const driver=s.driver, camera=s.perf?.cameras?.driver;
+ const tracked=driver?.monitoring_ok===true && camera?.available!==false;
+ return <Panel id="vision" label="DIAGNOSTIC LIVE" title="Semnalul camerei șoferului">
+   <Metrics items={[
+     ["Conexiune Core",connection],
+     ["Cadru disponibil",yes(camera?.available)],
+     ["Vârsta cadrului la publicare",fmt(camera?.age_ms," ms")],
+   ]}/>
+   <Rows items={[
+     ["Monitorizare",driver?.monitoring_ok===true?"Activă":driver?.monitoring_ok===false?"Întreruptă":"—"],
+     ["Motiv raportat",driver?.monitoring_reason],
+     ["Avertismente",driver?.monitoring_warnings?.join(", ")||"—"],
+     ["Mod cameră",words(driver?.camera_mode)],
+     ["Încredere față",fmt(driver?.face_conf,"%",100)],
+     ["Calibrare privire",tracked?yes(driver?.gaze?.calibrated):"—"],
+     ["Timp în afara drumului · ultimele 60 s",tracked && driver?.gaze?.calibrated?fmt(driver.gaze.off_road_60s_ms," s",.001,2):"—"],
+     ["Rezultate pierdute",fmt(camera?.dropped_results)],
+   ]}/>
+ </Panel>;
+}
+
 export function Performance({s}: StateProps){
  const p=s.perf??{}, cameras=p.cameras??{};
  const models={face_driver:"Față șofer",face_passenger:"Față pasager",pose:"Postură",phone:"Telefon",gesture:"Gest",sface:"Identitate"};

@@ -26,6 +26,8 @@ from perception.worker import (
     ModularPipeline,
     WorkerOptions,
     default_pipeline,
+    downscale,
+    process_size,
     put_latest,
     resolve_factory,
 )
@@ -200,6 +202,7 @@ def test_put_latest_reports_drops() -> None:
 # --- spawned worker -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_worker_streams_stops_cleanly_and_jpeg_only_on_demand() -> None:
     worker = CameraWorker("driver", load_config(), SYNTH).start()
     try:
@@ -224,6 +227,7 @@ def test_worker_streams_stops_cleanly_and_jpeg_only_on_demand() -> None:
     assert not worker.alive and not worker.available
 
 
+@pytest.mark.slow
 def test_worker_restarts_and_is_unavailable_while_down() -> None:
     cfg = load_config()
     cfg = cfg.model_copy(update={"workers": cfg.workers.model_copy(update={"restart_backoff_s": 0.3})})
@@ -241,6 +245,7 @@ def test_worker_restarts_and_is_unavailable_while_down() -> None:
         worker.stop()
 
 
+@pytest.mark.slow
 def test_commands_reach_the_injected_pipeline() -> None:
     worker = CameraWorker("driver", load_config(), SYNTH, factory=ECHO).start()
     try:
@@ -263,6 +268,7 @@ def test_commands_reach_the_injected_pipeline() -> None:
         assert worker.stop() == 0
 
 
+@pytest.mark.slow
 def test_extra_module_from_config_runs_in_the_process() -> None:
     worker = CameraWorker("driver", load_config(), SYNTH, modules=["tests.perception.test_worker:PatchModule"]).start()
     try:
@@ -313,3 +319,16 @@ def test_missing_camera_reports_unavailable_and_never_exits(monkeypatch: pytest.
     stop.set()
     thread.join(5.0)
     assert not thread.is_alive()  # stops cleanly without a camera
+
+
+def test_process_size_keeps_aspect_and_skips_small_captures() -> None:
+    assert process_size(1920, 1080, 1280) == (1280, 720)  # 1080p capture, 720p processing
+    assert process_size(1280, 720, 1280) == (1280, 720)
+    assert process_size(1280, 720, None) == (1280, 720)
+
+
+def test_downscale_resizes_once_and_keeps_the_frame_identity() -> None:
+    big = Frame(image=np.zeros((1080, 1920, 3), np.uint8), frame_id=7, t_capture=1.5)
+    small = downscale(big, 1280, 720)
+    assert small.image.shape == (720, 1280, 3) and (small.frame_id, small.t_capture) == (7, 1.5)
+    assert downscale(small, 1280, 720) is small  # already the right size: no copy

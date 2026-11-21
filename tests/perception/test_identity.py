@@ -217,6 +217,7 @@ def test_names_and_paths_are_safe(tmp_path: Path) -> None:
 
 
 @pytest.mark.models
+@pytest.mark.slow
 def test_real_yunet_sface_on_a_black_frame() -> None:
     cfg = IdentityConfig()
     if not (cfg.path(cfg.yunet_model).exists() and cfg.path(cfg.sface_model).exists()):

@@ -358,6 +358,10 @@ def dshow_settings(controls: CameraControls) -> list[tuple[str, int | None, bool
     return out
 
 
+def _windows_only() -> None:  # pragma: no cover - non-Windows only
+    raise OSError("DirectShow is only available on Windows")
+
+
 class _DShow:  # pragma: no cover - needs Windows + DirectShow
     """Minimal raw-COM access to DirectShow video input devices through ctypes (no comtypes dependency).
 
@@ -378,8 +382,13 @@ class _DShow:  # pragma: no cover - needs Windows + DirectShow
                         ("v2", c_void_p))  # fmt: skip
 
         self.GUID, self.VARIANT = GUID, VARIANT
-        self.ole32 = ctypes.OleDLL("ole32")
-        self.oleaut32 = ctypes.WinDLL("oleaut32")
+        self.ole32: Any
+        self.oleaut32: Any
+        if sys.platform == "win32":  # OleDLL / WinDLL exist only on Windows
+            self.ole32 = ctypes.OleDLL("ole32")
+            self.oleaut32 = ctypes.WinDLL("oleaut32")
+        else:
+            _windows_only()
         self.iid = {
             "dev_enum": self.guid("{62BE5D10-60EB-11d0-BD3B-00A0C911CE86}"),
             "create_dev_enum": self.guid("{29840822-5B84-11D0-BD3B-00A0C911CE86}"),
@@ -540,20 +549,21 @@ def _with_dshow_device(index: int, action: Callable[[_DShow, dict[str, Any]], An
 
 
 def _list_dshow_devices() -> list[CameraDevice]:  # pragma: no cover - needs Windows + DirectShow
-    """Video input devices in DirectShow order (= OpenCV's CAP_DSHOW indices)."""
-    com = _DShow()
+    """Video input devices in DirectShow order (= OpenCV's CAP_DSHOW indices); empty outside Windows."""
     devices: list[CameraDevice] = []
-    try:
-        for index, moniker in enumerate(com.monikers()):
-            props = com.properties(moniker) or {}
-            com.release(moniker)
-            path = props.get("DevicePath", "")
-            vid, pid, serial = _win_ids(path)
-            devices.append(
-                CameraDevice(index, props.get("FriendlyName", "?"), path, vid, pid, serial, port=_win_port(path))
-            )
-    finally:
-        com.close()
+    if sys.platform == "win32":
+        com = _DShow()
+        try:
+            for index, moniker in enumerate(com.monikers()):
+                props = com.properties(moniker) or {}
+                com.release(moniker)
+                path = props.get("DevicePath", "")
+                vid, pid, serial = _win_ids(path)
+                devices.append(
+                    CameraDevice(index, props.get("FriendlyName", "?"), path, vid, pid, serial, port=_win_port(path))
+                )
+        finally:
+            com.close()
     return devices
 
 

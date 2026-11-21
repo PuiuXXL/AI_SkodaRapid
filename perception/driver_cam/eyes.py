@@ -260,6 +260,7 @@ class EyeTracker:
         self._blinks: deque[float] = deque()
         self._first_t: float | None = None
         self._last_blink_ms: int | None = None
+        self.blink_count = 0
         self.events: list[EyeEvent] = []
 
     @staticmethod
@@ -467,8 +468,10 @@ class EyeTracker:
             elif above and not ep.confirmed:
                 self._episode = None  # a one-frame dip that never confirmed: no event
             elif above:
-                # reopen hysteresis: the closure (and closed_ms) goes on until reopen_min_frames frames in a row
-                if ep.reopen_run >= cfg.reopen_min_frames:
+                # two tiers: a blink (<= blink_max_ms) ends at the FIRST open frame; a longer closure (and its
+                # closed_ms) goes on until reopen_min_frames open frames in a row (reopen hysteresis)
+                is_long = (t - ep.t_drop) * 1000.0 > cfg.blink_max_ms
+                if not is_long or ep.reopen_run >= cfg.reopen_min_frames:
                     self._finish(ep, out)
                     self._episode = None
             elif since_drop > cfg.plateau_check_ms / 1000.0:
@@ -535,6 +538,7 @@ class EyeTracker:
         self._minima.append(min_ratio)
         if kind == "blink":
             self._last_blink_ms = round(duration_ms)
+            self.blink_count += 1
             self._blinks.append(end)
 
     def _gap_or_lose(self, t: float, out: EyeOutput) -> EyeOutput:
@@ -542,8 +546,8 @@ class EyeTracker:
         (closed_ms keeps counting, ``reliable`` is held: a dropout frame must not reset P2's microsleep timer); a
         longer gap ends the closure as an event at its last valid frame."""
         ep = self._episode
-        if ep is not None and ep.confirmed:
-            last = ep.times[-1]
+        if ep is not None and ep.confirmed and (ep.times[-1] - ep.t_drop) * 1000.0 > self.cfg.blink_max_ms:
+            last = ep.times[-1]  # only a closure longer than a blink is held over a gap; a blink just ends
             if (t - last) * 1000.0 <= self.cfg.closure_gap_max_ms:
                 out.state = "CLOSED"
                 out.reliable = True

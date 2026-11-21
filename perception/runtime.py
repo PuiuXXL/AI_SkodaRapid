@@ -122,8 +122,11 @@ class OnnxModel:
         perf_window: int = 120,
         warmup: bool = True,
         order: Sequence[str] = DEFAULT_PROVIDER_ORDER,
+        threads: int | None = None,
     ) -> None:
+        """``threads``: CPU threads for this model (None = the process-wide ``set_intra_op_threads`` value)."""
         self.path = Path(path)
+        self._threads = _intra_op_threads if threads is None else max(0, int(threads))
         if not self.path.is_file():
             raise FileNotFoundError(f"ONNX model not found: {self.path}")
         self.name = name or self.path.stem
@@ -180,8 +183,8 @@ class OnnxModel:
         options = ort.SessionOptions()
         options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         options.log_severity_level = 3
-        if _intra_op_threads:
-            options.intra_op_num_threads = _intra_op_threads
+        if self._threads:
+            options.intra_op_num_threads = self._threads
         session = ort.InferenceSession(str(self.path), sess_options=options, providers=[provider])
         active = session.get_providers()[0]
         if active != provider:  # ORT silently falls back to CPU when a provider fails to initialize
@@ -203,7 +206,9 @@ class OnnxModel:
 
         device = os.environ.get(OPENVINO_DEVICE_ENV, "CPU")
         core = ov.Core()
-        compiled = core.compile_model(str(self.path), device)
+        # the same CPU thread cap as the ORT sessions (without it OpenVINO takes every core and starves the face)
+        config = {"INFERENCE_NUM_THREADS": self._threads} if self._threads and device == "CPU" else {}
+        compiled = core.compile_model(str(self.path), device, config)
         self._ov_compiled = compiled
         self.backend = "openvino"
         self.provider = f"{OPENVINO}:{device}"

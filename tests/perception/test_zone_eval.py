@@ -55,6 +55,7 @@ def test_trials_from_intervals() -> None:
     assert len(trials) == 1 and trials[0].zone == "lap" and trials[0].mode == "lizard"
 
 
+@pytest.mark.slow
 def test_synthetic_session_passes_and_measures_latency(cfg: PerceptionConfig) -> None:
     cal, _ = calibrate_synthetic(cfg, seed=1)
     frames, intervals = synthetic_session(seed=2)
@@ -71,6 +72,7 @@ def test_synthetic_session_passes_and_measures_latency(cfg: PerceptionConfig) ->
     assert sum(res.confusion["road"].values()) > 0
 
 
+@pytest.mark.slow
 def test_reclassify_reproduces_the_pipeline_and_reacts_to_parameters(cfg: PerceptionConfig) -> None:
     cal, _ = calibrate_synthetic(cfg, seed=3)
     frames, intervals = synthetic_session(seed=4)
@@ -91,6 +93,7 @@ def _latest_zone_session() -> Path | None:
 
 
 @pytest.mark.realdata
+@pytest.mark.slow
 def test_latest_real_zone_session_replays() -> None:
     session = _latest_zone_session()
     if session is None or not (session / "calibration.json").exists():

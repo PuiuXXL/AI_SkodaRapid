@@ -12,6 +12,7 @@ To also mark ground-truth events while recording, use ``scripts/label_session.py
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import datetime as dt
 import gzip
 import hashlib
@@ -189,6 +190,13 @@ class RecordingSession:
             raise RuntimeError(f"camera {camera!r} delivered no frame in 10 s")
         info = self.camera.stats().info
         assert info is not None
+        from perception.worker import process_size
+
+        # the same processing size as the runtime (1080p capture, 720p processing): pixel thresholds such as
+        # face.min_face_width_px must mean the same during calibration / evaluation as live
+        self.capture_size = (info.width, info.height)
+        self.proc_size = process_size(info.width, info.height, cam_cfg.process_width)
+        info = dataclasses.replace(info, width=self.proc_size[0], height=self.proc_size[1])
         self.info = info
         self.extractor = FeatureExtractor(cfg, camera_fps=info.fps or cam_cfg.fps, gesture_hz=gesture_hz)
         meta = build_metadata(
@@ -200,6 +208,7 @@ class RecordingSession:
             cadence=self.extractor.cadence,
             synthetic=synthetic,
         )
+        meta["camera"]["capture_width"], meta["camera"]["capture_height"] = self.capture_size
         self.writer = FeatureWriter(out_path, meta)
         self.t0 = time.perf_counter()  # session clock origin, shared with labels
         self._last_id = first.frame_id
@@ -217,6 +226,9 @@ class RecordingSession:
         t = frame.t_capture - self.t0
         if t < 0:  # captured before the session started
             return None
+        from perception.worker import downscale
+
+        frame = downscale(frame, *self.proc_size)
         features = self.extractor.extract(frame, t, self.camera_name)
         self.writer.write(features)
         self.last = features

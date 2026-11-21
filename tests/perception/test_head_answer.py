@@ -198,6 +198,7 @@ def test_result_fields() -> None:
 
 
 @pytest.mark.realdata
+@pytest.mark.slow
 def test_no_answer_outside_the_window_on_a_real_session() -> None:
     """Replay of the eval_eyes laptop session (head turns, tilts, yawns, speech): the detector stays silent with the
     window closed, and with the window open it stays silent while the person sits still."""

@@ -219,6 +219,7 @@ def test_as_bgr_shapes() -> None:
 
 
 @pytest.mark.models
+@pytest.mark.slow
 def test_real_gesture_recognizer_on_a_black_frame() -> None:
     cfg = HandsConfig()
     if not cfg.model_path().exists():

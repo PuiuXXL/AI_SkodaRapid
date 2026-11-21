@@ -3,7 +3,7 @@ import {test} from "node:test";
 import {renderToStaticMarkup} from "react-dom/server";
 import {MotionConfig} from "motion/react";
 import {General, Eyes, Reaction} from "../src/App";
-import {Cabin, Scorecard, Performance, fmt} from "../src/Panels";
+import {Cabin, Scorecard, Performance, VisionDiagnostics, fmt} from "../src/Panels";
 import {Assistant} from "../src/Assistant";
 import {withState, appendEvent} from "../src/session-state";
 import type {DashboardState, SessionData} from "../src/types";
@@ -59,6 +59,18 @@ test("invalid or absent reaction baseline never produces a ratio", () => {
   const html=renderToStaticMarkup(<Reaction s={{driver:{reaction:{visual_ms:0,baseline_ms:{visual:base}}}}}/>);
   assert.doesNotMatch(html,/style="left|NaN|Infinity/);
  }
+});
+
+test("a connected core without camera frames exposes the reason and masks default ocular zeros",()=>{
+ const state:DashboardState={
+   driver:{monitoring_ok:false,monitoring_reason:"no_frames",eyes:{reliable:false,perclos_60s:0,closed_ms:0}},
+   perf:{cameras:{driver:{available:false,age_ms:630,dropped_results:0}}},
+ };
+ const html=renderToStaticMarkup(<><VisionDiagnostics s={state} connection="Live · conectat"/><Eyes live s={state}/></>);
+ assert.match(html,/no_frames/);
+ assert.match(html,/630 ms/);
+ assert.match(html,/Rezultate pierdute<\/dt><dd>0/);
+ assert.match(html,/PERCLOS · 60 s<b>—/);
 });
 
 test("unknown gaze and unreliable eyes never render a synthetic eye in live mode", () => {
