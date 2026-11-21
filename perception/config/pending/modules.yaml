@@ -1,0 +1,94 @@
+# PENDING module configuration (not loaded by the runtime yet).
+#
+# Each section is the default of one module's config dataclass, built with `<X>Config.from_mapping(section)`:
+#   hands        -> perception.hands.HandsConfig
+#   head_answer  -> perception.driver_cam.head_answer.HeadAnswerConfig
+#   phone        -> perception.phone.PhoneConfig
+#   identity     -> perception.identity.IdentityConfig
+#   monitoring   -> perception.monitoring.CameraMonitorConfig
+# The modules never read a yaml file themselves. At integration these sections move into
+# perception/config/perception.yaml (+ perception/config.py validation); keys that already exist there are marked
+# "(= perception.yaml <key>)" and must keep ONE value. The tests check that this file equals the dataclass defaults.
+# Model paths are relative to the repo root. Values marked "start" are starting values to tune live (Sunday).
+
+hands:                         # MediaPipe Gesture Recognizer, AS9 / AP6, hand positions for the phone geometry
+  model: perception/models/gesture_recognizer.task   # (= perception.yaml models.gesture_recognizer)
+  num_hands: 2
+  min_hand_detection_conf: 0.5
+  min_hand_presence_conf: 0.5
+  min_tracking_conf: 0.5
+  background_hz: 2.0           # outside the dialog window: hand positions (phone geometry, lap pattern), raised hand
+  dialog_hz: 0.0               # inside the dialog window: 0 = every frame (the maximum rate)
+  allowed: [Thumb_Up, Thumb_Down, Open_Palm]         # (= perception.yaml gesture.allowed)
+  min_score: 0.60              # (= perception.yaml gesture.min_score)
+  min_ms: 500.0                # gesture must be held this long (= perception.yaml gesture.min_duration_s x 1000)
+  dropout_ms: 200.0            # a run without the gesture is tolerated this long (recognizer flicker to "None")
+  max_gap_s: 0.7               # observations further apart break the hold (background rate 2 Hz -> 0.5 s period)
+  raised_margin: 0.5           # palm above face bottom + 0.5 x face height = raised hand (AS9 outside the window)
+  raised_y_frac: 0.6           # no face box: palm above 60 % of the frame height = raised (start)
+  raised_boost_s: 2.0          # a raised hand outside the window switches to the dialog rate this long (hold timing)
+
+head_answer:                   # AS8 yes / no from the head, only inside an open dialog window
+  slow_tau_s: 1.0              # slow mean (EMA time constant) subtracted from yaw and pitch; a step / slow drop
+                               # decays monotonically towards it and never crosses zero
+  min_amplitude_deg: 6.0       # peak-to-peak; zero crossings use a Schmitt trigger at +-3 deg (= perception.yaml
+                               # head.answer.min_amplitude_deg)
+  min_crossings: 2             # (= perception.yaml head.answer.min_reversals)
+  window_s: 1.2                # (= perception.yaml head.answer.window_s)
+  dominance_ratio: 1.5         # both axes oscillating: the answer axis needs 1.5 x the RMS of the other
+  max_closed_ms: 400.0         # eyes closed longer than this reset the count (a blink does not; a fatigue nod does)
+  answer_hold_s: 1.5           # a detected answer is reported this long, then counting restarts
+  max_gap_s: 0.25              # no angles for longer (face lost, implausible pose) -> state reset
+
+phone:                         # AS7 / AP4: YOLO26 class 67 + geometry + 3-of-5 vote
+  class_id: 67                 # COCO "cell phone" (= perception.yaml phone.class_id)
+  conf_min: 0.40               # (= perception.yaml phone.conf_min)
+  device: auto                 # auto | cpu | gpu (= perception.yaml models.phone_device; auto = gpu if CUDA)
+  cpu_model: perception/models/yolo26n_416.onnx      # n at 416 on CPU (docs/perception.md §3.6)
+  cpu_imgsz: 416
+  gpu_model: perception/models/yolo26s_640.onnx      # s at 640 on GPU
+  gpu_imgsz: 640
+  cpu_providers: [OpenVINOExecutionProvider, CPUExecutionProvider]
+  rate_hz: 5.0                 # (= perception.yaml rates.phone_hz)
+  vote_window: 5               # (= perception.yaml phone.vote_window)
+  vote_min: 3                  # (= perception.yaml phone.vote_min)
+  near_face_ratio: 1.2         # phone centre within 1.2 x face width of the face centre -> near_face / call
+                               # (= perception.yaml phone.near_face_ratio)
+  hand_radius_ratio: 0.6       # palm / wrist within 0.6 x face width of the box -> phone in that hand (start)
+  foreign_dx_ratio: 1.5        # on the passenger side, > 1.5 x face width from the face centre, not near the face
+                               # -> not the driver's phone (does not vote) (start)
+  passenger_side: right        # the passenger's side in the DRIVER's terms (left-hand-drive car)
+  mirrored: false              # the camera image is not mirrored: image right = the driver's left
+  lap_conf: 0.40               # confidence reported for source "lap_pattern" (= perception.yaml phone.lap_pattern.conf)
+
+identity:                      # AS10 / AP1: YuNet + SFace, per-camera embeddings profiles/<name>/face_<camera>.npy
+  yunet_model: perception/models/face_detection_yunet_2023mar.onnx   # (= perception.yaml models.yunet)
+  sface_model: perception/models/face_recognition_sface_2021dec.onnx # (= perception.yaml models.sface)
+  cosine_threshold: 0.363      # OpenCV's SFace value (= perception.yaml identity.cosine_threshold)
+  score_threshold: 0.80        # YuNet (= perception.yaml identity.yunet_score_threshold)
+  nms_threshold: 0.30          # YuNet (= perception.yaml identity.yunet_nms_threshold)
+  top_k: 50
+  min_face_px: 60.0            # smaller YuNet boxes are ignored
+  recheck_s: 10.0              # re-identify every ~10 s while the face stays (= perception.yaml rates.identity_recheck_s)
+  retry_s: 1.0                 # Face Landmarker sees a face but YuNet did not: retry this soon
+  lost_s: 1.0                  # face absent this long -> the next face is a NEW face (identified at once)
+  enroll_frames: 10            # (= perception.yaml identity.enroll_frames)
+  enroll_interval_s: 0.2       # at least this between two enrollment frames (different expressions / poses)
+  enroll_min_face_px: 120.0    # enrollment needs a closer face than recognition
+  enroll_min_sharpness: 40.0   # variance of the Laplacian on the 112x112 aligned crop (start)
+  enroll_min_consistency: 0.5  # every enrolled frame must have cosine >= this to the mean, else the enrollment fails
+
+monitoring:                    # AS12 / AP5: monitoring_ok + reason
+  no_frames_s: 1.0             # no frame for this long -> no_frames
+  frozen_s: 1.0                # identical frames this long -> frozen (= perception.yaml monitoring.frozen_frame_s)
+  frozen_pixel_diff: 0.5       # (= perception.yaml monitoring.frozen_pixel_diff)
+  face_lost_s: 2.0             # (= perception.yaml monitoring.face_lost_s)
+  dark_luma: 60.0              # mean luma below this = dark (= perception.yaml monitoring.dark_luma)
+  occluded_std_max: 8.0        # luma std below this = uniform image (lens covered) (start, synthetic only)
+  blur_var_min: 20.0           # Laplacian variance (160 px wide image) below this = blurred (start, synthetic only)
+  mono_chroma_max: 2.0         # mean |R-G|,|B-G| below this = monochrome (IR night mode) (start)
+  mode_switch_luma_delta: 50.0 # luma jump between consecutive frames, image still structured -> mode_switch (start)
+  mode_switch_hold_s: 1.5      # monitoring_ok=false this long after a day/night switch (0 = never)
+  min_face_width_px: 250.0     # R-FL3: below this face_too_small + reduced confidence, NOT monitoring_ok=false
+                               # (= perception.yaml face.min_face_width_px)
+  analysis_width: 160          # luma / std / blur / chroma measured on a frame resized to this width

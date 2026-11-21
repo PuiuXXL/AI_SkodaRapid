@@ -13,7 +13,7 @@ perception/models/
 *.task
 
 # Biometric data and calibration (generated at runtime)
-profiles/*/face.npy
+profiles/*/face*.npy
 profiles/*/calibration.json
 
 # Media
