@@ -31,7 +31,7 @@ from perception.driver_cam.head import HeadOutput, HeadTracker
 from perception.driver_cam.mouth import MouthOutput, MouthTracker
 from perception.features import FeatureFrame
 
-__all__ = ["DriverEyes", "DriverFace", "DriverGaze", "DriverHead", "DriverPipeline", "DriverState"]
+__all__ = ["ClosedEyesLatch", "DriverEyes", "DriverFace", "DriverGaze", "DriverHead", "DriverPipeline", "DriverState"]
 
 
 class _Out(BaseModel):
@@ -121,6 +121,40 @@ class DriverState(_Out):
     perf: dict[str, float]  # detector stage timings in ms
 
 
+class ClosedEyesLatch:
+    """Eyes closed and not visibly reopened since: what the fatigue nod needs.
+
+    With the head pitched down the shut lids often read SQUINT (eval 2026-11-21: 1 of 2 live nods reported), so the
+    eye state of the current frame is not enough. Armed by a closure longer than a blink (``long_closure``: a blink
+    followed by a glance at the lap must not arm it); disarmed only by ``reopen_min_frames`` frames OPEN with the ratio
+    back above ``reopen_ratio`` (SQUINT, UNKNOWN and a lost face keep it); expires ``closed_recent_s`` after the last
+    CLOSED frame.
+    """
+
+    def __init__(self, recent_s: float, reopen_frames: int, reopen_ratio: float) -> None:
+        self.recent_s = recent_s
+        self.reopen_frames = reopen_frames
+        self.reopen_ratio = reopen_ratio
+        self.armed = False
+        self._last_closed: float | None = None
+        self._open_run = 0
+
+    def update(self, t: float, eyes: EyeOutput) -> bool:
+        if eyes.state == "CLOSED":
+            self._last_closed = t
+            self._open_run = 0
+            self.armed = self.armed or eyes.long_closure
+        elif eyes.state == "OPEN" and eyes.ratio is not None and eyes.ratio >= self.reopen_ratio:
+            self._open_run += 1
+            if self._open_run >= self.reopen_frames:
+                self.armed = False
+        else:
+            self._open_run = 0
+        if self.armed and self._last_closed is not None and t - self._last_closed > self.recent_s:
+            self.armed = False
+        return self.armed
+
+
 class DriverPipeline:
     def __init__(
         self,
@@ -134,6 +168,8 @@ class DriverPipeline:
         self.eyes = EyeTracker(cfg.eyes, frame_size, ear_baseline)
         self.head = HeadTracker(cfg.head, cfg.filters)
         self.mouth = MouthTracker(cfg.yawn, cfg.speaking, frame_size)
+        e = cfg.eyes
+        self.closed_latch = ClosedEyesLatch(cfg.head.nod.closed_recent_s, e.reopen_min_frames, e.reopen_ratio)
         g, f = cfg.gaze, cfg.filters.one_euro_gaze
         self.gaze_smoother = GazeSmoother(f.min_cutoff, f.beta, f.d_cutoff, g.max_age_ms)
         self.gaze_features = GazeFeatureBuilder(cfg, frame_size)
@@ -198,8 +234,10 @@ class DriverPipeline:
         eyes = self.eyes.update(ff)
         t1 = time.perf_counter()
         # nodding needs the eye detector's CLOSED verdict: "ratio below reopen_ratio" is also true when looking down
-        # at the lap (the lids follow the gaze), which made every look-down a nod (all 4 sessions, 2026-11-21)
-        head = self.head.update(ff.t, ff.face.head_matrix, eyes.state == "CLOSED")
+        # at the lap (the lids follow the gaze), which made every look-down a nod (all 4 sessions, 2026-11-21). The
+        # latch keeps a real closure counting while the dropped head makes the shut lids read SQUINT
+        closing = self.closed_latch.update(ff.t, eyes) or eyes.state == "CLOSED"
+        head = self.head.update(ff.t, ff.face.head_matrix, closing)
         t2 = time.perf_counter()
         mouth = self.mouth.update(ff.t, ff.face)
         t3 = time.perf_counter()

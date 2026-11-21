@@ -10,6 +10,7 @@ cameras:
   driver:                      # USB webcam (Logi C615, 1080p max), facing the driver only
     enabled: true
     device: "usb:046d:082c"    # Logi C615 (an OpenCV index, path or URL also works)
+    device_name: "C615"        # no usb match -> unique friendly-name substring (null = off)
     backend: auto              # auto | dshow | msmf | v4l2 | any   (Windows: dshow opens MJPG reliably)
     width: 1280
     height: 720
@@ -34,6 +35,7 @@ cameras:
   passenger:                   # USB webcam (Microsoft LifeCam HD-6000, 720p max), facing the front-right seat only
     enabled: true
     device: "usb:045e:076f"    # LifeCam HD-6000
+    device_name: "LifeCam"
     backend: auto
     width: 1280
     height: 720
@@ -51,6 +53,11 @@ cameras:
       gain: null
       auto_white_balance: null
       white_balance_k: null
+  # Selection order per camera: usb selector -> device_name -> (only with dev_fallback) a device no camera claims,
+  # preferring a name containing fallback_name; the driver has priority. A camera still not found is reported
+  # camera_unavailable (no restart loop). The start-up log prints the device table and the assignment.
+  dev_fallback: false          # development only (laptop without the USB cams); the frame says camera_fallback
+  fallback_name: "Integrated"  # DirectShow name of the laptop camera ("Integrated Camera")
 
 models:
   dir: perception/models       # relative to the repo root; gitignored, filled by scripts/download_models.sh
@@ -114,6 +121,9 @@ eyes:                          # docs/perception.md ยง3.2; values from docs/eval
   slow_close_ratio: 0.47       # a SLOW fall counts only below this (2 s closures: 0.42-0.47; a hard squint
                                # hovered at 0.48-0.51). Tuned on ONE session: re-check on every new one
   min_state_frames: 2          # frames below drop_ratio before CLOSED is reported (closed_ms starts at the drop)
+  reopen_min_frames: 2         # a confirmed closure ends only after this many frames in a row above the reopen level:
+                               # one bright frame (landmark jitter) no longer resets closed_ms (diag 2026-11-21)
+  closure_gap_max_ms: 200      # face lost / eyes unreliable this long inside a closure: the closure goes on
   blink_max_ms: 500            # longer than this = closure (separate state), shorter = blink
   plateau_check_ms: 300        # from here on, CLOSED needs ratio < squint band low AND eyeBlink >= blendshape_closed
   blendshape_closed: 0.45      # eyeBlink needed to accept a SLOW fall (drowsy lids); 2 s closures reach ~0.5,
@@ -163,6 +173,10 @@ head:
   nod:                         # fatigue head drop (with eyes closing)
     pitch_drop_deg: 15
     window_s: 1.5
+    closed_recent_s: 2.0       # a closure > blink_max_ms within this long arms the nod: with the head down the shut
+                               # lids often read SQUINT (eval 2026-11-21); only a confirmed reopen disarms it
+    max_gap_s: 0.5             # face lost this long keeps the pitch history (the falling head leaves the tracker)
+    hold_s: 1.0                # a detected nod is reported this long, frames without a face included
   answer:                      # AS8 yes / no, only while the dialog window is open (driver_cam/head_answer.py)
     min_reversals: 2           # zero crossings of the detrended angle within window_s
     window_s: 1.2
@@ -308,7 +322,8 @@ workers:                       # one OS process per camera (docs/perception.md ย
   restart_backoff_max_s: 10.0
   stale_s: 5.0                 # a running process silent this long is hung: kill and restart
   startup_s: 30.0              # before its first frame: DSHOW opens 720p in ~4 s, models load in ~2 s
-  first_frame_timeout_s: 10.0
+  first_frame_timeout_s: 10.0   # no first frame by then (and no open error yet) -> camera_unavailable logged
+  unavailable_report_s: 5.0    # missing camera: its worker logs camera_unavailable this often and never exits
 
 output:
   ws_url: ws://localhost:8000/ws/perception

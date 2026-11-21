@@ -417,6 +417,27 @@ def _with_driver_device(cfg: PerceptionConfig, device: str) -> PerceptionConfig:
     return PerceptionConfig.model_validate(data)  # re-validated: e.g. the same device as the passenger is refused
 
 
+def log_camera_table(cfg: PerceptionConfig, cameras: list[str]) -> str:
+    """Start-up log: every capture device (index, name, VID:PID) and which camera gets it, with the same selection
+    the workers use (perception/capture.py ``select_device``). Returns the table text."""
+    from perception.capture import assignment_rows, list_devices
+
+    rows, assigned = assignment_rows(cfg.cameras, list_devices(), cameras)
+    lines = ["capture devices:", f"  {'idx':>3}  {'name':<44} {'vid:pid':<10} assigned"]
+    lines += [f"  {r['index']:>3}  {r['name'][:44]:<44} {r['vid_pid']:<10} {r['assigned']}" for r in rows]
+    if not rows:
+        lines.append("  (none found)")
+    lines += [f"  {cam}: {how}" for cam, how in assigned.items()]
+    text = "\n".join(lines)
+    log.info(text)
+    for cam, how in assigned.items():
+        if how.startswith("NOT FOUND"):
+            log.warning("camera_unavailable at start", extra={"fields": {"camera": cam}})
+        elif how.startswith("fallback"):
+            log.warning("camera on the development fallback", extra={"fields": {"camera": cam, "device": how}})
+    return text
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--print", dest="print_frames", action="store_true", help="PerceptionFrame JSON lines on stdout")
@@ -444,6 +465,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.passenger == "on" or (args.passenger == "auto" and cfg.cameras.passenger.enabled):
         cameras.append("passenger")
     synthetic = args.synthetic or args.source == "synthetic"
+    if not synthetic:
+        log_camera_table(cfg, cameras)
     options = WorkerOptions(synthetic=synthetic, models=not args.no_models, log_level="WARNING")
     app = Perception(
         cfg,

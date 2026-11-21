@@ -14,6 +14,10 @@
   ``usb:<vid>:<pid>[:<serial>][@<port>]`` resolved at every open (:func:`resolve_device`; DirectShow enumeration on
   Windows, sysfs on Linux), so the camera keeps its role when indices shift after re-plugging; ``@<port>`` tells two
   cameras of the same model apart (``scripts/camera_probe.py`` prints the ports).
+* Selection (:func:`select_device`, used by the camera workers at every open): the ``usb:`` selector, then
+  ``cameras.<name>.device_name`` (unique friendly-name substring), then, only with ``cameras.dev_fallback``, a device no
+  camera claims (preferring ``cameras.fallback_name``; the driver first). Deterministic, so the start-up table
+  (:func:`assignment_rows`, printed by perception/main.py) shows what the workers will open.
 """
 
 from __future__ import annotations
@@ -33,13 +37,15 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 
-from perception.config import CameraConfig, CameraControls
+from perception.config import CameraConfig, CameraControls, CamerasConfig
 from perception.log import get_logger
 from perception.perf import RateMeter
 
 __all__ = [
+    "CAMERA_NAMES",
     "CameraDevice",
     "CameraOpenError",
+    "CameraSelection",
     "CaptureInfo",
     "CaptureStats",
     "DShowControl",
@@ -48,6 +54,7 @@ __all__ = [
     "LatestFrameCamera",
     "OpenCVSource",
     "SyntheticSource",
+    "assignment_rows",
     "decode_synthetic_id",
     "dshow_apply",
     "dshow_controls",
@@ -59,6 +66,7 @@ __all__ = [
     "normalize_fourcc",
     "parse_usb_selector",
     "resolve_device",
+    "select_device",
     "to_bgr8",
 ]
 
@@ -90,6 +98,8 @@ class CaptureInfo:
     raw_format: str = "uint8x3"  # dtype x channels of the frame as the backend delivered it, before to_bgr8
     mono: bool = False  # grey image (mono format, or a camera that switched to night / IR mode)
     device: str = ""  # the device actually opened (index / path), after resolving a usb: selector
+    via: str = ""  # how it was selected: usb / name / fallback / index / path ("" = resolve_device, no selection)
+    device_name: str = ""  # friendly name of the selected device, when known
 
 
 @dataclass(frozen=True)
@@ -102,6 +112,7 @@ class CaptureStats:
     dropped: int
     reconnects: int
     read_failures: int
+    last_error: str | None = None  # last open failure (None once a frame source is open)
 
 
 class FrameSource(Protocol):
@@ -679,6 +690,145 @@ def resolve_device(device: int | str, backend: str = "auto") -> int | str:
     return found.path if _PLATFORM.startswith("linux") else found.index
 
 
+# --- camera selection ----------------------------------------------------------------------------------
+
+CAMERA_NAMES: tuple[str, ...] = ("driver", "passenger")  # fallback priority: the driver camera first
+
+
+@dataclass(frozen=True)
+class CameraSelection:
+    """What a camera opens: ``device`` for ``cv2.VideoCapture`` and how it was found."""
+
+    device: int | str
+    via: str  # usb / name / fallback / index / path
+    matched: CameraDevice | None = None
+
+
+def _open_target(dev: CameraDevice) -> int | str:
+    return dev.path if _PLATFORM.startswith("linux") else dev.index
+
+
+def _explicit(device: int | str) -> CameraSelection | None:
+    """An OpenCV index or a path / URL: used as is (``--device``)."""
+    if isinstance(device, int) or device.isdigit():
+        return CameraSelection(int(device), "index")
+    if parse_usb_selector(split_port(device)[0]) is None:
+        return CameraSelection(device, "path")
+    return None
+
+
+def _by_name(cfg: CameraConfig, devices: Sequence[CameraDevice]) -> list[CameraDevice]:
+    if not cfg.device_name:
+        return []
+    key = cfg.device_name.lower()
+    return [d for d in devices if key in d.name.lower()]
+
+
+def _claimed(cfg: CameraConfig, devices: Sequence[CameraDevice]) -> CameraDevice | None:
+    """The device a camera finds without the fallback (usb selector, then a unique name match), or None."""
+    if isinstance(cfg.device, str) and _explicit(cfg.device) is None:
+        try:
+            return match_device(cfg.device, devices)
+        except CameraOpenError:
+            pass
+    hits = _by_name(cfg, devices)
+    return hits[0] if len(hits) == 1 else None
+
+
+def _fallback(name: str, cameras: CamerasConfig, devices: Sequence[CameraDevice]) -> CameraDevice | None:
+    """Development fallback: the cameras that need one (driver first) take the free devices in order, the ones whose
+    name contains ``fallback_name`` first. A free device = not claimed by any enabled camera (selector, name or an
+    explicit index)."""
+    taken: set[int] = set()
+    needing: list[str] = []
+    for cam in CAMERA_NAMES:
+        cfg: CameraConfig = getattr(cameras, cam)
+        if not cfg.enabled:
+            continue
+        explicit = _explicit(cfg.device)
+        if explicit is not None:
+            if isinstance(explicit.device, int):
+                taken.add(explicit.device)
+            continue
+        hit = _claimed(cfg, devices)
+        if hit is not None:
+            taken.add(hit.index)
+        else:
+            needing.append(cam)
+    free = [d for d in devices if d.index not in taken]
+    if cameras.fallback_name:
+        key = cameras.fallback_name.lower()
+        preferred = [d for d in free if key in d.name.lower()]
+        free = preferred + [d for d in free if d not in preferred]
+    if name not in needing:
+        return None
+    pos = needing.index(name)
+    return free[pos] if pos < len(free) else None
+
+
+def select_device(name: str, cameras: CamerasConfig, devices: Sequence[CameraDevice]) -> CameraSelection:
+    """The device camera ``name`` opens: explicit index / path, ``usb:`` selector, ``device_name``, then (only with
+    ``cameras.dev_fallback``) the development fallback.
+
+    Raises:
+        CameraOpenError: the camera is not there (the worker reports ``camera_unavailable`` and retries).
+    """
+    cfg: CameraConfig = getattr(cameras, name)
+    explicit = _explicit(cfg.device)
+    if explicit is not None:
+        return explicit
+    reasons: list[str] = []
+    try:
+        hit = match_device(str(cfg.device), devices)
+        return CameraSelection(_open_target(hit), "usb", hit)
+    except CameraOpenError as exc:
+        reasons.append(str(exc))
+    if cfg.device_name:
+        hits = _by_name(cfg, devices)
+        if len(hits) == 1:
+            return CameraSelection(_open_target(hits[0]), "name", hits[0])
+        reasons.append(f"device_name {cfg.device_name!r} matches {len(hits)} devices")
+    if cameras.dev_fallback:
+        fb = _fallback(name, cameras, devices)
+        if fb is not None:
+            log.warning(
+                "camera not found: using the development fallback device",
+                extra={"fields": {"camera": name, "device": fb.index, "name": fb.name}},
+            )
+            return CameraSelection(_open_target(fb), "fallback", fb)
+        reasons.append("no free device for the fallback")
+    raise CameraOpenError(f"{name}: camera not found ({'; '.join(reasons)})")
+
+
+def assignment_rows(
+    cameras: CamerasConfig, devices: Sequence[CameraDevice], names: Sequence[str]
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Start-up table: one row per device (index, name, vid:pid, assigned camera + how) and, per camera in ``names``,
+    what it opens or why it does not ("not found: ...")."""
+    assigned: dict[str, str] = {}
+    by_index: dict[int, str] = {}
+    for cam in names:
+        try:
+            sel = select_device(cam, cameras, devices)
+        except CameraOpenError as exc:
+            assigned[cam] = f"NOT FOUND -> camera_unavailable ({exc})"
+            continue
+        target = sel.matched.index if sel.matched is not None else sel.device
+        assigned[cam] = f"{sel.via}: {sel.device}" + (f" ({sel.matched.name})" if sel.matched is not None else "")
+        if isinstance(target, int):
+            by_index[target] = f"{cam} ({sel.via})"
+    rows = [
+        {
+            "index": d.index,
+            "name": d.name,
+            "vid_pid": f"{d.vid}:{d.pid}" if d.vid and d.pid else "?",
+            "assigned": by_index.get(d.index, "-"),
+        }
+        for d in devices
+    ]
+    return rows, assigned
+
+
 # --- OpenCV source -------------------------------------------------------------------------------------
 
 _BACKENDS: dict[str, int] = {
@@ -751,9 +901,14 @@ class OpenCVSource:
     Frames are normalised by :func:`to_bgr8`, so mono formats (GREY / Y8 / Y16) arrive as 3-channel BGR uint8.
     """
 
-    def __init__(self, cfg: CameraConfig, name: str = "camera") -> None:
+    def __init__(
+        self, cfg: CameraConfig, name: str = "camera", resolver: Callable[[], CameraSelection] | None = None
+    ) -> None:
+        """``resolver``: picks the device at every open (the workers use :func:`select_device`); None = the config
+        ``device`` through :func:`resolve_device`."""
         self._cfg = cfg
         self._name = name
+        self._resolver = resolver
         self._cap: cv2.VideoCapture | None = None
         self._first: Image | None = None
         self._bits: int = 8  # significant bits of a 16-bit mono stream, kept across frames (stable brightness)
@@ -789,7 +944,12 @@ class OpenCVSource:
 
     def open(self) -> CaptureInfo:
         cfg = self._cfg
-        device = resolve_device(cfg.device, cfg.backend)
+        if self._resolver is not None:
+            sel = self._resolver()
+            device, via = sel.device, sel.via
+            label = sel.matched.name if sel.matched is not None else ""
+        else:
+            device, via, label = resolve_device(cfg.device, cfg.backend), "", ""
         cap = self._open_capture(device)
         # Never set FOURCC / size again here: on DirectShow a second FOURCC set resets the stream to YUY2.
         cap.set(cv2.CAP_PROP_BUFFERSIZE, cfg.buffer_size)
@@ -818,6 +978,8 @@ class OpenCVSource:
             raw_format=_raw_format(raw_arr),
             mono=is_mono(img),
             device=str(device),
+            via=via,
+            device_name=label,
         )
         requested = (cfg.fourcc, cfg.width, cfg.height, float(cfg.fps))
         obtained = (info.fourcc, info.width, info.height, round(info.fps, 2))
@@ -946,9 +1108,20 @@ class LatestFrameCamera:
                 ...
     """
 
-    def __init__(self, cfg: CameraConfig, name: str = "driver", source: FrameSource | None = None) -> None:
+    def __init__(
+        self,
+        cfg: CameraConfig,
+        name: str = "driver",
+        source: FrameSource | None = None,
+        *,
+        quiet_open_errors: bool = False,
+    ) -> None:
+        """``quiet_open_errors``: open failures go to DEBUG and :attr:`CaptureStats.last_error`; the owner reports
+        them at its own pace (the camera workers: ``camera_unavailable`` every ``workers.unavailable_report_s``)."""
         self._cfg = cfg
         self._name = name
+        self._quiet_open_errors = quiet_open_errors
+        self._last_error: str | None = None
         self._source: FrameSource = source if source is not None else OpenCVSource(cfg, name)
         self._cond = threading.Condition()
         self._stop = threading.Event()
@@ -1025,6 +1198,7 @@ class LatestFrameCamera:
                 dropped=self._dropped,
                 reconnects=self._reconnects,
                 read_failures=self._read_failures,
+                last_error=self._last_error,
             )
 
     # internals ----------------------------------------------------------------------------------------
@@ -1044,7 +1218,9 @@ class LatestFrameCamera:
                     try:
                         info = self._source.open()
                     except Exception as exc:
-                        log.warning(
+                        with self._cond:
+                            self._last_error = str(exc)
+                        (log.debug if self._quiet_open_errors else log.warning)(
                             "camera open failed",
                             extra={
                                 "fields": {
@@ -1059,6 +1235,7 @@ class LatestFrameCamera:
                     with self._cond:
                         self._connected = True
                         self._info = info
+                        self._last_error = None
                         if opened_once:
                             self._reconnects += 1
                     opened_once = True
@@ -1073,6 +1250,8 @@ class LatestFrameCamera:
                                 "width": info.width,
                                 "height": info.height,
                                 "fps": info.fps,
+                                "device": info.device,
+                                "via": info.via,
                                 "reconnects": self._reconnects,
                             }
                         },

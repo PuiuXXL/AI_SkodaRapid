@@ -69,6 +69,14 @@ Inside each camera process, capture runs in its own thread and keeps **only the 
   `--synthetic`), so the capture logic is tested without a camera.
 - **Backend:** from yaml; `auto` = `CAP_V4L2` on Linux, `CAP_DSHOW` on Windows (DSHOW honours MJPG + 720p;
   MSMF often ignores the FOURCC).
+- **Camera selection** (`capture.select_device`, at every open, 2026-11-21): (1) the `usb:<vid>:<pid>` selector,
+  (2) `cameras.<cam>.device_name` (unique friendly-name substring: `C615`, `LifeCam`), (3) only with
+  `cameras.dev_fallback: true` (default **false**) a device no enabled camera claims, the ones containing
+  `cameras.fallback_name` (`Integrated`) first; the **driver has priority**, the passenger takes the fallback only when
+  the driver does not need it. A fallback camera is logged as a warning and the frame says
+  `monitoring_reason = "camera_fallback"`. An explicit index / path (`--device 0`) is used as is. The selection is
+  deterministic, so `perception.main` prints at start a table of every device (index, name, VID:PID) and which camera
+  gets it, exactly what the workers then open.
 
 ### 2.1 Camera controls (fixed exposure, focus, white balance, 50 Hz)
 
@@ -107,6 +115,11 @@ python scripts/ws_sink.py --show --send debug      # stand-in for core's /ws/per
 - **Supervision:** a dead process, or one silent for `workers.stale_s` after its first frame (`workers.startup_s`
   before it: DSHOW opens 720p in ~4 s, the models load in ~2 s), is restarted with backoff 1, 2, 4 ... 10 s; the
   camera is `available = false` while it is down. Rates and debug are re-sent to the new process.
+- **A missing camera is not a crash** (2026-11-21): the worker used to exit with code 2 when no first frame came in
+  10 s, and the supervisor restarted it forever. Now the process stays up, sends a `camera_unavailable` heartbeat
+  every 0.5 s (keeps the supervisor fed), logs `camera_unavailable` every `workers.unavailable_report_s` (5 s; open
+  errors from the capture thread go to DEBUG, the worker reports them), keeps retrying the selection, and loads the
+  models only when the first frame arrives. The frame reports the camera unavailable meanwhile.
 - **Main process (asyncio):** polls the workers, merges the newest results into a `PerceptionFrame` every
   `1 / output.publish_hz` s (`perception/contract.py`), validates it, sends it to core, prints it with `--print`.
 - **WebSocket:** reconnect with backoff (`ws_reconnect_s` doubling to `ws_reconnect_max_s`, +-20 % jitter); the
@@ -193,7 +206,12 @@ Blinks themselves were sharp: 180 ms at 50 % depth in the raw EAR, 192 ms after 
     counts from the interpolated drop, not from the confirmation;
   - **slow fall** (drowsy lids) counts only deep (`slow_close_ratio` 0.47) with the lids meeting
     (`eyeBlink` >= `blendshape_closed` 0.45, or >= `blendshape_strong` 0.65 alone), never while relaxed;
-  - **end**: r back above half the depth of the episode (the same 50 % rule as the duration);
+  - **end**: r back above half the depth of the episode (the same 50 % rule as the duration) for
+    `reopen_min_frames` (2) frames **in a row** (reopen hysteresis, 2026-11-21): one bright frame no longer ends a
+    closure and restarts `closed_ms` from 0; the duration spans the first down to the last up crossing;
+  - **gaps**: frames without a face / with unreliable eyes inside a confirmed closure keep it going for up to
+    `closure_gap_max_ms` (200): state `CLOSED`, `closed_ms` counting and `reliable` held (P2's microsleep rule reads
+    `eyes.reliable and closed_ms`); a longer gap ends it as an event at its last valid frame;
   - **plateau check** (from `plateau_check_ms`, 300): the episode stays closed only while the lids look closed
     (r < squint band low and `eyeBlink` >= `blendshape_closed`, or `eyeBlink` >= `blendshape_strong`); otherwise
     it was a fast squint (cancelled, no event) or a closure that opened into a squint (ends there).
@@ -281,7 +299,20 @@ closed eyes as open in the venue light, set `eyes.cnn.enabled: false` (safety: a
 - **Slow events need a minimum duration:**
   - yawn = `jawOpen` above its threshold for **≥ 1.5 s**;
   - gesture held for **≥ 0.5 s**.
-- `nodding` (fatigue head drop): pitch drops by > 15° in < 1.5 s while the eyes are closing.
+- `nodding` (fatigue head drop): raw pitch drops by > 15° in < 1.5 s while the eyes are closed **or were in a
+  closure that has not visibly reopened** (`ClosedEyesLatch`, perception/driver_cam/pipeline.py, 2026-11-21):
+  - why: with the head pitched down the shut lids often read SQUINT, so "CLOSED on this frame" missed 1 of 2 live
+    nods (eval 2026-11-21); the detector never required open eyes, it required CLOSED exactly when the eye tracker
+    stops giving it;
+  - armed by a closure longer than a blink (`long_closure`; a blink followed by a glance at the lap must not arm it),
+    disarmed only by `reopen_min_frames` OPEN frames with r >= `reopen_ratio` (SQUINT / UNKNOWN / no face keep it),
+    expires `head.nod.closed_recent_s` (2 s) after the last CLOSED frame;
+  - the falling head often leaves the face tracker: gaps up to `head.nod.max_gap_s` (0.5 s) keep the pitch history,
+    a pitch beyond the plausible limit **downwards** (yaw / roll plausible) still feeds it, and a detected nod is held
+    `head.nod.hold_s` (1 s), frames without a face included;
+  - limitation: a fast nod where the eyes close **with** the fall (no closure may start while the head moves) does
+    not arm the latch; `closed_ms` and PERCLOS stay P2's primary fatigue signals. Verified on synthetic sequences only
+    (the labelled live session with nods was not kept).
 - **Head answer** (`head.answer`), only while core has the dialog window open:
   - ≥ 2 direction reversals in < 1.2 s, with the eyes open;
   - pitch reversals = yes, yaw reversals = no.
@@ -547,6 +578,7 @@ CONTRACT: driver.face_too_small, bool (default false), P1, R-FL3: fața sub 250 
 CONTRACT: driver.monitoring_ok, bool (default true), P1, camera șoferului vede fața; sursa pentru safety.monitoring_ok și regula C7
 CONTRACT: driver.monitoring_reason, "camera_unavailable"|"camera_frozen"|"camera_covered"|"face_lost"|null (default null), P1, de ce nu mai vede camera; C7 poate spune „Nu te mai văd” cu motivul
 CONTRACT: passenger.monitoring_reason, același tip (default null), P1, de ce camera pasagerului nu-l vede (AP5); passenger.present=false singur nu spune motivul
+CONTRACT: driver.monitoring_reason / passenger.monitoring_reason, valoare nouă "camera_fallback" (string liber, nu e încă în MONITORING_REASONS), P1, camera rulează pe camera de rezervă de dezvoltare (cameras.dev_fallback), nu pe cea configurată
 CONTRACT: driver.head.yaw / pitch / roll, float|null (default null), P1, null când fața lipsește sau unghiurile nu sunt plauzibile; 0 ar însemna „drept înainte”
 CONTRACT: perf.cameras.<cam>.available, bool (default true), P1, procesul camerei rulează și livrează cadre (J1)
 CONTRACT: perf.degrade_level, int (default 0), P1, pasul curent al regulii de degradare (J1, plan §8)

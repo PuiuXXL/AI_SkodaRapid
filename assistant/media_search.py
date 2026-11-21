@@ -78,11 +78,12 @@ _NEXT = ("altceva", "alta", "altele", "altul", "niciuna", "niciunul", "nici una"
 _CANCEL = ("lasa", "stop", "anuleaza", "gata", "nimic", "renunta", "las o", "nu mai vreau")
 
 # --- fallback request detection (no LLM) ------------------------------------------------------------------------
-_REQUEST_VERBS = frozenset({"pune", "puneti", "cauta", "cautati", "dami", "vreau", "porneste", "play", "asculta",
-                            "ascultam", "baga"})
+_REQUEST_VERBS = frozenset({"pune", "puneti", "pui", "cauta", "cautati", "dami", "vreau", "porneste", "play",
+                            "asculta", "ascultam", "baga"})
+_MUSIC_NOUNS = frozenset({"muzica", "melodie", "melodia", "piesa", "cantec", "ceva"})
 _MEDIA_NOUNS = frozenset({"muzica", "melodie", "melodia", "piesa", "piese", "cantec", "cantece", "podcast",
                           "podcastul", "playlist", "mix", "album", "ceva"})
-_QUERY_DROP = frozenset({"pune", "puneti", "cauta", "cautati", "da", "mi", "dami", "vreau", "as", "vrea", "porneste",
+_QUERY_DROP = frozenset({"pune", "puneti", "pui", "sa", "cauta", "cautati", "da", "mi", "dami", "vreau", "as", "vrea", "porneste",
                          "play", "asculta", "ascultam", "baga", "te", "rog", "imi", "niste", "ceva", "un", "o", "pe",
                          "youtube", "copilot", "drivemate", "drive", "mate", "si", "mie", "noua"})
 
@@ -337,6 +338,12 @@ def media_request(text: str) -> Optional[tuple[str, Kind]]:
     if not query or query in ("muzica", "melodie", "piesa"):
         return None
     return query, kind
+
+
+def wants_music(text: str) -> bool:
+    """A plain "pune muzică" / "vreau să pui muzică" with no wish (the catalog answers it, no search)."""
+    tokens = set(normalize(text).replace("da mi", "dami").replace("pune mi", "pune").split())
+    return bool(_REQUEST_VERBS & tokens) and bool(_MUSIC_NOUNS & tokens)
 
 
 # =============================================================================================================
