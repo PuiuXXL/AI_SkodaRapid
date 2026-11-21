@@ -32,7 +32,7 @@ safety:
   escalation:                   # C2: discrete signal (event visual_cue) -> voice -> alarm, for P2 distractions
     voice_after_ms: 1500        # still distracted this long after the visual cue -> voice
     alarm_after_ms: 3000        # still distracted this long after the visual cue -> alarm
-    cooldown_s: 10              # after an episode ends, the next visual cue waits this long (no nagging)
+    cooldown_s: 10              # the same spoken warning is not repeated within this (the cue and the alarm always fire)
 
   monitoring:                   # C7: "Nu te mai văd, monitorizarea e întreruptă"
     lost_after_ms: 500          # driver.monitoring_ok=false this long -> announce (P1 already waits face_lost_s=2 s)

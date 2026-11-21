@@ -3,7 +3,8 @@
 :class:`Safety` wires the rules into the engine:
 
 * the SOS machine (C3, C4, C5) runs on every PerceptionFrame (fast path) and on every tick (timers);
-* the monitoring rule (C7) and the arbiter (C1, C8 veto) run on every tick;
+* the distraction escalation (C2), the monitoring rule (C7), the A/B counter (B8) and the arbiter (C1, C8 veto) run
+  on every tick;
 * the browser's ``alarm_played`` gives the alarm latency, its ``speech`` the spoken answers.
 
 SOS channels: the DriveMate Contact page when P4's ``integrations.contact_app`` exists; ``call`` (Twilio) and
@@ -16,9 +17,11 @@ import importlib
 import logging
 from typing import TYPE_CHECKING, Any
 
+from core.ab_baseline import AbBaseline
 from core.dialog_window import DialogWindow
 from core.safety.alarm import Alarms
 from core.safety.arbiter import Arbiter
+from core.safety.distraction import DistractionRule
 from core.safety.monitoring import MonitoringRule
 from core.safety.sos import SosChannel, SosMachine
 from shared.contracts import SosReport, State, UiAlarmPlayed, UiSpeech
@@ -56,8 +59,11 @@ class Safety:
         self.dialog = DialogWindow(engine)
         self.arbiter = Arbiter(engine)
         self.alarms = Alarms(engine)
+        self.ab = AbBaseline(engine)
         channels = default_sos_channels() if sos_channels is None else sos_channels
         self.sos = SosMachine(engine, self.arbiter, self.alarms, self.dialog, channels)
+        self.sos.ab = self.ab
+        self.distraction = DistractionRule(engine, self.arbiter, self.alarms, self.ab)
         self.monitoring = MonitoringRule(engine, self.arbiter)
         engine.add_frame_listener(self.sos.on_frame)
         engine.add_browser_listener(self.on_browser)
@@ -73,9 +79,11 @@ class Safety:
     def on_tick(self, state: State, now: float) -> None:
         self.dialog.tick(state, now)
         self.sos.tick(state, now)
+        self.distraction.tick(state, now)
         self.monitoring.tick(state, now)
+        self.ab.tick(state, now)
         self.arbiter.tick(state, now)
 
     def reset(self, now: float) -> None:
-        for part in (self.dialog, self.arbiter, self.alarms, self.sos, self.monitoring):
+        for part in (self.dialog, self.arbiter, self.alarms, self.sos, self.distraction, self.monitoring, self.ab):
             part.reset(now)

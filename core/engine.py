@@ -118,18 +118,23 @@ class Engine:
 
     def say(self, clip_id: str | None, text: str, *, to: str = "driver", is_question: bool = False,
             expects: str | None = None, prefix: str = "c") -> str:
-        """Play a fixed text through P3's voice: the pre-generated clip when there is one, else the browser's TTS.
+        """Play a fixed text through P3's voice. Returns the utterance id (it comes back in ``speak_done``).
 
-        Returns the utterance id (it comes back in ``speak_done``).
+        The pre-generated clip when it exists (local, instant). Otherwise the text as sentences for P3's TTS
+        (``/tts/<id>.mp3``, edge-tts); P3's player falls back to the browser's own voice when a sentence cannot be
+        fetched. A ``speak`` with neither a clip nor sentences would be silent in P3's player.
         """
-        from core.clips import clip_url  # here, not at the top: clips.py reads P3's clips.json once
+        from core import clips  # here, not at the top: clips.py reads P3's clips.json once
 
         self._utterance_counter += 1
         utterance_id = f"{prefix}{self._utterance_counter}"
-        message = UiSpeak.model_validate({"id": utterance_id, "to": to, "is_question": is_question,
-                                          "expects": expects, "text": text,
-                                          "clip_url": clip_url(clip_id) if clip_id else None})
-        self.hub.broadcast_ui(to_wire(message))
+        message: dict[str, Any] = {"id": utterance_id, "to": to, "is_question": is_question, "expects": expects,
+                                   "text": text, "clip_url": None, "sentences": []}
+        if clip_id and clips.exists(clip_id):
+            message["clip_url"] = clips.clip_url(clip_id)
+        else:
+            message["sentences"] = tts_sentences(text, utterance_id)
+        self.hub.broadcast_ui(to_wire(UiSpeak.model_validate(message)))
         return utterance_id
 
     # --- events --------------------------------------------------------------------------------------------------
@@ -347,3 +352,20 @@ class Engine:
             "state_seq": self.state.seq,
             "hub": self.hub.stats(),
         }
+
+
+def tts_sentences(text: str, utterance_id: str) -> list[dict[str, str]]:
+    """``text`` as sentences for P3's TTS router (synthesis starts in the background when a loop is running).
+
+    Without P3's module the browser still speaks: a URL that cannot be fetched makes P3's player use the browser's
+    own voice for that sentence.
+    """
+    try:
+        from assistant.contract import Action
+        from assistant.tts import speak_message
+
+        return list(speak_message(Action(type="speak", to="driver", text=text, source="RULE"), utterance_id)
+                    ["sentences"])
+    except Exception:  # P3's code or its dependencies missing on this laptop
+        log.debug("P3's TTS unavailable, the browser will speak %r", text)
+        return [{"id": f"{utterance_id}-local", "text": text, "url": f"/tts/{utterance_id}-local.mp3"}]

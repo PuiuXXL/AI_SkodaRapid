@@ -183,3 +183,32 @@ phone part is wired. A channel that fails is logged as `error: ...` and the othe
 Checked end to end (core + `fake_perception.py` + a client playing the browser): scene 8 (eyes closed -> stop +
 alarm in 31-36 ms detection -> `alarm_played`, "Ești bine?" -> "Da" -> normal, LLM allowed again) and scene 9 (head
 drop -> alarm -> no answer -> "Maria, Andrei nu răspunde..." -> 10 s countdown with re-alarms -> SOS report).
+
+## 4. Distractions (C2) and the A/B counter (B8)
+
+| File | Rule |
+|---|---|
+| `safety/distraction.py` | **C2.** Above `safety.distraction.min_speed_kmh`: `driver.gaze.off_road_ms` past `off_road_ms` (`off_road_ms_high_speed` from `high_speed_kmh`), or `driver.phone.in_use` for `phone_min_ms`. One episode: at once `visual_cue` + a P2 alert (voice and music stop, LLM silent); after `escalation.voice_after_ms` a fixed sentence ("Ochii pe drum." / "Lasă telefonul." / "Lasă telefonul, ți-l citesc eu." when a message is waiting); after `alarm_after_ms` the alarm. The same sentence is not repeated within `cooldown_s`; nothing is said over the SOS; `unknown` zones and low gaze confidence never alert. `distraction_end` logs the time to come back (visual reaction). |
+| `ab_baseline.py` | **B8.** The simple threshold on the same perception, without zones, calibration, context or speed: head past `yaw_deg` / `pitch_deg` for `min_ms` (a mirror check counts), eyes closed `closed_ms`, any phone in the driver camera (the passenger's too). One per episode, one per `cooldown_s`, logged as `naive_alert`. DriveMate's side counts each distraction episode and each microsleep alarm. Both go to `state.ab`. |
+
+Fixed texts without a clip go through P3's TTS (`/tts/...`); P3's player falls back to the browser's voice. Clip ids
+for them are already in `templates.yaml` (`eyes_on_road`, `phone_down`, `phone_read_for_you`): once P3 generates
+those clips they are used automatically.
+
+Checked end to end: scene 2 (mirror glance -> "prag simplu 1 / DriveMate 0") and scene 3 (phone in hand with a
+message waiting -> cue at 1.1 s -> "Lasă telefonul, ți-l citesc eu." -> alarm at 3 s -> phone down -> end; counter
+"prag simplu 2 / DriveMate 1").
+
+## 5. Testing without the others
+
+```bash
+pytest tests/core                                   # the rules, scene by scene, in fake time
+python -m core.main                                 # terminal 1
+python scripts/fake_perception.py                   # terminal 2: keys 1-9 instead of the camera
+python scripts/core_command.py watch                # terminal 3: alarms, voice, events, level, A/B counter
+python scripts/core_command.py scene 8              # director commands until P4's panel has them
+python scripts/core_command.py message Mihai "Unde ești?"
+```
+
+With the dashboard (`cd dashboard && npm run dev`, Google Chrome, Sursă -> "Live · local", "Activează vocea") the
+alarms and the voice are heard; without a browser, `watch --ack-alarms` answers `alarm_played` in its place.

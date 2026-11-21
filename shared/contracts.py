@@ -558,7 +558,9 @@ EVENT_TYPES: tuple[str, ...] = (
 
 #: Events core only logs on ``/ws/ui`` (event log H3, visual cue C2); they never go to the LLM.
 CORE_EVENT_TYPES: tuple[str, ...] = (
-    "visual_cue",             # C2: discrete signal, the UI flashes a light / border
+    "visual_cue",             # C2: discrete signal, the UI flashes a light / border   data: alert, level
+    "distraction_end",        # C2: the distraction is over                  latency_ms = time to come back
+    "naive_alert",            # B8: the simple threshold would have alerted  data: reason
     "alert",                  # an alert was raised                          data: level, alert
     "alarm",                  # C3: the alarm clip was sent                  data: alarm_id, clip
     "alarm_played",           # C3: the browser played it                    latency_ms = alarm_ms, data: on_target

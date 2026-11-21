@@ -53,6 +53,7 @@ class Rig:
         self.safety = Safety(self.engine, sos_channels)
         self.t = T0
         self.fake = FakePerception(now=T0)
+        self.patch: Any = None  # optional (frame dict, t) -> None, to shape what "P1" reports
         self._next_frame = self._next_tick = T0
         self.command("scene", scene)
         self.engine.tick(T0)  # the trip speed is known before the first frame
@@ -75,7 +76,10 @@ class Rig:
                 break
             self.t = t
             if t == self._next_frame:
-                self.engine.on_perception_message(self.fake.frame(t), t)
+                frame = self.fake.frame(t)
+                if self.patch is not None:
+                    self.patch(frame, t)
+                self.engine.on_perception_message(frame, t)
                 self._next_frame += 1.0 / FRAME_HZ
             if t == self._next_tick:
                 self.engine.tick(t)
