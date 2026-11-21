@@ -9,6 +9,7 @@ Usage (from the repo root, core running)::
     python scripts/core_command.py stop                  # stop at the next POI
     python scripts/core_command.py rear ioana child      # declare a rear occupant
     python scripts/core_command.py debug on              # P1's debug overlay
+    python scripts/core_command.py end                   # end of the trip: the trip report (scene 10)
     python scripts/core_command.py reset
     python scripts/core_command.py watch                 # live: alarms, voice, events, level, A/B counter
     python scripts/core_command.py watch --ack-alarms    # also answer alarm_played (no browser open)
@@ -31,7 +32,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 #: name on the command line -> (core cmd, how the arguments become the message)
-SIMPLE = {"start": "start", "pause": "pause", "stop": "stop_at_next_poi", "reset": "reset"}
+SIMPLE = {"start": "start", "pause": "pause", "stop": "stop_at_next_poi", "reset": "reset", "end": "end_trip"}
 
 
 def default_url() -> str:

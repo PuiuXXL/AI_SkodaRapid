@@ -18,6 +18,7 @@ from shared import contracts as c
         (["debug", "on"], {"cmd": "debug", "on": True}),
         (["stop"], {"cmd": "stop_at_next_poi"}),
         (["reset"], {"cmd": "reset"}),
+        (["end"], {"cmd": "end_trip"}),
         (["message", "Mihai", "Unde", "ești?"],
          {"cmd": "fake_message", "value": {"from": "Mihai", "app": "whatsapp", "text": "Unde ești?"}}),
         (["rear", "ioana", "child"], {"cmd": "declare_occupant", "value": {"profile": "ioana", "role": "child"}}),
