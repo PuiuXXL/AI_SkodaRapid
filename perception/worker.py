@@ -33,6 +33,7 @@ persistent state cannot.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import importlib
 import multiprocessing as mp
 import queue
@@ -69,6 +70,8 @@ __all__ = [
     "PipelineModule",
     "WorkerOptions",
     "default_pipeline",
+    "downscale",
+    "process_size",
     "put_latest",
     "resolve_factory",
     "run_camera",
@@ -85,6 +88,25 @@ class WorkerOptions:
     synthetic: bool = False  # SyntheticSource instead of the real camera (tests, CI, --source synthetic)
     models: bool = True  # False: no models (face never present): pipeline / IPC tests without model files
     log_level: str = "WARNING"
+
+
+def process_size(width: int, height: int, process_width: int | None) -> tuple[int, int]:
+    """Size the models work on: the capture size, or ``process_width`` wide (aspect kept, even height) when the
+    capture is wider (1080p capture, 720p processing: the pixel thresholds stay the ones tuned at 720p)."""
+    if not process_width or width <= process_width:
+        return width, height
+    return process_width, round(height * process_width / width / 2.0) * 2
+
+
+def downscale(frame: Frame, width: int, height: int) -> Frame:
+    """One resize per frame (INTER_AREA) for every model; the same frame when it already has that size."""
+    if frame.image.shape[1] == width and frame.image.shape[0] == height:
+        return frame
+    import cv2
+    import numpy as np
+
+    small = np.asarray(cv2.resize(frame.image, (width, height), interpolation=cv2.INTER_AREA), dtype=np.uint8)
+    return dataclasses.replace(frame, image=small)
 
 
 def put_latest(q: Queue[Any], item: Any) -> bool:
@@ -304,6 +326,10 @@ class CalibrationModule:
         log.info("gaze profile loaded", extra={"fields": {"profile": self.profile.name}})
         return True
 
+    def posture_ref(self) -> dict[str, float] | None:
+        """The loaded profile's posture reference (PostureModule reads it every frame; None = none / not calibrated)."""
+        return self.profile.posture_ref if self.profile is not None else None
+
     def follow_identity(self, profile: str | None) -> None:
         """The identity module recognised the driver: switch to their calibration if they have one."""
         if profile:
@@ -516,6 +542,7 @@ def default_pipeline(ctx: CameraContext, perf: PerfTracker) -> ModularPipeline:
         MonitorModule,
         PassengerStateModule,
         PhoneTrackerModule,
+        PostureModule,
     )
 
     extractor = make_extractor(ctx)
@@ -533,6 +560,7 @@ def default_pipeline(ctx: CameraContext, perf: PerfTracker) -> ModularPipeline:
         PhoneTrackerModule(ctx, extractor, perf),
         HeadAnswerModule(ctx, extractor),
         IdentityModule(ctx, extractor, perf, on_profile=calibration.follow_identity if calibration else None),
+        PostureModule(ctx, extractor, reference=calibration.posture_ref if calibration else None),
     ]
     if not ctx.is_driver:
         modules.append(PassengerStateModule(ctx, extractor))
@@ -637,12 +665,13 @@ def run_camera(
         info = cam.stats().info
         if first is None or info is None:
             return  # stopped before the camera ever appeared
+        proc_w, proc_h = process_size(info.width, info.height, cam_cfg.process_width)
         ctx = CameraContext(
             name=name,
             cfg=cfg,
             options=options,
-            width=info.width,
-            height=info.height,
+            width=proc_w,
+            height=proc_h,
             fps=info.fps or cam_cfg.fps,
             backend=info.backend,
             modules=tuple(modules),
@@ -698,6 +727,8 @@ def run_camera(
                     period = 1.0 / face_hz
                     next_due = now + period if now - next_due > period else next_due + period
                 t_wall = time.time() - (time.perf_counter() - frame.t_capture)
+                with perf.time("resize"):
+                    frame = downscale(frame, proc_w, proc_h)
                 inp = FrameInput(frame=frame, t=frame.t_capture - t0, t_wall=t_wall, debug=debug)
                 payload = pipeline.process(inp)
                 perf.add("e2e_worker", (time.perf_counter() - frame.t_capture) * 1000.0)

@@ -220,3 +220,33 @@ def test_enroll_follows_its_camera_and_reports_progress_then_done() -> None:
         assert app.acks[-1]["detail"]["camera"] == "passenger"
     finally:
         app.system.close()
+
+
+def test_async_phone_detection_never_blocks_the_frame() -> None:
+    """YOLO runs in its own thread: a slow detection (here 80 ms) costs the frame loop nothing; its boxes arrive on a
+    later frame and are voted like before."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from perception.phone import PhoneDetections
+
+    class SlowDetector:
+        rate_hz = 0.0
+
+        def should_run(self, t: float) -> bool:
+            return True
+
+        def detect(self, image: Any, t: float) -> PhoneDetections:
+            time.sleep(0.08)
+            return PhoneDetections((), 80.0)
+
+    mod = PhoneTrackerModule(_ctx("driver"), None)
+    mod.detector, mod._pool = SlowDetector(), ThreadPoolExecutor(max_workers=1)
+    ff = FeatureFrame(t=0.0, frame_id=1, camera="driver", face=face())
+    t0 = time.perf_counter()
+    for i in range(5):
+        mod.update(ff, _inp(i / 30.0))
+    assert time.perf_counter() - t0 < 0.05  # 5 frames, none waited for the 80 ms detection
+    time.sleep(0.12)
+    mod.update(ff, _inp(0.2))
+    assert mod.tracker is not None and mod._future is not None  # the next run is already queued
+    mod.close()

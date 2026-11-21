@@ -171,6 +171,7 @@ def _driver_block(cfg: PerceptionConfig, d: Mapping[str, Any], frame: dict[str, 
             squint=e["squint"],
             long_closure=e["long_closure"],
             blink_rate=e["blink_rate"],
+            blink_count=e["blink_count"],
             open_baseline=ref,
         )
         frame["driver"]["phone"].update(

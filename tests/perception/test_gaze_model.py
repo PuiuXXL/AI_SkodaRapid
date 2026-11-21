@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import cv2
 import numpy as np
@@ -119,14 +120,10 @@ def test_smoother_follows_a_glance() -> None:
     assert reached is not None and reached <= 0.2  # 75 % of a mirror glance within 200 ms
 
 
+@pytest.mark.slow
 @pytest.mark.models
-def test_real_model_returns_plausible_angles() -> None:
-    cfg = load_config()
-    if not cfg.models.path(cfg.models.gaze).exists():
-        pytest.skip("MobileGaze model missing (scripts/download_models.sh)")
-    from perception.driver_cam.gaze_model import MobileGazeModel
-
-    model = MobileGazeModel(cfg)
+def test_real_model_returns_plausible_angles(mobilegaze_model: Any) -> None:
+    model = mobilegaze_model
     image = np.full((720, 1280, 3), 128, dtype=np.uint8)
     out = model.estimate(image, (500.0, 200.0, 280.0, 320.0))
     assert out is not None

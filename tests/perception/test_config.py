@@ -27,7 +27,8 @@ def test_default_config_loads() -> None:
     assert isinstance(cfg, PerceptionConfig)
     assert cfg.cameras.driver.enabled
     assert isinstance(cfg.cameras.driver.device, int | str)  # the index depends on the machine (0 laptop, 1 USB)
-    assert (cfg.cameras.driver.width, cfg.cameras.driver.height, cfg.cameras.driver.fps) == (1280, 720, 30)
+    assert (cfg.cameras.driver.width, cfg.cameras.driver.height, cfg.cameras.driver.fps) == (1920, 1080, 30)
+    assert cfg.cameras.driver.process_width == 1280  # 1080p capture, 720p processing
     assert cfg.cameras.driver.fourcc == "MJPG"
     assert cfg.output.publish_hz == 15
     assert cfg.output.mjpeg_port == 8001
@@ -102,6 +103,12 @@ def test_missing_key_rejected(tmp_path: Path) -> None:
         ("output", "publish_hz", 60),
         ("output", "ws_url", "http://localhost:8000"),
         ("identity", "cosine_threshold", 1.5),
+        # face / eye rules (R-FL1, R-FL4)
+        ("face", "num_faces", 2),
+        ("eyes", "squint_ear_band", [0.8, 0.5]),
+        ("eyes", "squint_ear_band", [0.5]),
+        ("eyes", "drop_ratio_relaxed", 0.9),
+        ("models", "gaze_providers", ["CUDAExecutionProvider"]),
     ],
 )
 def test_invalid_values_rejected(tmp_path: Path, section: str, key: str, value: object) -> None:
@@ -111,17 +118,17 @@ def test_invalid_values_rejected(tmp_path: Path, section: str, key: str, value: 
         load_config(_write(tmp_path, data))
 
 
-def test_gaze_zones_need_road(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("section", "key", "value", "message"),
+    [
+        ("gaze", "zones", ["mirror_left", "lap"], "road"),
+        ("models", "onnx_providers", ["CPUExecutionProvider", "CUDAExecutionProvider"], "CPUExecutionProvider"),
+    ],
+)
+def test_rule_violation_names_the_rule(tmp_path: Path, section: str, key: str, value: object, message: str) -> None:
     data = _default_data()
-    data["gaze"]["zones"] = ["mirror_left", "lap"]
-    with pytest.raises(ValidationError, match="road"):
-        load_config(_write(tmp_path, data))
-
-
-def test_onnx_providers_must_end_with_cpu(tmp_path: Path) -> None:
-    data = _default_data()
-    data["models"]["onnx_providers"] = ["CPUExecutionProvider", "CUDAExecutionProvider"]
-    with pytest.raises(ValidationError, match="CPUExecutionProvider"):
+    data[section][key] = value
+    with pytest.raises(ValidationError, match=message):
         load_config(_write(tmp_path, data))
 
 
@@ -140,23 +147,6 @@ def test_face_landmarker_rules_in_yaml() -> None:
     assert cfg.face.min_face_width_px == 250  # R-FL3
     low, high = cfg.eyes.squint_ear_band  # R-FL4
     assert 0 < low < high < 1
-
-
-@pytest.mark.parametrize(
-    ("section", "key", "value"),
-    [
-        ("face", "num_faces", 2),
-        ("eyes", "squint_ear_band", [0.8, 0.5]),
-        ("eyes", "squint_ear_band", [0.5]),
-        ("eyes", "drop_ratio_relaxed", 0.9),
-        ("models", "gaze_providers", ["CUDAExecutionProvider"]),
-    ],
-)
-def test_face_rule_violations_rejected(tmp_path: Path, section: str, key: str, value: object) -> None:
-    data = _default_data()
-    data[section][key] = value
-    with pytest.raises(ValidationError):
-        load_config(_write(tmp_path, data))
 
 
 def test_camera_controls_and_reconnect() -> None:

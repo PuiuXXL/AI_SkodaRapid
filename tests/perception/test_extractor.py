@@ -19,6 +19,7 @@ def test_every_n_frames() -> None:
 
 
 @pytest.mark.models
+@pytest.mark.slow
 def test_extractor_on_blank_frame_reports_no_face() -> None:
     cfg = load_config()
     if not cfg.models.path(cfg.models.face_landmarker).exists():

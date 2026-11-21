@@ -82,6 +82,7 @@ def phone_config(cfg: PerceptionConfig) -> PhoneSettings:
         passenger_side=p.passenger_side,
         mirrored=p.mirrored,
         lap_conf=p.lap_pattern.conf,
+        threads=m.phone_threads,
     )
 
 

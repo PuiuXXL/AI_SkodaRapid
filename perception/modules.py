@@ -225,6 +225,13 @@ class PhoneTrackerModule:
                 self.detector = PhoneDetector(cfg)
             except (FileNotFoundError, OSError) as exc:  # model not downloaded: tracker without detections
                 log.warning("phone detector unavailable", extra={"fields": {"camera": ctx.name, "error": str(exc)}})
+        # async: one background thread runs YOLO (ORT releases the GIL), the face pipeline never waits for it
+        self._pool: Any = None
+        self._future: Any = None
+        if self.detector is not None and ctx.cfg.phone.async_inference:
+            from concurrent.futures import ThreadPoolExecutor
+
+            self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"phone-{ctx.name}")
 
     @property
     def rate_hz(self) -> float:
@@ -239,7 +246,16 @@ class PhoneTrackerModule:
 
     def update(self, ff: FeatureFrame, inp: FrameInput) -> dict[str, Any]:
         boxes = None
-        if self.detector is not None and self.detector.should_run(inp.t):
+        if self._pool is not None:
+            if self._future is not None and self._future.done():
+                det = self._future.result()
+                self._future = None
+                boxes = det.boxes
+                if self.perf is not None:
+                    self.perf.add("phone", det.ms)
+            if self._future is None and self.detector.should_run(inp.t):
+                self._future = self._pool.submit(self.detector.detect, inp.frame.image, inp.t)
+        elif self.detector is not None and self.detector.should_run(inp.t):
             det = self.detector.detect(inp.frame.image, inp.t)
             boxes = det.boxes
             if self.perf is not None:
@@ -275,7 +291,8 @@ class PhoneTrackerModule:
             _text(img, "phone: lap pattern", (12, img.shape[0] - 140), RED)
 
     def close(self) -> None:
-        return None
+        if self._pool is not None:
+            self._pool.shutdown(wait=True, cancel_futures=True)
 
 
 # --- head yes / no (AS8) ---------------------------------------------------------------------------------
@@ -454,6 +471,60 @@ class IdentityModule:
 # --- passenger asleep (AP2) ------------------------------------------------------------------------------
 
 
+class PostureModule:
+    """Posture on both seats (perception/posture.py): ``driver.posture`` / ``passenger.posture``.
+
+    ``reference``: returns the calibration's ``posture_ref`` dict (driver camera: the loaded gaze profile) or None,
+    in which case the tracker learns its own reference from the first ``posture.auto_ref_s`` seconds.
+    """
+
+    name = "posture"
+    commands: frozenset[str] = frozenset()
+
+    def __init__(
+        self, ctx: CameraContext, extractor: Any, reference: Callable[[], dict[str, float] | None] | None = None
+    ) -> None:
+        from perception.posture import PostureTracker
+
+        self.ctx = ctx
+        self.tracker = PostureTracker(ctx.cfg.posture)
+        self._reference = reference
+        self._ref_seen: dict[str, float] | None = None
+
+    def update(self, ff: FeatureFrame, inp: FrameInput) -> dict[str, Any]:
+        from perception.posture import PostureRef, face_geometry
+
+        ref = self._reference() if self._reference is not None else None
+        if ref != self._ref_seen:  # a calibration was loaded / replaced
+            self._ref_seen = ref
+            self.tracker.set_reference(PostureRef.from_dict(ref) if ref else None)
+        state = inp.shared.get("state")
+        head = state.head if state is not None else None
+        out = self.tracker.update(
+            inp.t,
+            face_geometry(ff.face, (self.ctx.width, self.ctx.height)),
+            head.raw_yaw if head else None,
+            head.raw_pitch if head else None,
+            head.raw_roll if head else None,
+        )
+        inp.shared["posture"] = out
+        seat = "driver" if self.ctx.is_driver else "passenger"
+        return {"posture": dataclasses.asdict(out), "frame_patch": {seat: {"posture": out.states()}}}
+
+    def handle(self, cmd: dict[str, Any]) -> bool:
+        return False
+
+    def draw(self, img: Image, inp: FrameInput) -> None:
+        out = inp.shared.get("posture")
+        if out is None:
+            return
+        label = ", ".join(out.active()) or ("upright" if out.reference else "posture: learning")
+        _text(img, f"posture: {label}", (12, img.shape[0] - 130), AMBER if out.active() else GREY)
+
+    def close(self) -> None:
+        return None
+
+
 class PassengerStateModule:
     """AP2: asleep when the eyes were not seen open for ``passenger.asleep_closed_s`` while the passenger is there, or
     for ``asleep_closed_head_s`` with the head dropped by ``head_drop_deg`` below their upright pitch.
@@ -507,6 +578,7 @@ class PassengerStateModule:
         )
         self._asleep = bool(present and asleep_now)
         eyes_closed_s = round(closed_s, 2) if present else 0.0
+        inp.shared["passenger_state"] = (present, not self._asleep, eyes_closed_s)
         return {
             "passenger_state": {
                 "present": present,
@@ -516,6 +588,14 @@ class PassengerStateModule:
                 "upright_pitch": None if upright is None else round(upright, 1),
             },
         }
+
+    def draw(self, img: Image, inp: FrameInput) -> None:
+        state = inp.shared.get("passenger_state")
+        if state is None:
+            return
+        present, awake, closed_s = state
+        label = "absent" if not present else ("awake" if awake else f"ASLEEP ({closed_s:.0f} s eyes closed)")
+        _text(img, f"passenger: {label}", (12, img.shape[0] - 160), GREEN if present and awake else AMBER)
 
     def handle(self, cmd: dict[str, Any]) -> bool:
         return False

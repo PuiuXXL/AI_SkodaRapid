@@ -76,6 +76,7 @@ def _synthetic_session() -> tuple[list[tuple[float, dict[str, object]]], list[In
     return spec, labels
 
 
+@pytest.mark.slow
 def test_synthetic_labelled_session_passes_exit_criteria(tmp_path: Path) -> None:
     cfg = load_config()
     spec, labels = _synthetic_session()
@@ -129,6 +130,7 @@ def _latest_real_session() -> Path | None:
     "the eye CNN; no threshold separates it on all sessions (docs/eval/eyes-laptop-cnn-2026-11-21.md, Diagnosis)",
     strict=False,
 )
+@pytest.mark.slow
 def test_latest_real_eval_session_meets_minimums() -> None:
     session = _latest_real_session()
     if session is None:
@@ -203,15 +205,14 @@ def test_nod_with_closed_eyes_reading_squint_once_the_head_is_down(dropout_frame
     assert any(s.head.nodding for s in states)
 
 
-def test_blink_then_glance_at_the_lap_is_not_a_nod() -> None:
-    """A blink does not arm the nod latch: only a closure longer than a blink does."""
+@pytest.mark.parametrize(
+    "closed_s",
+    [
+        0.15,  # a blink does not arm the nod latch: only a closure longer than a blink does
+        0.8,  # a closure followed by eyes clearly open again disarms it
+    ],
+)
+def test_glance_at_the_lap_after_open_eyes_is_not_a_nod(closed_s: float) -> None:
     cfg = load_config()
-    states = _nod_run(cfg, [(0.15, SHUT), (0.3, {"ear_left": OPEN})], LOOK_DOWN)
-    assert not any(s.head.nodding for s in states)
-
-
-def test_reopened_eyes_disarm_the_nod_latch() -> None:
-    """Closure, eyes clearly open again, then a glance at the lap: not a nod."""
-    cfg = load_config()
-    states = _nod_run(cfg, [(0.8, SHUT), (0.4, {"ear_left": OPEN})], LOOK_DOWN)
+    states = _nod_run(cfg, [(closed_s, SHUT), (0.4, {"ear_left": OPEN})], LOOK_DOWN)
     assert not any(s.head.nodding for s in states)
