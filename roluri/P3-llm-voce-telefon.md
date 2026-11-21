@@ -117,6 +117,11 @@ Dacă ai nevoie de o schimbare în altă parte (un eveniment sau un câmp nou î
   - ceri confirmare, apoi îl trimiți prin punte;
   - citești răspunsul contactului de încredere când P2 îți dă voie (F2).
 
+### 7. Muzică și podcasturi de pe YouTube, la cerere (D11, prioritate S, v2.2)
+- **Făcut pe ramura `p3-youtube-media`** (`assistant/media_search.py`, `docs/assistant.md` §6.1): `search_media` (LLM sau cuvinte-cheie fără LLM) → „Caut.” → căutare (Data API cu `YOUTUBE_API_KEY`, altfel yt-dlp) → „Am găsit: A, B sau C. Care?” (o singură variantă la viteză mare) → alegerea în `DialogManager` → `play_media yt:<id>` → audio prin `/media/yt/<id>.m4a` (`assistant/router.py`).
+- **De verificat:** redarea în Chrome prin pagina de test a vocii și calea cu cheia Data API.
+- **Ce trebuie să facă P2 și P4:** în fișierele lor de rol, secțiunea „Adăugat de P3: YouTube”.
+
 ---
 
 ## Cum lucrezi fără ceilalți

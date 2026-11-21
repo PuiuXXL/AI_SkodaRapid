@@ -117,6 +117,17 @@ Componentele stau în `dashboard/src/components/`:
   - `consent.safe_contact_notify` și `announce`.
 - **Prezentarea** pe template (secțiunea 15), **README-ul** în engleză și **QR-ul**.
 
+### Adăugat de P3: YouTube la cerere (D11, prioritate S, v2.2)
+P3 a implementat căutarea și redarea de pe YouTube (ramura `p3-youtube-media`, `docs/assistant.md` §6.1). Vocea (`dashboard/src/voice/`) redă deja audio-ul, deci nu ai nimic obligatoriu de făcut. Ce ar fi util:
+- **`.env.example`:** adaugă `YOUTUBE_API_KEY=` (opțional; fără cheie căutarea merge prin yt-dlp, doar mai lent, și fără SafeSearch când e copil la bord).
+- **Proxy de dezvoltare (Vite):** `/media/yt/*` trebuie trimis la core, la fel ca `/tts/*` și `/media/*`.
+- **Dashboard-ul de acum** e pentru partea de computer vision. **Interfața vizuală pentru utilizator** (pe care o plănuim) poate arăta:
+  - „Acum se redă”: `state.media.title`, cu iconița sursei (`state.media.source`: `youtube` / `catalog`);
+  - **variantele găsite, doar pentru pasager** (șoferul nu citește nimic): titlurile din `ask.options`. Core-ul trebuie să le publice; varianta propusă e un eveniment `media_choice` în jurnal sau un câmp în stare. Decizia e la P2 + P4;
+  - un buton „oprește muzica” (`stop_media`).
+- **Panoul regizorului (opțional):** un comutator YouTube pornit/oprit, dacă rețeaua din sală e slabă (`youtube.enabled` din `assistant.yaml`).
+- **Slide-ul de confidențialitate:** linia nouă din §3 a planului („textul cererilor de muzică / podcast ajunge la YouTube”).
+
 ---
 
 ## Cum lucrezi fără ceilalți

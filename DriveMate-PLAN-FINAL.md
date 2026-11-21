@@ -23,6 +23,9 @@ clea# DriveMate: planul final de execuție, v2 (AI_SkodaRapid)
 10. **Fișierele de rol** (`roluri/P1…P4`): ce face fiecare, în ce ordine și cum (secțiunile 10 și 13).
 11. **Configurările sunt împărțite pe module** (`perception.yaml`, `thresholds.yaml`, `assistant.yaml`), iar dependențele pe roluri, în `requirements/`. Așa nu apar conflicte.
 
+### v2.2 (adăugat de P3, ramura `p3-youtube-media`)
+12. **Muzică și podcasturi de pe YouTube, la cerere (D11, prioritate S).** „Dă-mi ceva metal energic” / „caută un podcast despre X” → căutare pe YouTube → „Am găsit: A, B sau C. Care?” (la viteză mare: o singură variantă) → șoferul alege („a doua”, „cel cu Metallica”, 👍, „altceva”) → audio prin core (`/media/yt/<id>.m4a`), cu același player ca mp3-urile. Catalogul local rămâne pentru D8 și ca rezervă fără internet. Detalii: `docs/assistant.md` §6.1. Ce trebuie să facă P2 și P4: §4.D (D11), §6, §13 și fișierele lor de rol („Adăugat de P3: YouTube”).
+
 ---
 
 ## 0. Ideea și pitch-ul
@@ -139,7 +142,8 @@ CALEA LENTĂ (LLM):        eveniment → rezumatul stării → LLM (streaming) �
 - În cloud ajung doar:
   - starea JSON rezumată și textul conversației și al mesajelor, la LLM;
   - vocea, la recunoașterea vocală din Chrome;
-  - raportul SOS, la Twilio.
+  - raportul SOS, la Twilio;
+  - textul cererilor de muzică / podcast, la YouTube (D11, doar când șoferul cere ceva anume).
 - Embedding-urile faciale rămân pe laptop.
 - Din telefon citim doar notificările aplicațiilor din lista albă (SMS, WhatsApp).
 
@@ -253,6 +257,7 @@ F peste prag → asistentul pornește o conversație ca să-l țină treaz pe ș
 | D9 | ★ Înțelegerea mementourilor (K1): fraza liberă devine `create_reminder` cu o categorie validă | M |
 | D10 | ★ **Conversația anti-oboseală și refuzul.** Când F trece de prag, asistentul pornește o conversație scurtă ca să-l țină treaz pe șofer (inclusiv întrebarea KSS). **Refuzul** e recunoscut întâi prin cuvinte-cheie (`assistant/refusal.py`, rapid și determinist: „lasă-mă în pace”, „taci”, „nu acum”, „nu vreau”), prin ✋ / 👎 în dialogul de oboseală și, ca rezervă, de LLM (`stay_silent` cu `reason="driver_refused"`). Rezultatul e evenimentul `driver_refused`, urmat de clipul **„Ok, te las în pace.”** Dacă se anunță contactul, **decide regula C10, nu LLM-ul** | M |
 | D5b | Răspuns la „De ce m-ai atenționat?” | S |
+| D11 | ★ **Muzică și podcasturi de pe YouTube, la cerere** (adăugat de P3, v2.2). Cererea liberă („dă-mi ceva metal energic”, „caută un podcast despre istoria Romei”) sau un „da, ceva metal” la oferta D8 → LLM: `search_media {query, kind}` (fără LLM: detectare prin cuvinte-cheie) → „Caut.” → căutare (YouTube Data API cu `YOUTUBE_API_KEY`, altfel yt-dlp) → „Am găsit: A, B sau C. Care?” (max. 15 cuvinte; **o singură variantă** la ≥ 90 km/h sau risc ≥ 1) → „a doua” / „cel cu Metallica” / 👍 / „altceva” → `play_media {track_id: "yt:<id>", title}` → audio extras de yt-dlp și servit de core prin `assistant.router` la `/media/yt/<id>.m4a` (fără reclame, oprit de alarme, scăzut cât vorbește asistentul). Doar P4 (confort), cu copil la bord doar SafeSearch (cheia API). Rezervă: catalogul local. `docs/assistant.md` §6.1 | S |
 
 **Regula de formă:** maximum ~15 cuvinte către șofer, nimic de citit, nimic în timpul manevrelor. Muzica scade automat cât vorbește asistentul.
 
@@ -386,6 +391,12 @@ F peste prag → asistentul pornește o conversație ca să-l țină treaz pe ș
 | `stay_silent` | `reason` | oricând | — |
 
 Orice altceva primit de la LLM e respins și trecut în jurnal. Maximum 3 acțiuni per răspuns.
+
+**Adăugat de P3 (v2.2, D11 YouTube), compatibil cu tabelul de mai sus:**
+- `search_media {query, kind: music|podcast}`, permisă la P4. E **internă asistentului**: `handle_event` o rezolvă înainte să răspundă, deci **core nu o primește niciodată**. În locul ei, core primește un `ask` cu `expects: "choice"` și `options` (rezultatele căutării).
+- `ask.expects` poate fi și `"choice"` (doar din reguli, nu de la LLM), cu `options: [{track_id, title, full_title, channel, duration_s, offered}]`.
+- `play_media.track_id` poate fi `"yt:<id video>"`, cu câmpul nou `title` (titlul scurt rostit). Se redă la `music.track_url(track_id)` = `/media/yt/<id>.m4a`, cu `loop: false` (`music.loops(track_id)`).
+- În `shared/contracts.py` (P2): `ActionType` + `"search_media"`, `Action` + `query`, `kind`, `options`, `title`, `expects` + `"choice"`, `media.source` (`"catalog"` / `"youtube"`). Toate opționale. Copia provizorie din `assistant/_TEMP_contract_DELETE_LATER.py` le are deja.
 
 ---
 
@@ -673,7 +684,7 @@ Fiecare scenă are un flux JSON înregistrat la repetiții. Dacă CV-ul cedează
 AI_SkodaRapid/
 ├── README.md                  # P4, în engleză
 ├── .gitignore                 # CLAUDE.md, CLAUDE.local.md, .claude/, .env, modele, embedding-uri, media, jurnale
-├── .env.example               # LLM, TWILIO_*, CONTACT_TOKEN, KDECONNECT_DEVICE_ID, EMERGENCY_NUMBER, SAFE_CONTACT_NUMBER, CORE_URL
+├── .env.example               # LLM, TWILIO_*, CONTACT_TOKEN, KDECONNECT_DEVICE_ID, EMERGENCY_NUMBER, SAFE_CONTACT_NUMBER, CORE_URL, YOUTUBE_API_KEY (opțional, D11; de adăugat de P4)
 ├── requirements.txt           # doar include requirements/p*.txt (P4)
 ├── requirements/              # p1-perception.txt, p2-core.txt, p3-assistant.txt, p4-dashboard.txt
 ├── run.sh
@@ -711,6 +722,7 @@ AI_SkodaRapid/
 │   ├── fallback.py
 │   ├── memory.py
 │   ├── music.py               # recomandarea pentru D
+│   ├── media_search.py        # D11: căutare YouTube, variante rostite, alegerea, fluxul audio
 │   ├── refusal.py             # recunoașterea refuzului (D10)
 │   ├── summary.py             # starea → ~10 rânduri pentru LLM
 │   ├── router.py              # /tts/… (montat de core)
@@ -772,7 +784,7 @@ Când cineva are nevoie să schimbe ceva în zona altcuiva, anunță pe grup, ca
 | `ws://localhost:8000/ws/ui` | core ↔ browser (UI-ul lui P4 + vocea lui P3) | → browser: `state` (10 Hz), `event`, `speak`, `speak_control`, `alarm`, `media` · → core: `command`, `speech`, `speech_onset`, `speak_done`, `alarm_played` |
 | `assistant.handle_event(event, state) -> list[Action]` | core → P3 (în proces) | evenimente → acțiuni, validate de P2 |
 | `assistant.refusal.is_refusal(text) -> bool` | core → P3 (în proces) | refuzul din dialogul de oboseală |
-| `assistant.router` | P3, montat în core | `/tts/{id}.mp3` |
+| `assistant.router` | P3, montat în core | `/tts/{id}.mp3`, `/media/{id}.mp3`, `/media/yt/{id}.m4a` (audio YouTube, D11) |
 | `ws://localhost:8000/ws/phone` | puntea lui P3 ↔ core | `phone_message`, `call`, `phone_status` → core · `send_reply`, `send_sms` → punte |
 | `integrations.contact_app` | P4, montat în core | `router`, `push_status`, `push_safe_contact`, `push_sos`; mesajele din pagină → core |
 | `simulator.Simulator` | core → P4 (în proces) | `tick() -> Trip`, `command(cmd)` |
@@ -860,7 +872,7 @@ Când cineva are nevoie să schimbe ceva în zona altcuiva, anunță pe grup, ca
 
 ## 16. Ce am tăiat
 
-Apple Watch, CarPlay / Android Auto real, Spotify API (folosim mp3-uri locale), Telegram (înlocuit de DriveMate Contact), iPhone ca telefon conectat, rPPG, copilul uitat în mașină, camera pentru bancheta din spate, RAG complex, apelul la 112, LLM local, imagini trimise la LLM, video înregistrat. Toate apar pe slide-ul de viziune.
+Apple Watch, CarPlay / Android Auto real, Spotify API (folosim mp3-uri locale; muzica la cerere vine de pe YouTube, D11, prioritate S), Telegram (înlocuit de DriveMate Contact), iPhone ca telefon conectat, rPPG, copilul uitat în mașină, camera pentru bancheta din spate, RAG complex, apelul la 112, LLM local, imagini trimise la LLM, video înregistrat. Toate apar pe slide-ul de viziune.
 
 ---
 
