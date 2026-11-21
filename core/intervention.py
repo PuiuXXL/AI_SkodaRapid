@@ -46,11 +46,13 @@ class InterventionTracker:
     samples: deque[tuple[float, float, float]] = field(default_factory=deque)  # (t, attention, D)
     running: Running | None = None
     effects: dict[str, list[float]] = field(default_factory=dict)
+    history: list[dict[str, object]] = field(default_factory=list)  # every measured intervention, trip report (J3)
 
     def reset(self) -> None:
         self.samples.clear()
         self.running = None
         self.effects = {}
+        self.history = []
 
     def _window(self, since: float, until: float) -> list[tuple[float, float, float]]:
         return [s for s in self.samples if since <= s[0] <= until]
@@ -96,6 +98,9 @@ class InterventionTracker:
         intervention.stats = {LABELS.get(kind, kind).split("_")[0]: round(statistics.fmean(values), 2)
                               for kind, values in self.effects.items()}
         text = render("interventions", f"{running.kind}_{'ok' if helped else 'no'}", pct=pct)
+        self.history.append({"action": LABELS.get(running.kind, running.kind),
+                             "reason": "distraction" if running.kind == "delegate" else "disengagement",
+                             "effect_pct": pct, "helped": helped, "at": now})
         self.engine.log_event("intervention_effect", now, text=text, kind=running.kind, effect_pct=pct,
                               before=round(running.before, 2), after=round(after, 2),
                               attention_before=round(running.attention_before, 2),

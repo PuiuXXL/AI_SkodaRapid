@@ -189,8 +189,9 @@ intervention:                   # D6: attention (and D or F) before vs. after ea
   after_s: 60
   min_samples: 20
 
-scorecard:                      # J2
+scorecard:                      # J2, J3
   focus_break_ms: 2000          # longest_focus_min: a stretch without an off-road glance longer than this
+  history_s: 10                 # the trip report keeps one attention / F / D point this often
 
 refusal_mute_min: 15            # C10, D10: after a refusal the assistant is silent (P3-P4 only; P0-P2 stay on)
 

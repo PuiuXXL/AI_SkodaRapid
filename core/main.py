@@ -28,8 +28,10 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from core.assistant_link import AssistantLink
 from core.engine import Engine
 from core.hub import Hub, Peer
+from core.reminders import ReminderRule
 from core.safe_contact import SafeContactRule
 from core.safety import Safety
+from core.scorecard import TripReport
 from core.scoring import Scores
 from core.settings import th
 from core.simulation import load_simulator
@@ -109,6 +111,10 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         Scores(engine)  # B: reaction, F, D, attention, risk, conversation, blind meters, cause, interventions
     if engine.safe_contact is None:
         SafeContactRule(engine)  # C10: the trusted contact, from profiles/<driver>/profile.json
+    if engine.reminders is None:
+        ReminderRule(engine)  # K2: "Ai zis să iei ..." at a stop (before the assistant: it takes its own answer)
+    if engine.trip_report is None:
+        TripReport(engine)  # J2, J3: the scorecard and the trip report
     if engine.assistant is None:
         AssistantLink(engine)  # the slow path: P3's assistant, after the safety rules
     assistant_router = _optional_router("assistant.router")

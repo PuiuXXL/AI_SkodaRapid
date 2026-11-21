@@ -574,6 +574,8 @@ CORE_EVENT_TYPES: tuple[str, ...] = (
     "monitoring_lost",        # C7: "Nu te mai văd"                          data: reason
     "monitoring_restored",    # C7
     "reminder_due",           # K2: stopped at a POI of the category         data: reminder_id, poi_id
+    "reminder_done", "reminder_kept",  # K2: the answer (or none)   data: reminder_ids, channel
+    "trip_report",            # J2, J3: end of the trip (end_trip / reset)   data: report
     "message_deferred",       # F2: "Ți-l citesc imediat ce e liniște."      data: msg_id, reason
     "safe_contact_notified",  # C10: SMS + yellow notice sent                data: contact, sms_ok
     "assistant_action",       # an action was executed                       data: action
@@ -1044,6 +1046,7 @@ UI_COMMANDS: tuple[str, ...] = (
     "fake_message",      # value: {from, app, text}
     "calibrate",         # value: {profile, quick} -> forwarded to P1
     "enroll",            # value: {name, camera} -> forwarded to P1
+    "end_trip",          # the trip report (J2, J3)
     "reset",
 )
 

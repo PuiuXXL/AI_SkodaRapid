@@ -48,8 +48,9 @@ safe_contact:                   # C10, F8: tired driver who refused the assistan
   elapsed_minutes: "{m} min"
 
 reminders:                      # K2: delivered only with the car stopped at a POI of the category
-  # Fields: task (the noun phrase of create_reminder, e.g. "lichid de parbriz")
+  # Fields: task (the noun phrase of create_reminder, e.g. "lichid de parbriz"; several joined with " și ")
   due: "Ai zis să iei {task}."
+  kept: "Bine, ți-l amintesc la următoarea oprire."
 
 explanations:                   # principle 4, D5: one sentence per alert, in the event log and for alert_explain
   # Fields: s (seconds, one decimal with a comma, e.g. "2,1"), speed_kmh, zone_text, reason_text
@@ -69,6 +70,7 @@ clips:
   passenger_instructions: "passenger_instructions_{passenger}_{driver}"   # "Maria, Andrei nu răspunde. ..."
   monitoring_lost: "monitoring_lost"                        # "Nu te mai văd. Monitorizarea e întreruptă."
   confirm_ok: "confirm_ok"                                  # "Ok."
+  confirm_done: "confirm_done"                              # "Gata." (K2: reminder done)
   message_deferred: "message_deferred"                      # "Ți-l citesc imediat ce e liniște." (F2)
   notify_contact: "notify_contact_{contact}"                # "Îi dau de veste lui Mihai." (C10)
   # C2 voice stage. These clips do not exist yet: the text goes through P3's TTS until P3 generates them.

@@ -9,9 +9,11 @@ from assistant.client import AnswerInfo
 from core.assistant_link import AssistantLink
 from core.engine import Engine
 from core.hub import Hub
+from core.reminders import ReminderRule
 from core.safe_contact import NoticeChannel, SafeContactRule
 from core.safety import Safety
 from core.safety.sos import SosChannel
+from core.scorecard import TripReport
 from core.scoring import Scores
 from core.simulation import FakeSimulator
 from scripts.fake_perception import FakePerception
@@ -62,6 +64,8 @@ class Rig:
         self.scores = Scores(self.engine)
         # profiles from a test folder only: the repo's profiles/ never leaks into a test
         self.contact = SafeContactRule(self.engine, contact_channels, profiles_root or Path("/nonexistent-profiles"))
+        self.reminders = ReminderRule(self.engine)
+        self.report = TripReport(self.engine)
         self.link = AssistantLink(self.engine, client=assistant, clock=lambda: self.t) if assistant else None
         self.fake = FakePerception(now=T0)
         self.patch: Any = None  # optional (frame dict, t) -> None, to shape what "P1" reports

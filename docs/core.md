@@ -292,7 +292,19 @@ Checked end to end (real processes, P3's real client, a test profile outside the
 question -> "Lasă-mă în pace." -> "Ok, te las în pace." -> "Îi dau de veste lui Mihai." -> the text for Mihai ->
 his answer read after "da" -> "Oprim la Cafenea peste 10.8 km?" -> "da".
 
-## 9. Testing without the others
+## 9. Reminders at a stop (K2) and the trip report (J2, J3)
+
+| File | What it does |
+|---|---|
+| `reminders.py` | **K2** (`ReminderRule`): stopped (`stopped_max_kmh` for `stopped_min_s`) at a POI whose category has active reminders -> "Ai zis să iei lichid de parbriz." (several tasks joined with " și ") and a dialog window. Yes (voice, nod, 👍) = done + "Gata." (clip); no = kept ("Bine, ți-l amintesc la următoarea oprire."); no answer = kept. Once per stop, never during a safety alert, said even while the assistant is silenced (it is the driver's own request, and scene 7 follows scene 6). Registered before the assistant link: its answer never reaches the LLM (`engine.input_consumed_at`). **K3** (`pick_stop`) as before. |
+| `scorecard.py` | **J2, J3** (`TripReport`). Live in `state.scorecard`: `longest_focus_min` (trip minutes while moving without an off-road glance over `focus_break_ms`; the stretch counts only on the road), `phone_touches` (phone in hand for `phone_min_ms` while moving: "0 atingeri" is honest only if nobody holds it). The report on the director's `end_trip` (and before a `reset`): distance, time, stops, scorecard, blind meters and the previous trip's, A/B, reaction per channel against the baseline, the effect of every intervention, attention / F / D every `history_s`, the event log; event `trip_report`. Its fields follow P4's `Report` (`dashboard/src/driver/contracts.ts`). |
+
+`scripts/core_command.py end` sends `end_trip`.
+
+Checked end to end (real processes): scene 7, stop at OMV -> "Ai zis să iei lichid de parbriz." -> "da" -> "Gata."
+-> done; scene 10, `end` -> "Fișa călătoriei: 8.0 km, concentrat cel mult 4 min, ..." with the full report.
+
+## 10. Testing without the others
 
 ```bash
 pytest tests/core                                   # the rules, scene by scene, in fake time

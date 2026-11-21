@@ -124,8 +124,9 @@ class AssistantLink:
         self.speaking, self.paused = None, False
 
     def _sos_active(self, now: float) -> bool:
+        """The SOS is on, or this input already answered a rule (the SOS question, a stop reminder)."""
         sos = self.engine.safety.sos
-        return sos.state != "normal" or sos.consumed_at == now
+        return sos.state != "normal" or sos.consumed_at == now or self.engine.input_consumed_at == now
 
     # --- events --------------------------------------------------------------------------------------------------
 

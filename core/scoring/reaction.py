@@ -31,6 +31,7 @@ class ReactionTracker:
         self.outcomes: deque[tuple[float, bool]] = deque()  # (t, answered) per question, for the response rate
         self.words: deque[int] = deque(maxlen=5)
         self.missed = 0
+        self.totals: dict[str, list[float]] = {ch: [0.0, 0.0] for ch in CHANNELS}  # (sum ms, count), trip report
         self.question_at: float | None = None
         self.awaiting_words = False
         self.visual_since: float | None = None
@@ -47,8 +48,15 @@ class ReactionTracker:
         self.recent.append((channel, ms))
         if missed:
             self.missed += 1
-        elif len(self.first[channel]) < int(th("reaction", "baseline_max_samples")):
+            return
+        self.totals[channel][0] += ms
+        self.totals[channel][1] += 1
+        if len(self.first[channel]) < int(th("reaction", "baseline_max_samples")):
             self.first[channel].append(ms)
+
+    def means(self) -> dict[str, float]:
+        """Mean reaction per channel over the trip (answered ones only), for the trip report (J2)."""
+        return {ch: round(total / count, 1) for ch, (total, count) in self.totals.items() if count}
 
     def slow_ratio(self) -> float | None:
         if not self.recent:

@@ -93,7 +93,11 @@ class Engine:
         self._frame_listeners: list[FrameListener] = []
         self._tick_listeners: list[TickListener] = []
         self._reset_listeners: list[Callable[[float], None]] = []
+        self._before_reset_listeners: list[Callable[[float], None]] = []
         self._utterance_counter = 0
+        self.input_consumed_at: float | None = None  # a rule used this input (the assistant must not see it too)
+        self.reminders: Any = None  # core.reminders.ReminderRule, attached by it
+        self.trip_report: Any = None  # core.scorecard.TripReport, attached by it
         self.safety: Any = None  # core.safety.Safety, attached by it
         self.assistant: Any = None  # core.assistant_link.AssistantLink, attached by it
         self.scores: Any = None  # core.scoring.Scores, attached by it
@@ -114,9 +118,10 @@ class Engine:
         """Called on every tick with the state being built, before it is published (scores, rules)."""
         self._tick_listeners.append(listener)
 
-    def add_reset_listener(self, listener: Callable[[float], None]) -> None:
-        """Called after a director reset (a new trip), with ``now``."""
-        self._reset_listeners.append(listener)
+    def add_reset_listener(self, listener: Callable[[float], None], *, before: bool = False) -> None:
+        """Called after a director reset (a new trip), with ``now``. ``before=True``: while the old trip still
+        exists (the trip report is built then)."""
+        (self._before_reset_listeners if before else self._reset_listeners).append(listener)
 
     # --- voice ---------------------------------------------------------------------------------------------------
 
@@ -257,6 +262,8 @@ class Engine:
 
     def reset(self, now: float) -> None:
         """Director reset: a new trip. The LLM switch is kept."""
+        for listener in self._before_reset_listeners:
+            listener(now)
         llm_enabled = self.state.safety.llm_enabled
         self.state = State()
         self.state.safety.llm_enabled = llm_enabled
