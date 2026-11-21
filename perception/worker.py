@@ -560,8 +560,9 @@ def default_pipeline(ctx: CameraContext, perf: PerfTracker) -> ModularPipeline:
         PhoneTrackerModule(ctx, extractor, perf),
         HeadAnswerModule(ctx, extractor),
         IdentityModule(ctx, extractor, perf, on_profile=calibration.follow_identity if calibration else None),
-        PostureModule(ctx, extractor, reference=calibration.posture_ref if calibration else None),
     ]
+    if ctx.is_driver or ctx.cfg.passenger.posture.enabled:
+        modules.append(PostureModule(ctx, extractor, reference=calibration.posture_ref if calibration else None))
     if not ctx.is_driver:
         modules.append(PassengerStateModule(ctx, extractor))
     builtin = len(modules)

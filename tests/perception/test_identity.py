@@ -225,3 +225,58 @@ def test_real_yunet_sface_on_a_black_frame() -> None:
     ident = FaceIdentifier(cfg, FaceGallery("driver", {"x": _BASE[1]}))
     r = ident.update(0.0, np.zeros((480, 640, 3), dtype=np.uint8), True)
     assert r.ran and r.reason == "no_face" and r.profile is None
+
+
+def test_identity_module_never_blocks_the_frame_loop() -> None:
+    """IdentityModule: a due run goes to its thread; frames keep the held identity until the result is ready."""
+    import threading
+    import time
+    from types import SimpleNamespace
+
+    from perception.capture import Frame
+    from perception.config import load_config
+    from perception.modules import IdentityModule
+    from perception.worker import CameraContext, FrameInput, WorkerOptions
+
+    gate = threading.Event()
+
+    class BlockedRecognizer(FakeRecognizer):
+        def feature(self, aligned: Any) -> Any:
+            gate.wait(5.0)  # SFace "still running"
+            return super().feature(aligned)
+
+    ctx = CameraContext(
+        name="driver",
+        cfg=load_config(),
+        options=WorkerOptions(synthetic=True, models=True),
+        width=W,
+        height=H,
+        fps=30.0,
+        backend="synthetic",
+    )
+    mod = IdentityModule(ctx, SimpleNamespace(face=object()))
+    mod.identifier = FaceIdentifier(
+        gallery=FaceGallery("driver", {"andrei": _BASE[1]}), detector=FakeDetector(), recognizer=BlockedRecognizer()
+    )
+    ff: Any = SimpleNamespace(face=SimpleNamespace(present=True))
+
+    def step(i: int) -> dict[str, Any]:
+        inp = FrameInput(frame=Frame(image=frame(1), frame_id=i, t_capture=i / 30), t=i / 30, t_wall=0.0)
+        out: dict[str, Any] = mod.update(ff, inp)["identity"]
+        return out
+
+    try:
+        t0 = time.perf_counter()
+        first, second = step(0), step(1)  # submitted, not waited for: the recognizer is blocked
+        assert time.perf_counter() - t0 < 1.0
+        assert not first["ran"] and not second["ran"] and second["profile"] is None
+        gate.set()
+        deadline, out = time.monotonic() + 5.0, second
+        while not out["ran"] and time.monotonic() < deadline:
+            time.sleep(0.01)
+            out = step(2)
+        assert out["ran"] and out["profile"] == "andrei" and out["ms"] > 0
+        held = step(3)  # next run only after recheck_s
+        assert held["profile"] == "andrei" and not held["ran"]
+    finally:
+        mod.close()

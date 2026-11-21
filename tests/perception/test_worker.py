@@ -113,9 +113,9 @@ def _latest(worker: CameraWorker) -> dict[str, Any]:
 # --- in-process: the pipeline interface -----------------------------------------------------------------
 
 
-def _ctx(modules: tuple[str, ...] = ()) -> CameraContext:
+def _ctx(modules: tuple[str, ...] = (), name: str = "driver") -> CameraContext:
     return CameraContext(
-        name="driver",
+        name=name,
         cfg=load_config(),
         options=SYNTH,
         width=320,
@@ -156,6 +156,16 @@ def test_default_pipeline_satisfies_the_interface() -> None:
         assert pipeline.process(_input(2))["identity"]["enroll"]["state"] == "error"
         img = pipeline.render(_input(2), payload, debug=True, fps=15.0)
         assert img.shape == (240, 320, 3)
+    finally:
+        pipeline.close()
+
+
+def test_passenger_posture_is_off_by_default() -> None:
+    pipeline = default_pipeline(_ctx(name="passenger"), PerfTracker())
+    try:
+        assert isinstance(pipeline, ModularPipeline)
+        names = [m.name for m in pipeline.modules]
+        assert "posture" not in names and "passenger_state" in names
     finally:
         pipeline.close()
 

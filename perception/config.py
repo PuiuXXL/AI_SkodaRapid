@@ -444,7 +444,12 @@ class FiltersConfig(_Section):
     unknown_below_conf: Fraction
 
 
+class SeatPostureConfig(_Section):
+    enabled: bool  # PostureModule on this seat's camera (the driver's always runs)
+
+
 class PassengerConfig(_Section):
+    posture: SeatPostureConfig
     asleep_closed_s: PositiveFloat  # AP2: eyes not seen open for this long (passenger present) -> awake = false
     asleep_closed_head_s: PositiveFloat  # ... or this long with the head dropped (plan AP2: eyes closed + head down)
     head_drop_deg: PositiveFloat  # head pitch this far below the passenger's upright pitch = dropped

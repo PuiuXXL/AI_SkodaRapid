@@ -299,6 +299,8 @@ monitoring:
   analysis_width: 160          # luma / std / blur / chroma measured on a frame resized to this width
 
 passenger:
+  posture:
+    enabled: false             # passenger posture off (not used in the scenario; 4 false events / 60 s live)
   asleep_closed_s: 10          # AP2: eyes not seen open for this long while the passenger is there -> awake = false
   asleep_closed_head_s: 5      # ... or this long with the head dropped (plan AP2: "ochi închiși + capul lăsat")
   head_drop_deg: 15            # pitch this far below the passenger's upright pitch = head dropped
