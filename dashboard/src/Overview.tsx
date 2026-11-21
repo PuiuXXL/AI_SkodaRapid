@@ -14,7 +14,7 @@ export function AttentionGauge({value}: {value: Reading | undefined}){
           const angle=Math.PI*(1-i/(count-1));
           return <line key={i} x1={100+78*Math.cos(angle)} y1={98-78*Math.sin(angle)}
             x2={100+92*Math.cos(angle)} y2={98-92*Math.sin(angle)}
-            stroke={i<lit?"var(--accent)":"#608da240"} strokeWidth="4.8"/>;
+            stroke={i<lit?"var(--accent)":"var(--ui-stroke-strong)"} strokeWidth="4.8"/>;
         })}
       </svg>
       <div className="gauge-number"><b>{fmt(value,"",100,0)}</b><span>/ 100</span></div>

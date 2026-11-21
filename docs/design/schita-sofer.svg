@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="794" viewBox="0 0 1200 794" role="img" aria-labelledby="title desc">
+  <title id="title">DriveMate. Patru ecrane propuse pentru șofer</title>
+  <desc id="desc">Schiță de proiectare cu date simulate. Connect deschide profilul. Înainte de plecare apar vocea, muzica, drumul și mesajele. În mers rămân piesa curentă, semnalul copilotului și următoarea oprire. În profil se aleg frecvența intervențiilor, volumul și genurile muzicale.</desc>
+  <style>
+    text { font-family: "Segoe UI", Arial, sans-serif; fill: #203b33; }
+    .caption { font-size: 18px; font-weight: 600; }
+    .frame { fill: #fff; stroke: #c9d6cf; }
+    .dark { fill: #16392f; }
+    .dark-text { fill: #fff; }
+    .muted { fill: #52685f; }
+    .light { fill: #c1ddd0; }
+    .brand { font-size: 16px; font-weight: 700; }
+    .label { font-size: 14px; }
+    .control { font-size: 15px; font-weight: 600; }
+    .heading { font-size: 29px; font-weight: 600; }
+    .value { font-size: 24px; font-weight: 600; }
+    .line { stroke: #dce5df; }
+    .soft { fill: #f3f6f3; }
+    .select { fill: #d9eee2; }
+    .accent { fill: #0d694e; }
+  </style>
+  <rect width="1200" height="794" fill="#eef2ee"/>
+
+  <g transform="translate(28 53)">
+    <text y="-16" class="caption">Intrare</text>
+    <rect width="560" height="322" rx="18" class="dark"/>
+    <text x="28" y="37" class="brand dark-text">DriveMate</text>
+    <g fill="none" aria-hidden="true">
+      <path d="M 366 292 C 345 224 520 221 483 158 C 462 120 380 118 400 72 Q 413 43 506 28" stroke="#335f4e" stroke-width="30"/>
+      <path d="M 366 292 C 345 224 520 221 483 158 C 462 120 380 118 400 72 Q 413 43 506 28" stroke="#a5cfb8" stroke-width="2" stroke-dasharray="8 10"/>
+    </g>
+    <text x="28" y="132" class="heading dark-text">Copilotul tău la drum</text>
+    <text x="28" y="164" class="label light">Muzică, mesaje și opriri, prin voce.</text>
+    <rect x="28" y="208" width="145" height="46" rx="12" fill="#b9e7c9"/>
+    <text x="49" y="237" class="control">Connect</text>
+    <path d="M133 231h14m-6-6 6 6-6 6" fill="none" stroke="#203b33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g transform="translate(612 53)">
+    <text y="-16" class="caption">La volan · înainte de plecare</text>
+    <rect width="560" height="322" rx="18" class="frame"/>
+    <text x="24" y="32" class="brand">DriveMate</text>
+    <text x="339" y="32" class="label muted">Instrumente</text>
+    <rect x="449" y="11" width="87" height="30" rx="15" class="soft"/>
+    <text x="492" y="31" text-anchor="middle" class="control">Profil</text>
+    <path d="M0 51h560" class="line"/>
+    <text x="24" y="91" class="heading">Salut, Andrei</text>
+    <text x="535" y="89" class="label muted" text-anchor="end">Simulat</text>
+    <rect x="24" y="109" width="247" height="89" rx="12" class="select"/>
+    <text x="39" y="137" class="label">Acum asculți</text>
+    <text x="39" y="174" class="value">Rock 1</text>
+    <rect x="283" y="109" width="253" height="89" rx="12" class="soft"/>
+    <text x="298" y="137" class="label muted">Următoarea oprire</text>
+    <text x="298" y="174" class="value">OMV · 12 km</text>
+    <rect x="24" y="214" width="180" height="42" rx="10" class="accent"/>
+    <text x="114" y="240" text-anchor="middle" class="control dark-text">Începe călătoria</text>
+    <rect x="214" y="214" width="164" height="42" rx="10" fill="none" stroke="#a4b7aa"/>
+    <text x="296" y="240" text-anchor="middle" class="control">Activează vocea</text>
+    <path d="M0 275h560" class="line"/>
+    <text x="69" y="303" text-anchor="middle" class="control accent">La volan</text>
+    <text x="209" y="303" text-anchor="middle" class="label">Drum</text>
+    <text x="349" y="303" text-anchor="middle" class="label">Muzică</text>
+    <text x="489" y="303" text-anchor="middle" class="label">Mesaje</text>
+    <path d="M42 312h54" stroke="#0d694e" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(28 441)">
+    <text y="-16" class="caption">La volan · în mers</text>
+    <rect width="560" height="322" rx="18" class="dark"/>
+    <text x="28" y="37" class="brand dark-text">La volan</text>
+    <text x="532" y="36" text-anchor="end" class="label light">Simulat</text>
+    <text x="28" y="105" class="label light">Acum asculți</text>
+    <text x="26" y="168" class="dark-text" font-size="54" font-weight="600">Rock 1</text>
+    <g transform="translate(465 130)" fill="none" aria-hidden="true">
+      <circle r="42" stroke="#547867"/>
+      <circle r="32" fill="#28513f"/>
+      <g stroke="#bee5ca" stroke-width="3.5" stroke-linecap="round">
+        <path d="M-14 -4v8 M-7 -11v22 M0 -16v32 M7 -8v16 M14 -3v6"/>
+      </g>
+    </g>
+    <text x="465" y="196" text-anchor="middle" class="label light">Voce activă</text>
+    <path d="M28 224h504" stroke="#476556"/>
+    <text x="28" y="257" class="label light">Următoarea oprire</text>
+    <text x="28" y="292" class="value dark-text">OMV · 12 km</text>
+  </g>
+
+  <g transform="translate(612 441)">
+    <text y="-16" class="caption">Profil · configurarea copilotului</text>
+    <rect width="560" height="322" rx="18" class="frame"/>
+    <text x="24" y="38" class="value">Profilul lui Andrei</text>
+    <g class="label" text-anchor="middle">
+      <text x="46" y="73">Eu</text>
+      <text x="131" y="73" class="control accent">Copilot</text>
+      <text x="237" y="73">Contacte</text>
+      <text x="351" y="73">Conexiuni</text>
+    </g>
+    <path d="M24 84h512" class="line"/>
+    <path d="M99 84h64" stroke="#0d694e" stroke-width="3" stroke-linecap="round"/>
+    <text x="24" y="114" class="control">Cât de des să vorbească?</text>
+    <rect x="24" y="126" width="286" height="33" rx="9" class="soft"/>
+    <rect x="119" y="126" width="94" height="33" rx="9" class="select"/>
+    <text x="71" y="148" text-anchor="middle" class="label">Rar</text>
+    <text x="166" y="148" text-anchor="middle" class="control accent">Normal</text>
+    <text x="260" y="148" text-anchor="middle" class="label">Des</text>
+    <text x="24" y="194" class="control">Volum</text>
+    <path d="M137 190h212" stroke="#d1dbd4" stroke-width="5" stroke-linecap="round"/>
+    <path d="M137 190h85" stroke="#0d694e" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="222" cy="190" r="7" class="accent"/>
+    <text x="367" y="195" class="label muted">40%</text>
+    <text x="24" y="235" class="control">Genuri preferate</text>
+    <rect x="175" y="213" width="64" height="32" rx="16" class="select"/>
+    <text x="207" y="234" text-anchor="middle" class="label">Rock</text>
+    <rect x="246" y="213" width="59" height="32" rx="16" class="select"/>
+    <text x="275" y="234" text-anchor="middle" class="label">Pop</text>
+    <rect x="24" y="264" width="135" height="40" rx="10" class="accent"/>
+    <text x="91" y="290" text-anchor="middle" class="control dark-text">Salvează</text>
+  </g>
+</svg>

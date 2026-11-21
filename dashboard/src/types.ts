@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
+import type {DriverUI, Phase, Point, Poi} from "./driver/contracts";
 
 export type Reading = number | null;
 export interface Assessment { attention?: Reading; fatigue?: Reading; disengagement?: Reading; risk?: Reading }
 export interface Trip {
   speed_kmh?: Reading; elapsed_min?: Reading; eta_min?: Reading; road?: string;
-  stopped?: boolean; next_poi?: {name?: string; dist_km?: Reading};
+  id?: string|null; phase?: Phase; distance_km?: Reading; scene?:number;pos?:Point;at_poi?:Poi|null;
+  stopped?: boolean; next_poi?: {id?:string;name?:string;category?:string|null;dist_km?:Reading}|null;
 }
 export interface Driver {
   eyes?: {ear?: Reading; eye_used?: string; perclos_60s?: Reading; blink_ms?: Reading; microsleep?: boolean; reliable?: boolean; closed_ms?: Reading; open_baseline?: Reading; blink_rate?: Reading; squint?: boolean; state?: string; long_closure?: boolean};
@@ -26,12 +28,13 @@ export interface DashboardState {
   safety?: {monitoring_ok?: boolean; alert?: string | {text?: string} | null; level?: string; alarm_ms_last?: Reading; llm_enabled?: boolean; llm_allowed?: boolean};
   cause?: {label?: string | null; target?: string | null; glances_30s?: Reading; sources?: string[]; conf?: Reading};
   occupants?: {id?: string | number; profile?: string; seat?: string; source?: string; role?: string}[];
-  messages?: {id?: string; from?: string; app?: string; state?: string; deferred_reason?: string | null}[];
+  messages?: {id?: string; from?: string; app?: string; state?: string; deferred_reason?: string | null;text?:string;replyable?:boolean;reply?:string;ts?:number}[];
   reminders?: {id?: string; task?: string; state?: string; trigger?: {category?: string}}[];
   passenger?: {present?: boolean; awake?: boolean; speaking?: boolean; holding_phone?: boolean; gesture?: string | null};
   conversation?: boolean; phone?: {connected?: boolean; battery?: Reading};
   safe_contact?: {name?: string; consent?: boolean; notified_ts?: number | null};
-  media?: {playing?: boolean; title?: string | null; volume?: Reading};
+  media?: {playing?: boolean; title?: string | null; track_id?:string|null;artist?:string;volume?: Reading};
+  driver_ui?: DriverUI;
   scorecard?: {longest_focus_min?: Reading; hands_free_messages?: Reading; phone_touches?: Reading; suggestions_accepted?: Reading; suggestions_rejected?: Reading; reminders_done?: Reading};
   ab?: {naive_alerts?: Reading; our_alerts?: Reading}; blind_m?: {last?: Reading; trip?: Reading};
   intervention?: {last?: string | null; effect_pct?: Reading};
@@ -39,6 +42,7 @@ export interface DashboardState {
   assistant?: {muted_until?: number | null; mute_reason?: string | null};
 }
 export interface DashboardEvent {type: string; ts: number; source?: string; text?: string; explanation?: string; channel?: string; latency_ms?: number}
-export interface SessionData {state: DashboardState; history: (Assessment | null | undefined)[]; log: DashboardEvent[]; socket: WebSocket | null; cue: number; speech: string; connection: string}
+export interface SessionSocket extends EventTarget {readonly readyState:number;send(data:string):void}
+export interface SessionData {state: DashboardState; history: (Assessment | null | undefined)[]; log: DashboardEvent[]; socket: SessionSocket | null; cue: number; speech: string; connection: string}
 export type StateProps = {s: DashboardState};
 export type RowsData = [string, ReactNode][];
