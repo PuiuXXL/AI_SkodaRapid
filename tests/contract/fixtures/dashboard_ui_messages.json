@@ -25,5 +25,7 @@
   {"name": "request", "args": {"text": "Propune muzică"},
    "message": {"type": "speech", "text": "Propune muzică", "final": true, "addressed": true}},
   {"name": "answer", "args": {"id": "q1", "value": "da"}, "message": {"type": "speech", "text": "da", "final": true, "addressed": true}},
-  {"name": "stop_media", "args": {}, "message": {"type": "speech", "text": "Oprește muzica", "final": true, "addressed": true}}
+  {"name": "stop_media", "args": {}, "message": {"type": "speech", "text": "Oprește muzica", "final": true, "addressed": true}},
+  {"name": "set_assistant_preference", "args": {"key": "answer_length", "value": "short"},
+   "message": {"type": "command", "cmd": "assistant_preference", "value": {"key": "answer_length", "value": "short"}}}
 ]

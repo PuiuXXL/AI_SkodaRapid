@@ -53,7 +53,9 @@ export interface DashboardState {
   ab?: {naive_alerts?: Reading; our_alerts?: Reading}; blind_m?: {last?: Reading; trip?: Reading};
   intervention?: {last?: string | null; effect_pct?: Reading; stats?: Record<string, number>};
   interaction?: {state?: string | null; addressed_to?: string | number | null; dialog_window_open?: boolean; last_input?: {from?: number | null; channel?: string | null; value?: string | null; ts?: number | null} | null};
-  assistant?: {muted_until?: number | null; mute_reason?: string | null};
+  assistant?: {muted_until?: number | null; mute_reason?: string | null;
+    // P3's interaction preferences, copied by core every tick (assistant/preferences.py).
+    preferences?: {talkativeness?: "low" | "normal" | "high"; follow_up?: "always" | "never"; answer_length?: "short" | "normal"}};
 }
 export interface DashboardEvent {type: string; ts: number; source?: string | null; text?: string | null; explanation?: string | null; channel?: string | null; latency_ms?: number | null; data?: Record<string, unknown>}
 export interface SessionSocket extends EventTarget {readonly readyState:number;send(data:string):void}

@@ -12,12 +12,13 @@ import {Icon} from "../App";
 import {Cockpit,Greeting} from "./Cockpit";
 import {LandingPage} from "./LandingPage";
 import {MonitorPage} from "./MonitorPage";
+import {SettingsPage} from "./SettingsPage";
 import {Simulator} from "../Simulator";
 import {useRoutePlanner} from "../route-simulation";
 import "./driver.css";
 import "./cockpit.css";
 
-const links=[{page:"volan",icon:"grid"},{page:"dashboard",icon:"eye"},{page:"simulator",icon:"route"}] as const;
+const links=[{page:"volan",icon:"grid"},{page:"dashboard",icon:"eye"},{page:"setari",icon:"sliders"},{page:"simulator",icon:"route"}] as const;
 export function DriverApp(){
   const landing=usePage()==="start";
   const [visited,setVisited]=useState(!landing);
@@ -29,7 +30,7 @@ export function DriverApp(){
 }
 // Everything shown here comes from core over /ws/ui (session.ts). Without core the pages say so and show no values.
 function DriverWorkspace(){
-  const rawPage=usePage(),page=["start","salut","dashboard","simulator","missing"].includes(rawPage)?rawPage:"volan";
+  const rawPage=usePage(),page=["start","salut","dashboard","setari","simulator","missing"].includes(rawPage)?rawPage:"volan";
   const session=useDriverSession(),audio=useDriverAudio(session.data.socket);
   const shell=useRef<HTMLDivElement>(null);
   const [collapsed,setCollapsed]=useState(()=>{try{return localStorage.getItem("drivemate.sidebar.collapsed")==="true"}catch{return false;}});
@@ -66,6 +67,7 @@ function DriverWorkspace(){
       {session.error&&<div className="form-feedback" role="alert">{session.error}<button onClick={session.clearError}>Închide mesajul</button></div>}
       {page==="volan"&&<Cockpit/>}
       {page==="dashboard"&&<MonitorPage/>}
+      {page==="setari"&&<SettingsPage/>}
       {page==="simulator"&&<div><div className="driver-heading"><small>INSTRUMENTE / LOCAȚIE</small><h1>Simulator de locație</h1><p>Traseul de pe hartă devine drumul pe care core îl parcurge</p></div><Simulator planner={planner}/></div>}
       {page==="missing"&&<section className="empty-state"><h1>Pagina nu există</h1><p>Revino la meniul șoferului.</p><button onClick={()=>navigate("volan")}>La volan</button></section>}
       <footer className="driver-footer"><span>DriveMate · Copilot personal</span><span>Date Live · core</span></footer>

@@ -56,7 +56,8 @@ export function useDriverSession() {
 
 /** Dashboard actions that the contract can express (see :func:`liveMessage`). */
 export const LIVE_COMMANDS=new Set(["start_trip","resume_trip","pause_trip","stop_at_poi","end_trip","reset","scene","set_llm","set_child",
-  "declare_occupant","set_rate","set_speed","inject_message","debug","calibrate","enroll","request","answer","stop_media"]);
+  "declare_occupant","set_rate","set_speed","inject_message","debug","calibrate","enroll","request","answer","stop_media",
+  "set_assistant_preference"]);
 
 /**
  * A dashboard action as core expects it on ``/ws/ui`` (``UI_COMMANDS`` in shared/contracts.py), or null when the
@@ -80,6 +81,8 @@ export function liveMessage(name:string,args:Record<string,unknown>,state:Dashbo
     case "calibrate":return typeof args.profile==="string"&&args.profile.trim()?cmd({cmd:"calibrate",value:{profile:args.profile.trim(),quick:args.quick===true}}):null;
     case "enroll":return typeof args.name==="string"&&args.name.trim()?cmd({cmd:"enroll",value:{name:args.name.trim(),camera:args.camera==="passenger"?"passenger":"driver"}}):null;
     case "declare_occupant":return cmd({cmd:"declare_occupant",value:args});
+    // P3's interaction preferences (talkativeness / follow_up / answer_length); core keeps them for this trip.
+    case "set_assistant_preference":return typeof args.key==="string"&&typeof args.value==="string"?cmd({cmd:"assistant_preference",value:{key:args.key,value:args.value}}):null;
     case "set_child":{
       // A rear child is a declared occupant in core (plan G1); removing it needs the id core assigned.
       if(args.enabled===true)return cmd({cmd:"declare_occupant",value:{profile:null,role:"child",seat:"rear"}});

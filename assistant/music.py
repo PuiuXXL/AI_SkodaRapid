@@ -28,8 +28,9 @@ from pathlib import Path
 from typing import Optional
 
 from assistant import cabin
+from assistant.preferences import driver_profile
 from assistant.contract import State
-from assistant.settings import REPO_ROOT, cfg, resolve_path
+from assistant.settings import cfg, resolve_path
 
 log = logging.getLogger("drivemate.assistant.music")
 
@@ -123,16 +124,11 @@ def profile_genres(state: State) -> list[str]:
     Returns:
         Lower-case genre names, most preferred first.
     """
-    driver = cabin.occupant(state, "driver")
-    if driver and driver.profile:
-        path = REPO_ROOT / "profiles" / driver.profile / "profile.json"
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            genres = data.get("music_genres") or data.get("preferences", {}).get("music_genres")
-            if genres:
-                return [str(g).lower() for g in genres]
-        except (OSError, ValueError, AttributeError):
-            pass
+    data = driver_profile(state)
+    prefs = data.get("preferences")
+    genres = data.get("music_genres") or (prefs.get("music_genres") if isinstance(prefs, dict) else None)
+    if isinstance(genres, list) and genres:
+        return [str(g).lower() for g in genres]
     return [g.lower() for g in cfg("music", "default_genres", default=[])]
 
 
