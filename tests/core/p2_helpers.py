@@ -10,6 +10,7 @@ from core.engine import Engine
 from core.hub import Hub
 from core.safety import Safety
 from core.safety.sos import SosChannel
+from core.scoring import Scores
 from core.simulation import FakeSimulator
 from scripts.fake_perception import FakePerception
 
@@ -51,10 +52,11 @@ class Rig:
 
     def __init__(self, scene: int = 8, sos_channels: dict[str, SosChannel] | None = None,
                  assistant: Any = None) -> None:
-        self.hub = RecordingHub()
-        self.engine = Engine(self.hub, FakeSimulator())
-        self.safety = Safety(self.engine, sos_channels)
         self.t = T0
+        self.hub = RecordingHub()
+        self.engine = Engine(self.hub, FakeSimulator(clock=lambda: self.t))  # the trip moves in fake time too
+        self.safety = Safety(self.engine, sos_channels)
+        self.scores = Scores(self.engine)
         self.link = AssistantLink(self.engine, client=assistant, clock=lambda: self.t) if assistant else None
         self.fake = FakePerception(now=T0)
         self.patch: Any = None  # optional (frame dict, t) -> None, to shape what "P1" reports
