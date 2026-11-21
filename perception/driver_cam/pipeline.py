@@ -50,6 +50,7 @@ class DriverEyes(_Out):
     eye_squint: float | None = None
     eye_blink: float | None = None
     look_down: float | None = None
+    cnn_closed: float | None = None  # eye-state CNN p(closed) (None: model absent or no face)
     relaxed: bool = False  # gaze conditioning active (looking down / head tilted)
     long_closure: bool = False  # CLOSED for longer than eyes.blink_max_ms
     baseline_left: float | None = None
@@ -137,6 +138,7 @@ class DriverPipeline:
                 eye_squint=eyes.eye_squint,
                 eye_blink=eyes.eye_blink,
                 look_down=eyes.look_down,
+                cnn_closed=eyes.cnn_closed,
                 relaxed=eyes.relaxed,
                 long_closure=eyes.long_closure,
                 baseline_left=eyes.baseline_left,

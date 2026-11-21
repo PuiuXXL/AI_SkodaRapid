@@ -72,14 +72,15 @@ def draw_driver(
     if state is not None:
         e = state.eyes
         base = (
-            f"{e.baseline_left:.3f}/{e.baseline_right:.3f}{' (prov.)' if e.baseline_provisional else ''}"
-            if e.baseline_left is not None and e.baseline_right is not None
+            f"ref {e.ref_left:.3f}/{e.ref_right:.3f}{' (prov.)' if e.baseline_provisional else ''}"
+            f"{'  RELAXED' if e.relaxed else ''}"
+            if e.ref_left is not None and e.ref_right is not None
             else "learning..."
         )
         lines.append((f"EYES {e.state}  closed {e.closed_ms} ms  perclos {e.perclos_60s:.2f}", STATE_COLOURS[e.state]))
         ear_l = f"{e.ear_left:.3f}" if e.ear_left is not None else "-"
         ear_r = f"{e.ear_right:.3f}" if e.ear_right is not None else "-"
-        lines.append((f"EAR L {ear_l}  R {ear_r}  used {e.eye_used or '-'}  base {base}", GREEN))
+        lines.append((f"EAR L {ear_l}  R {ear_r}  used {e.eye_used or '-'}  {base}", GREEN))
         squint = f"{e.eye_squint:.2f}" if e.eye_squint is not None else "-"
         ratio = f"{e.ratio:.2f}" if e.ratio is not None else "-"
         blink = f"{e.blink_ms} ms" if e.blink_ms is not None else "-"

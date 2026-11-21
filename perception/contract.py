@@ -9,9 +9,10 @@ Pydantic models that follow ``DriveMate-PLAN-FINAL.md`` §7 field by field, for 
 * the whole ``passenger`` block;
 * ``perf.cameras`` and ``perf.*_ms_*``, ``cpu``, ``ram_mb``, ``gpu``.
 
-As soon as ``shared/contracts.py`` defines ``PerceptionFrame`` (and optionally ``PerceptionCommand``), :func:`validate_frame`
-and :func:`parse_command` use those instead; nothing here has to change. This file is never a second source of truth:
-it is deleted when P2's contract lands (``CONTRACT_SOURCE`` tells which one is in use).
+As soon as ``shared/contracts.py`` defines ``PerceptionFrame`` (and optionally ``PerceptionCommand``),
+:func:`validate_frame` and :func:`parse_command` use those instead; nothing here has to change. This file is never a
+second source of truth: the provisional models are deleted when P2's contract lands (``CONTRACT_SOURCE`` tells which
+one is in use).
 
 Fields P1 produces that are **not** in the plan's contract (``closed_ms``, ``squint``, ``monitoring_reason``, ...) are
 listed in docs/perception.md §9 with the exact ``CONTRACT:`` text for the group. They are sent only when

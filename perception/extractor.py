@@ -102,6 +102,17 @@ class FeatureExtractor:
             self._gesture_clock = VideoClock()
             self.models["gesture_recognizer"] = {"file": gesture_path.name, "backend": "mediapipe"}
 
+        self._eye_cnn: Any = None
+        eye_path = cfg.models.path(cfg.models.eye_state)
+        if cfg.eyes.cnn.enabled and eye_path.exists():
+            from perception.driver_cam.eye_cnn import EyeStateCNN
+
+            providers = [p for p in cfg.models.gaze_providers if p != CUDA]  # tiny model: CPU / OpenVINO
+            self._eye_cnn = EyeStateCNN(eye_path, providers, cfg.eyes.cnn.crop_scale, cfg.rates.perf_window)
+            self.models["eye_state"] = {"file": eye_path.name, "backend": self._eye_cnn.model.provider}
+        elif cfg.eyes.cnn.enabled:
+            log.warning("eye-state CNN enabled but its model is missing", extra={"fields": {"path": str(eye_path)}})
+
         self.cadence = {
             "gaze_every": self._gaze_every,
             "phone_every": self._phone_every,
@@ -120,6 +131,8 @@ class FeatureExtractor:
         mp_image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
         face, face_box = self.face.detect(mp_image, frame.t_capture, w, h)
+        if self._eye_cnn is not None and face.present:
+            face = face.model_copy(update={"eye_closed_p": self._eye_cnn.closed_probs(image, face)})
 
         gaze_out: GazeFeatures | None = None
         if self._gaze is not None and index % self._gaze_every == 0 and face_box is not None:
@@ -182,6 +195,10 @@ class FeatureExtractor:
     @property
     def phone_latency(self) -> LatencyWindow | None:
         return self._phone.latency if self._phone is not None else None
+
+    @property
+    def eye_state_latency(self) -> LatencyWindow | None:
+        return self._eye_cnn.latency if self._eye_cnn is not None else None
 
     @property
     def gesture_latency(self) -> LatencyWindow:

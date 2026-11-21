@@ -17,6 +17,7 @@ heartbeat when no frame arrives (camera unplugged, frozen driver), so the main p
 
 from __future__ import annotations
 
+import contextlib
 import multiprocessing as mp
 import queue
 import time
@@ -32,7 +33,7 @@ from perception.config import PerceptionConfig, PhoneConfig
 from perception.features import FaceFeatures, FeatureFrame, HandFeatures, PhoneBox
 from perception.log import get_logger
 
-__all__ = ["CameraWorker", "PhoneVoter", "GestureHold", "WorkerOptions", "put_latest", "run_camera"]
+__all__ = ["CameraWorker", "GestureHold", "PhoneVoter", "WorkerOptions", "put_latest", "run_camera"]
 
 log = get_logger("perception.worker")
 
@@ -53,14 +54,10 @@ def put_latest(q: Queue[Any], item: Any) -> None:
         return
     except queue.Full:
         pass
-    try:
+    with contextlib.suppress(queue.Empty):
         q.get_nowait()
-    except queue.Empty:
-        pass
-    try:
+    with contextlib.suppress(queue.Full):  # the consumer raced us; what it got is newer than nothing
         q.put_nowait(item)
-    except queue.Full:
-        pass  # the consumer raced us; the item it got is newer than nothing
 
 
 # --- small detectors that live with the camera ----------------------------------------------------------
@@ -137,7 +134,9 @@ class _NullExtractor:
         self.cadence: dict[str, int] = {}
 
     def extract(self, frame: Any, t: float, camera: str) -> FeatureFrame:
-        return FeatureFrame(t=round(t, 4), frame_id=frame.frame_id, camera=camera, face=FaceFeatures(present=False, conf=0.0))
+        return FeatureFrame(
+            t=round(t, 4), frame_id=frame.frame_id, camera=camera, face=FaceFeatures(present=False, conf=0.0)
+        )
 
     def set_phone_hz(self, rate_hz: float) -> None:
         return None
@@ -190,7 +189,13 @@ def run_camera(
     is_driver = name == "driver"
 
     def status(connected: bool, reason: str) -> dict[str, Any]:
-        return {"kind": "status", "camera": name, "t_capture": time.perf_counter(), "connected": connected, "reason": reason}
+        return {
+            "kind": "status",
+            "camera": name,
+            "t_capture": time.perf_counter(),
+            "connected": connected,
+            "reason": reason,
+        }
 
     with LatestFrameCamera(cam_cfg, name, source) as cam:
         first = cam.wait_new(0, timeout=cfg.workers.first_frame_timeout_s)
@@ -220,6 +225,8 @@ def run_camera(
             if extractor.phone_latency is not None:
                 perf.attach("phone", extractor.phone_latency)
             perf.attach("gesture", extractor.gesture_latency)
+            if extractor.eye_state_latency is not None:
+                perf.attach("eye_state", extractor.eye_state_latency)
 
         face_hz = 0.0 if is_driver else cfg.rates.passenger_face_hz  # 0 = every frame (driver: never degraded)
         debug = False
@@ -323,7 +330,9 @@ def run_camera(
                     else:
                         img = frame.image.copy()
                         label = f"{name} {state.eyes.state} {'' if mon.ok else mon.reason or ''}"
-                        cv2.putText(img, label, (16, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA)
+                        cv2.putText(
+                            img, label, (16, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2, cv2.LINE_AA
+                        )
                     put_latest(jpegs, _jpeg(img, out.video_width, out.jpeg_quality))
         extractor.close()
 
@@ -357,9 +366,10 @@ class CameraWorker:
         self._jpegs: Queue[Any] | None = None
         self._commands: Queue[Any] | None = None
         self._stop: Event | None = None
-        self._want_jpeg: Synchronized[int] = self._ctx.Value("b", 0)  # type: ignore[assignment]
+        self._want_jpeg: Synchronized[int] = self._ctx.Value("b", 0)
         self._started_at = 0.0
         self._last_msg_at = 0.0
+        self._got_frame = False  # stale detection only after the first frame (startup is slow)
         self._restart_at: float | None = None
         self._backoff = cfg.workers.restart_backoff_s
         self._stopping = False
@@ -400,6 +410,7 @@ class CameraWorker:
         self._proc.start()
         now = self._clock()
         self._started_at = self._last_msg_at = now
+        self._got_frame = False
         self._restart_at = None
         for cmd in self._persist.values():
             self._commands.put(cmd)
@@ -464,6 +475,7 @@ class CameraWorker:
                 pass
         if new is not None:
             self._last_msg_at = now
+            self._got_frame = self._got_frame or new["kind"] == "frame"
             self.latest = new
             self.available = new["kind"] == "frame" and bool(new.get("connected", True))
             if now - self._started_at > 30.0:
@@ -474,7 +486,8 @@ class CameraWorker:
     def _supervise(self, now: float) -> None:
         if self._stopping:
             return
-        if self._proc is not None and self._proc.is_alive() and now - self._last_msg_at > self.cfg.workers.stale_s:
+        silence = self.cfg.workers.stale_s if self._got_frame else self.cfg.workers.startup_s
+        if self._proc is not None and self._proc.is_alive() and now - self._last_msg_at > silence:
             log.warning("camera process hung: restarting", extra={"fields": {"camera": self.name}})
             self._proc.terminate()
             self._proc.join(2.0)

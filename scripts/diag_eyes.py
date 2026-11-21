@@ -3,8 +3,8 @@
     python scripts/diag_eyes.py --session data/features/<session>
 
 Writes, under data/diag/<session>/ (local only, gitignored with the rest of data/):
-  * overview_NN.png: 30 s pages with raw EAR left/right, EAR / local reference (bilateral) with drop_ratio / reopen_ratio, eyeBlink,
-    eyeSquint, eyeLookDown, head pitch raw/filtered, the labels and the detected states;
+  * overview_NN.png: 30 s pages with raw EAR left/right, EAR / local reference (bilateral) with drop_ratio /
+    reopen_ratio, eyeBlink, eyeSquint, eyeLookDown, CNN p(closed), head pitch raw/filtered, labels and states;
   * blinks.png, closures.png, false_closures.png, squint_smile.png, look_down.png: one zoomed panel per event;
   * diag.md: the tables and the three answers (blink width raw vs filtered, cause of false closures, real fps).
 
@@ -86,6 +86,7 @@ class Series:
     roll: np.ndarray
     state: list[str]
     speaking: np.ndarray
+    cnn: np.ndarray  # eye-state CNN p(closed) (NaN when the CNN did not run)
 
     def mask(self, t0: float, t1: float) -> np.ndarray:
         return (self.t >= t0) & (self.t < t1)
@@ -150,6 +151,7 @@ def build_series(frames: Sequence[FeatureFrame], states: Sequence[DriverState]) 
         r_r=r_r,
         state=[st.eyes.state for st in states],
         speaking=np.asarray([st.speaking for st in states]),
+        cnn=np.asarray([_f(st.eyes.cnn_closed) for st in states]),
         **arr,
     )
 
@@ -247,7 +249,9 @@ def _match_cues(cues: Sequence[Interval], events: Sequence[EyeEvent]) -> list[Ey
     return out
 
 
-def blink_table(s: Series, cues: Sequence[Interval], events: Sequence[EyeEvent], drop_ratio: float) -> list[dict[str, Any]]:
+def blink_table(
+    s: Series, cues: Sequence[Interval], events: Sequence[EyeEvent], drop_ratio: float
+) -> list[dict[str, Any]]:
     rows = []
     for cue, hit in zip(cues, _match_cues(cues, events), strict=True):
         t0, t1 = cue.start - BLINK_MATCH_BEFORE_S, cue.start + 1.5
@@ -330,7 +334,9 @@ def false_closures(
             cat = "look_down (eyeLookDown > p95)"
         elif vals["pitch_raw"] <= p5_pitch:
             cat = "pitch down (< p5)"
-        elif cfg.eyes.squint_ear_band[0] <= max(vals["r_l"], vals["r_r"]) and vals["blink"] < cfg.eyes.blendshape_closed:
+        elif (
+            cfg.eyes.squint_ear_band[0] <= max(vals["r_l"], vals["r_r"]) and vals["blink"] < cfg.eyes.blendshape_closed
+        ):
             cat = "squint-like (ratio in band, eyeBlink low)"
         elif labels:
             cat = f"during {'/'.join(labels)}"
@@ -356,7 +362,9 @@ def false_closures(
     return rows, counts
 
 
-def window_table(s: Series, wins: Sequence[Interval], events: Sequence[EyeEvent], cfg: PerceptionConfig) -> list[dict[str, Any]]:
+def window_table(
+    s: Series, wins: Sequence[Interval], events: Sequence[EyeEvent], cfg: PerceptionConfig
+) -> list[dict[str, Any]]:
     low, high = cfg.eyes.squint_ear_band
     rows = []
     for w in wins:
@@ -512,6 +520,8 @@ def plot_overview(
         ax.plot(t, s.blink[m], lw=0.9, label="eyeBlink")
         ax.plot(t, s.squint[m], lw=0.9, label="eyeSquint")
         ax.plot(t, s.look_down[m], lw=0.9, label="eyeLookDown")
+        if np.isfinite(s.cnn[m]).any():
+            ax.plot(t, s.cnn[m], lw=1.2, color="black", label="CNN p(closed)")
         ax.axhline(e.blendshape_closed, color="tab:blue", lw=0.5, ls=":")
         ax.set_ylim(0, 1)
         ax.legend(loc="upper right", fontsize=7, ncol=3)
@@ -561,6 +571,8 @@ def plot_windows(
         ax.plot(t, s.blink[m], lw=0.8, color="tab:blue", alpha=0.5, label="eyeBlink")
         ax.plot(t, s.squint[m], lw=0.8, color="tab:orange", alpha=0.5, label="eyeSquint")
         ax.plot(t, s.look_down[m], lw=0.8, color="tab:brown", alpha=0.5, label="eyeLookDown")
+        if np.isfinite(s.cnn[m]).any():
+            ax.plot(t, s.cnn[m], lw=1.2, color="magenta", label="CNN p(closed)")
         ax.axhline(cfg.eyes.drop_ratio, color="red", lw=0.6, ls="--")
         ax.axhline(cfg.eyes.reopen_ratio, color="green", lw=0.6, ls="--")
         _shade_states(ax, s, t0, t1)

@@ -30,9 +30,16 @@ MODELS=(
     "mobileone_s0_gaze.onnx|https://github.com/yakhyo/gaze-estimation/releases/download/weights/mobileone_s0_gaze.onnx|4000000"
     "yolo26n.pt|https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26n.pt|5000000"
     "yolo26s.pt|https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26s.pt|19000000"
+    # open-closed-eye-0001 (Intel Open Model Zoo, Apache-2.0); size and SHA-384 from its official model.yml
+    "open_closed_eye.onnx|https://storage.openvinotoolkit.org/repositories/open_model_zoo/public/2022.1/open-closed-eye-0001/open_closed_eye.onnx|46164"
 )
 
 size_of() { wc -c <"$1" | tr -d ' '; }
+
+# SHA-384 published next to the model (Open Model Zoo model.yml); files without one are checked by size + loading
+declare -A SHA384=(
+    ["open_closed_eye.onnx"]="2615bce53b55620c629db21b043057600ccc53466f053c0a8277c43577c2db21e48f330cf9b15213016d17cddb8cba27"
+)
 
 echo "== downloading into $DEST"
 for entry in "${MODELS[@]}"; do
@@ -56,8 +63,17 @@ for entry in "${MODELS[@]}"; do
         echo "ERROR: $file is $got B, expected >= $min B (URL: $url)" >&2
         exit 1
     fi
+    want_sha="${SHA384[$file]:-}"
+    if [[ -n "$want_sha" ]]; then
+        got_sha="$("$PY" -c 'import hashlib,sys; print(hashlib.sha384(open(sys.argv[1],"rb").read()).hexdigest())' "$target.part")"
+        if [[ "$got_sha" != "$want_sha" ]]; then
+            rm -f "$target.part"
+            echo "ERROR: $file SHA-384 mismatch (got $got_sha, expected $want_sha)" >&2
+            exit 1
+        fi
+    fi
     mv "$target.part" "$target"
-    echo "ok    $file ($got B)"
+    echo "ok    $file ($got B${want_sha:+, SHA-384 verified})"
 done
 
 echo "== exporting YOLO26 to ONNX (+ OpenVINO if installed)"

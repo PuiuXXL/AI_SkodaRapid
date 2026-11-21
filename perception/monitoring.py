@@ -16,22 +16,28 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-import cv2
 import numpy as np
 import numpy.typing as npt
 
 from perception.config import MonitoringConfig
 
-__all__ = ["MonitorState", "MonitoringReason", "Monitor", "thumbnail"]
+__all__ = ["Monitor", "MonitorState", "MonitoringReason", "thumbnail"]
 
 MonitoringReason = Literal["camera_unavailable", "camera_frozen", "camera_covered", "face_lost"]
 _THUMB = (64, 36)
 
 
 def thumbnail(image: npt.NDArray[np.uint8]) -> npt.NDArray[np.float32]:
-    """Small grey image for the frozen-frame check (cheap: ~0.1 ms on 720p)."""
-    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
-    return cv2.resize(grey, _THUMB, interpolation=cv2.INTER_AREA).astype(np.float32)
+    """Sparse pixel sample for the frozen-frame check (no averaging, ~0.05 ms on 720p).
+
+    Plain subsampling keeps the sensor noise: a live camera filming a static, empty scene still changes by ~1-2
+    grey levels per pixel, while a frozen driver returns the same buffer (difference 0). An area-averaged thumbnail
+    averaged that noise away and flagged a static dark room as frozen.
+    """
+    h, w = image.shape[:2]
+    sample = image[:: max(1, h // _THUMB[1]), :: max(1, w // _THUMB[0])]
+    grey = sample[..., 1] if sample.ndim == 3 else sample  # green channel: no colour conversion needed
+    return grey.astype(np.float32)
 
 
 @dataclass(frozen=True)

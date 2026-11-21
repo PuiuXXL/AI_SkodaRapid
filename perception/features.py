@@ -30,7 +30,7 @@ __all__ = [
     "landmark_slot",
 ]
 
-FEATURE_SCHEMA_VERSION = 1
+FEATURE_SCHEMA_VERSION = 2  # 2: face.eye_closed_p (optional, older files still load)
 
 # fmt: off
 _FACE_OVAL = (10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377,
@@ -90,11 +90,13 @@ class FaceFeatures(_Model):
     landmarks: list[Point3] | None = None  # LANDMARK_INDICES order, normalized
     blendshapes: dict[str, float] | None = None  # all 52 MediaPipe categories (REQUIRED_BLENDSHAPES at least)
     head_matrix: Annotated[list[float], Field(min_length=16, max_length=16)] | None = None  # 4x4, row-major
+    # eye-state CNN: p(closed) for the [left, right] eye (the person's); -1 = eye not croppable; None = CNN not run
+    eye_closed_p: Annotated[list[float], Field(min_length=2, max_length=2)] | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
         if not self.present:
-            if self.landmarks or self.blendshapes or self.head_matrix:
+            if self.landmarks or self.blendshapes or self.head_matrix or self.eye_closed_p:
                 raise ValueError("face.present is false but face data is set")
             return self
         if self.landmarks is None or len(self.landmarks) != len(LANDMARK_INDICES):

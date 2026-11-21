@@ -13,7 +13,7 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Any
 
 __all__ = ["LatencyWindow", "PerfTracker", "RateMeter", "SystemMonitor", "percentile", "round_or_none"]
@@ -168,7 +168,7 @@ class SystemMonitor:
         self._nvml: Any = None
         self._gpu_handle: Any = None
         try:
-            import pynvml
+            import pynvml  # type: ignore[import-untyped]  # optional: NVIDIA only
 
             pynvml.nvmlInit()
             self._gpu_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
@@ -207,8 +207,6 @@ class SystemMonitor:
 
     def close(self) -> None:
         if self._nvml is not None:
-            try:
+            with suppress(Exception):
                 self._nvml.nvmlShutdown()
-            except Exception:
-                pass
             self._nvml = None

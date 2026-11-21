@@ -63,6 +63,7 @@ models:
     - CUDAExecutionProvider
     - OpenVINOExecutionProvider
     - CPUExecutionProvider
+  eye_state: open_closed_eye.onnx  # open-closed-eye-0001, Intel OMZ, Apache-2.0 (eye-crop CNN, ~0.0014 GFLOPs)
   gaze_providers:              # MobileGaze is small: CUDA adds jitter (p95 15.4 vs 8.2 ms, docs/benchmark/)
     - OpenVINOExecutionProvider
     - CPUExecutionProvider
@@ -129,6 +130,12 @@ eyes:                          # docs/perception.md §3.2; values from docs/eval
   perclos_closure: 0.80
   perclos_window_s: 60
   min_eye_width_px: 18         # eye corner distance below this -> that eye is unreliable
+  cnn:                         # second opinion from the pixels for what EAR cannot separate (hard squint vs closed)
+    enabled: true              # active only if perception/models/open_closed_eye.onnx exists
+    crop_scale: 1.6            # crop side = 1.6 x eye-corner distance (the model was trained on loose eye crops)
+    open_max: 0.30             # p(closed) < 0.30 = clearly open -> a closure plateau is a squint (veto)
+    closed_min: 0.70           # p(closed) >= 0.70 = clearly closed -> confirms. Both: softmax defaults, to be tuned
+                               # live (recordings hold no pixels, so the CNN cannot be replayed on old sessions)
 
 yawn:
   jaw_open_threshold: 0.50     # jawOpen blendshape
@@ -214,7 +221,8 @@ filters:
 workers:                       # one OS process per camera (docs/perception.md §2)
   restart_backoff_s: 1.0       # a dead camera process is restarted after 1, 2, 4 ... s
   restart_backoff_max_s: 10.0
-  stale_s: 5.0                 # a live process silent this long is hung: kill and restart
+  stale_s: 5.0                 # a running process silent this long is hung: kill and restart
+  startup_s: 30.0              # before its first frame: DSHOW opens 720p in ~4 s, models load in ~2 s
   first_frame_timeout_s: 10.0
 
 output:

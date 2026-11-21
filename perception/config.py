@@ -118,6 +118,7 @@ class ModelsConfig(_Section):
     pose: str
     onnx_providers: Annotated[list[OnnxProvider], Field(min_length=1)]
     gaze_providers: Annotated[list[OnnxProvider], Field(min_length=1)]
+    eye_state: str  # open-closed-eye-0001 (eye-crop CNN, perception/driver_cam/eye_cnn.py)
 
     @model_validator(mode="after")
     def _cpu_fallback(self) -> Self:
@@ -170,6 +171,19 @@ class RatesConfig(_Section):
 RatioOfRef = Annotated[float, Field(gt=0, lt=1)]
 
 
+class EyeCnnConfig(_Section):
+    enabled: bool  # used when the model file is present; without it the detector runs on EAR + blendshapes only
+    crop_scale: PositiveFloat  # square crop side = this x the eye-corner distance
+    open_max: Fraction  # p(closed) below this on the reliable eyes = clearly open: vetoes a closure plateau
+    closed_min: Fraction  # p(closed) at or above this = clearly closed: confirms a plateau
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.open_max >= self.closed_min:
+            raise ValueError("eyes.cnn.open_max must be lower than eyes.cnn.closed_min")
+        return self
+
+
 class EyesConfig(_Section):
     # global reference (calibration, or provisional p90 of the first seconds): only a floor for the local one
     baseline_window_s: PositiveFloat
@@ -207,6 +221,7 @@ class EyesConfig(_Section):
     perclos_closure: RatioOfRef
     perclos_window_s: PositiveFloat
     min_eye_width_px: Annotated[float, Field(ge=1)]
+    cnn: EyeCnnConfig
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -345,7 +360,8 @@ class PassengerConfig(_Section):
 class WorkersConfig(_Section):
     restart_backoff_s: PositiveFloat  # first restart delay after a camera process died
     restart_backoff_max_s: PositiveFloat
-    stale_s: PositiveFloat  # no message from a live worker for this long -> it hangs: restart it
+    stale_s: PositiveFloat  # no message from a running worker for this long -> it hangs: restart it
+    startup_s: PositiveFloat  # allowed silence before the first frame (camera open + model load)
     first_frame_timeout_s: PositiveFloat
 
 

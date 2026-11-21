@@ -40,6 +40,7 @@ def face(
     width_px: float = 300.0,
     min_width: float = 250.0,
     matrix: list[float] | None = None,
+    cnn: list[float] | None = None,
 ) -> FaceFeatures:
     pts: list[tuple[float, float, float]] = [(0.5, 0.5, 0.0)] * len(LANDMARK_INDICES)
 
@@ -82,6 +83,7 @@ def face(
         landmarks=pts,
         blendshapes=blend,
         head_matrix=matrix or rotation_matrix(),
+        eye_closed_p=cnn,
     )
 
 
