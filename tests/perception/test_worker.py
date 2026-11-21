@@ -7,6 +7,7 @@ tests need no camera and no model files. The classes below are module-level so t
 
 from __future__ import annotations
 
+import dataclasses
 import time
 from collections.abc import Callable
 from typing import Any
@@ -166,6 +167,19 @@ def test_passenger_posture_is_off_by_default() -> None:
         assert isinstance(pipeline, ModularPipeline)
         names = [m.name for m in pipeline.modules]
         assert "posture" not in names and "passenger_state" in names
+    finally:
+        pipeline.close()
+
+
+def test_demo_switches_remove_modules_without_code_changes() -> None:
+    cfg = load_config()
+    off = cfg.demo.model_copy(update={"head_answer": False, "posture_driver": False})
+    ctx = dataclasses.replace(_ctx(), cfg=cfg.model_copy(update={"demo": off}))
+    pipeline = default_pipeline(ctx, PerfTracker())
+    try:
+        assert isinstance(pipeline, ModularPipeline)
+        names = [m.name for m in pipeline.modules]
+        assert "head_answer" not in names and "posture" not in names and "identity" in names
     finally:
         pipeline.close()
 

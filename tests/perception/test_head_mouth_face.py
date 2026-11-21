@@ -175,6 +175,19 @@ def test_num_faces_other_than_one_is_refused() -> None:
         FaceLandmarkerModel(bad)
 
 
+@pytest.mark.parametrize(("drop_deg", "fall_s"), [(18.0, 2.5), (20.0, 2.0), (25.0, 1.0)])
+def test_slow_drowsy_head_drop_with_closing_eyes_is_a_nod(drop_deg: float, fall_s: float) -> None:
+    """AS4: a drowsy nod falls slowly (1-2.5 s) with the eyes closing; a 2 s gap-free drop must be caught."""
+    cfg = load_config()
+    head = HeadTracker(cfg.head, cfg.filters)
+    nod = False
+    for i in range(round((1.0 + fall_s + 1.0) * FPS)):
+        t = i / FPS
+        down = drop_deg * min(1.0, max(0.0, (t - 1.0) / fall_s))
+        nod = head.update(t, rotation_matrix(pitch=down), eyes_closing=True).nodding or nod
+    assert nod
+
+
 def test_nod_survives_a_short_face_dropout_and_is_held() -> None:
     """The falling head leaves the face tracker for a few frames: the pitch history is kept (<= nod.max_gap_s), and a
     detected nod stays reported for nod.hold_s, frames without a face included."""

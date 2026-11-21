@@ -579,6 +579,7 @@ class PassengerStateModule:
         self._upright: deque[tuple[float, float]] = deque()
         self._last_pitch: tuple[float, float] | None = None
         self._asleep = False
+        self._open_run = 0  # consecutive open frames (the closed time resets only after open_reset_frames)
 
     def update(self, ff: FeatureFrame, inp: FrameInput) -> dict[str, Any]:
         p, t = self.cfg.passenger, inp.t
@@ -590,9 +591,13 @@ class PassengerStateModule:
             if state.head.raw_pitch is not None:
                 self._last_pitch = (t, state.head.raw_pitch)
             if state.eyes.reliable and state.eyes.state in ("OPEN", "SQUINT"):
-                self._last_open = t
+                self._open_run += 1
+                if self._open_run >= p.open_reset_frames:  # one noisy "open" frame does not wake a sleeper
+                    self._last_open = t
                 if state.head.raw_pitch is not None:
                     self._upright.append((t, state.head.raw_pitch))
+            else:
+                self._open_run = 0
         while self._upright and t - self._upright[0][0] > p.upright_window_s:
             self._upright.popleft()
         if self._last_open is None and self._last_face is not None:

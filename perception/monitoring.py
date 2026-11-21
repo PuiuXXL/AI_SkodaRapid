@@ -66,6 +66,9 @@ class CameraMonitorConfig:
     mode_switch_hold_s: float = 1.5
     min_face_width_px: float = 250.0
     analysis_width: int = 160
+    covered_s: float = 1.0  # no face + a very dark / uniform / sharpless image this long -> occluded (fast path)
+    covered_luma_max: float = 30.0
+    covered_sharpness_max: float = 8.0
 
     def __post_init__(self) -> None:
         if min(self.no_frames_s, self.frozen_s, self.face_lost_s, self.min_face_width_px) <= 0:
@@ -156,6 +159,7 @@ class CameraMonitor:
         self._last_face_t: float | None = None
         self._prev_thumb: npt.NDArray[np.float32] | None = None
         self._still_since: float | None = None
+        self._covered_since: float | None = None
         self._mode: Mode | None = None
         self._prev_luma: float | None = None
         self._switch_until = float("-inf")
@@ -233,12 +237,21 @@ class CameraMonitor:
             confidence = min(1.0, face_width_px / cfg.min_face_width_px)
         dark = stats.luma < cfg.dark_luma
         blurred = stats.sharpness < cfg.blur_var_min
+        # AS12 / AP5 fast path: lens covered = no face AND a very dark, uniform or sharpless image for covered_s
+        # (a hand passing in front of the lens is shorter; a face in the image is never "covered")
+        covered_now = not face_present and (
+            uniform or stats.luma < cfg.covered_luma_max or stats.sharpness < cfg.covered_sharpness_max
+        )
+        self._covered_since = (self._covered_since if self._covered_since is not None else t) if covered_now else None
+        covered = self._covered_since is not None and t - self._covered_since >= cfg.covered_s
 
         reason: MonitorReason | None = None
         if frozen:
             reason = "frozen"
         elif t < self._switch_until:
             reason = "mode_switch"
+        elif covered:
+            reason = "occluded"
         elif missing >= cfg.face_lost_s:
             reason = "occluded" if uniform else "too_dark" if dark else "blurred" if blurred else "face_lost"
         warnings: tuple[str, ...] = ()

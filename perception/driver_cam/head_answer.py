@@ -43,7 +43,7 @@ Answer = Literal["yes", "no"]
 @dataclass(frozen=True)
 class HeadAnswerConfig:
     slow_tau_s: float = 1.0
-    min_amplitude_deg: float = 6.0
+    min_amplitude_deg: float = 4.0
     min_crossings: int = 2
     window_s: float = 1.2
     dominance_ratio: float = 1.5

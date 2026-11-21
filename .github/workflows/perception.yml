@@ -6,6 +6,7 @@ on:
       - "perception/**"
       - "shared/**"                     # P2's contract: perception validates every frame against it
       - "tests/perception/**"
+      - "tests/contract/**"             # golden P1 frames (frame shape)
       - "scripts/**"                    # ruff / mypy check the P1 scripts (pyproject include / files)
       - "requirements/p1-*.txt"
       - "pyproject.toml"
@@ -15,6 +16,7 @@ on:
       - "perception/**"
       - "shared/**"
       - "tests/perception/**"
+      - "tests/contract/**"
       - "scripts/**"
       - "requirements/p1-*.txt"
       - "pyproject.toml"
@@ -37,7 +39,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"   # the version pyproject (ruff target, mypy) and the requirements target
+          python-version: "3.12"   # P1 decision 2026-11-21 (code still targets 3.11: pyproject ruff / mypy)
           cache: pip
           cache-dependency-path: |
             requirements/p1-perception.txt
@@ -65,7 +67,7 @@ jobs:
 
       - name: Pytest + coverage (tests needing models or a camera are skipped)
         run: >
-          python -m pytest tests/perception -m "not models and not camera" -q
+          python -m pytest tests/perception tests/contract -m "not models and not camera" -q
           --cov=perception --cov-report=term-missing:skip-covered --cov-report=xml:coverage-perception.xml
           --cov-fail-under=83
 

@@ -146,6 +146,19 @@ def test_zone_tracker_needs_min_frames_and_holds_through_blinks() -> None:
     assert tr.zone == "unknown"
 
 
+def test_zone_tracker_holds_the_zone_through_short_unknown_stretches() -> None:
+    tr = ZoneTracker(min_frames=3, blink_hold_s=0.5, unknown_hold_s=0.6)
+    unsure = ZoneResult("unknown", 0.4, 2.0, "road")
+    for i in range(5):
+        tr.update(i / 30, ZoneResult("road", 0.9, 0.1, "road"))
+    for i in range(5, 20):  # 0.5 s of classifier "unknown": road holds
+        assert tr.update(i / 30, unsure) == "road"
+    assert tr.update(20 / 30, ZoneResult("road", 0.9, 0.1, "road")) == "road"
+    for i in range(21, 60):  # 1.3 s unknown: reported once the hold (+ min_frames) has passed
+        tr.update(i / 30, unsure)
+    assert tr.zone == "unknown"
+
+
 def test_pipeline_classifies_every_zone_and_mode(cfg: PerceptionConfig, calibration) -> None:  # type: ignore[no-untyped-def]
     assert calibration.loo_accuracy()["all"] >= 0.95 and not calibration.warnings()
     pipe = DriverPipeline(cfg, (W, H), calibration.ear_baseline, calibration.model)

@@ -29,7 +29,10 @@ from perception.driver_cam.gaze_zones import (
 )
 from perception.driver_cam.head import HeadOutput, HeadTracker
 from perception.driver_cam.mouth import MouthOutput, MouthTracker
+from perception.driver_cam.rear_glance import RearGlance, RearGlanceConfig
 from perception.features import FeatureFrame
+
+REAR_GLANCE_CONF = 0.6  # AS13 comes from a rule on the head turn, not from the zone classifier
 
 __all__ = ["ClosedEyesLatch", "DriverEyes", "DriverFace", "DriverGaze", "DriverHead", "DriverPipeline", "DriverState"]
 
@@ -175,7 +178,12 @@ class DriverPipeline:
         self.gaze_smoother = GazeSmoother(f.min_cutoff, f.beta, f.d_cutoff, g.max_age_ms)
         self.gaze_features = GazeFeatureBuilder(cfg, frame_size)
         self.zone_model = zone_model
-        self.zones = ZoneTracker(g.zone_min_frames, cfg.eyes.blink_max_ms / 1000.0)
+        self.zones = ZoneTracker(g.zone_min_frames, cfg.eyes.blink_max_ms / 1000.0, g.unknown_hold_s)
+        r = g.rear_seat
+        self.rear = RearGlance(
+            RearGlanceConfig(r.min_yaw_deg, r.min_rise_deg, r.rising_s, r.max_gap_s, r.max_s, float(r.right_sign)),
+            enabled=cfg.demo.rear_seat,
+        )
         self.gaze_metrics = GazeMetrics(cfg)
         self.last_zone_features: npt.NDArray[np.float64] | None = None  # for the zone parameter sweep
         self.last_eyes = EyeOutput()
@@ -205,14 +213,17 @@ class DriverPipeline:
         if self.zone_model is not None and x is not None and not eyes_closed:
             result = self.zone_model.classify(x)
         zone = self.zones.update(ff.t, result, eyes_closed=eyes_closed and self.zone_model is not None)
+        rear = self.rear.update(ff.t, ff.face.present, head.raw_yaw)  # AS13: overrides the face-lost "unknown"
+        if rear:
+            zone = "rear_seat"
         if hands_seen is None and ff.hands is not None:  # recordings: the hands came with the frame
             hands_seen = bool(ff.hands)
         metrics = self.gaze_metrics.update(ff.t, zone, hands_seen)
         known = zone != "unknown"
         return DriverGaze(
             zone=zone,
-            conf=round(self.zones.conf, 3) if known else 0.0,
-            source="face" if known else None,
+            conf=(REAR_GLANCE_CONF if rear else round(self.zones.conf, 3)) if known else 0.0,
+            source=("body" if rear else "face") if known else None,
             off_road_ms=metrics.off_road_ms,
             vats_60s=metrics.vats_60s,
             entropy_60s=metrics.entropy_60s,

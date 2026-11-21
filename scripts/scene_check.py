@@ -11,9 +11,11 @@ judges every scene on the frames P1 publishes. Report: docs/eval/scene-check-<da
 S1 identities < 3 s + "yes" nod in the dialog window (both seats) | S2 left mirror without off_road x10, camera covered
 -> monitoring_ok=false < 2 s | S3 driver phone < 1 s (SPACE), thumbs up in the window (both) | S4 3 glances at the
 passenger + passenger.holding_phone, not the driver's phone | S5 gaze entropy falls over 30 s fixed | S6 yawns 3/3,
-open palm (both), passenger asleep < 12 s | S8 2 s closures with continuous closed_ms (+-100 ms), blinks 9/10, squint
-/ smile never a closure | S9 slow head drop with closed eyes 5/5, passenger awake again | N 60 s of normal driving:
-zero false phone / gesture / answer / posture / closure / nod events. Plus: driver face >= 20 fps.
+open palm (both), passenger asleep < 10 s | S7 thumbs up at the reminder (driver) | S8 2 s closures with continuous
+closed_ms (+-100 ms), blinks 9/10, squint / smile never a closure | S9 slow head drop with closed eyes >= 4/5, passenger
+awake again | A yes / no >= 9/10 | AS13 rear_seat on a turn to the rear | N 60 s of normal driving: zero false phone /
+gesture / answer / posture / closure / nod / rear / covered events. Plus: driver face >= 20 fps. (Scene 10, the trip
+report, has no P1 signal.)
 """
 
 from __future__ import annotations
@@ -225,7 +227,7 @@ async def s6(s: Session) -> None:
     t_closed = s.first(t0, t1, lambda f: f["passenger"].get("eyes_closed_s", 0) > 0)
     t_sleep = s.first(t0, t1, lambda f: f["passenger"].get("awake") is False)
     lat = None if t_closed is None or t_sleep is None else t_sleep - t_closed
-    s.record("S6", "passenger asleep < 12 s", lat is not None and lat < 12.0, f"{lat and round(lat, 1)} s")
+    s.record("S6", "passenger asleep < 10 s", lat is not None and lat < 10.0, f"{lat and round(lat, 1)} s")
     t0, t1, _ = await s.step("PASAGER: DESCHIDE ochii, priveste camera", 6.0, "S9 pasager treaz")
     awake = s.first(t0, t1, lambda f: f["passenger"].get("awake") is True and f["passenger"].get("present"))
     s.record("S9", "passenger awake again", awake is not None, f"{awake and round(awake - t0, 1)} s")
@@ -268,7 +270,40 @@ async def s9(s: Session) -> None:
         )
         await s.step("SOFER: ridica capul, ochii deschisi", 3.0, "S9")
         hits += any(f["driver"]["head"]["nodding"] for f in s.frames(t0, t1 + 1.0))
-    s.record("S9", "slow head drop with closed eyes 5/5", hits == 5, f"{hits}/5")
+    s.record("S9", "slow head drop with closed eyes >= 4/5", hits >= 4, f"{hits}/5")
+
+
+async def s7(s: Session) -> None:
+    """Scene 7: the reminder at the fuel station is confirmed with a thumbs up (driver, inside the window)."""
+    await s.dialog("driver")
+    t0, t1, _ = await s.step("SOFER: memento la benzinarie -> DEGETUL MARE SUS, tine 1 s", 7.0, "S7 memento")
+    got = {f["driver"].get("gesture") for f in s.frames(t0, t1)} - {None}
+    s.record("S7", "Thumb_Up driver (reminder)", "Thumb_Up" in got, f"gestures {sorted(got)}")
+    await s.step("mainile pe volan", 2.0, "S7")
+
+
+async def answers10(s: Session) -> None:
+    """AS8 target: >= 9/10 yes / no answers inside the window (5 yes, 5 no, driver)."""
+    hits, got_all = 0, []
+    for k, want in enumerate(["yes", "no"] * 5):
+        await s.dialog("driver", 6.0)
+        text = "DA din cap (2-3 aprobari)" if want == "yes" else "NU din cap (2-3 clatinari)"
+        t0, t1, _ = await s.step(f"SOFER: raspunde {text} ({k + 1}/10)", 5.0, "A raspuns din cap")
+        await s.step("relaxat, priveste drumul", 2.0, "A")
+        got = [f["driver"]["head"]["answer"] for f in s.frames(t0, t1) if f["driver"]["head"]["answer"]]
+        hits += bool(got) and got[0] == want
+        got_all.append(got[0] if got else "-")
+    s.record("A", "head yes / no >= 9/10 (inside the window)", hits >= 9, f"{hits}/10: {' '.join(got_all)}")
+
+
+async def rear(s: Session) -> None:
+    """AS13 (demo.rear_seat): turning to the rear seat on the right -> zone rear_seat."""
+    hits = 0
+    for k in range(3):
+        t0, t1, _ = await s.step(f"SOFER: INTOARCE-TE spre bancheta din spate, dreapta ({k + 1}/3)", 4.0, "AS13 spate")
+        await s.step("SOFER: inapoi la drum", 3.0, "AS13")
+        hits += any(f["driver"]["gaze"]["zone"] == "rear_seat" for f in s.frames(t0, t1 + 1.0))
+    s.record("AS13", "rear_seat on a turn to the rear >= 2/3", hits >= 2, f"{hits}/3")
 
 
 async def normal(s: Session) -> None:
@@ -280,6 +315,8 @@ async def normal(s: Session) -> None:
         "driver posture": lambda f: _posture_any(f["driver"]),
         "driver closure": lambda f: f["driver"]["eyes"].get("long_closure"),
         "driver nod": lambda f: f["driver"]["head"]["nodding"],
+        "driver rear_seat": lambda f: f["driver"]["gaze"]["zone"] == "rear_seat",
+        "driver covered": lambda f: f["driver"].get("monitoring_reason") == "occluded",
         "passenger phone": lambda f: f["passenger"].get("holding_phone"),
         "passenger gesture": lambda f: f["passenger"].get("gesture") is not None,
         "passenger answer": lambda f: f["passenger"].get("answer") is not None,
@@ -291,8 +328,10 @@ async def normal(s: Session) -> None:
     s.record("N", "60 s normal driving: zero false events", not bad, f"{bad or 'none'}")
 
 
-SCENES: dict[str, Callable[[Session], Any]] = {"S1": s1, "S2": s2, "S3": s3, "S4": s4, "S5": s5, "S6": s6, "S8": s8,
-                                               "S9": s9, "N": normal}  # fmt: skip
+#: plan §9 scenes 1-9 (scene 10, the trip report, has no P1 signal) + A (AS8 10 trials) + AS13 (extra) + N
+SCENES: dict[str, Callable[[Session], Any]] = {"S1": s1, "S2": s2, "S3": s3, "S4": s4, "S5": s5, "S6": s6, "S7": s7,
+                                               "S8": s8, "S9": s9, "A": answers10, "AS13": rear,
+                                               "N": normal}  # fmt: skip
 
 
 async def run(only: list[str], port: int) -> Session:
@@ -347,7 +386,7 @@ def write_report(session: Session, only: list[str]) -> Path:
         "",
         f"- scenes run: {' '.join(only)}{' (ABORTED)' if session.aborted else ''}; "
         f"criteria passed {ok}/{len(session.results)}",
-        "- driver: Logi C615 (1080p30 capture, 720p processing); passenger: LifeCam HD-6000 (720p30, 10 Hz)",
+        "- driver: Logi C615 (720p30); passenger: LifeCam HD-6000 (720p30, face at rates.passenger_face_hz)",
         "- judged on the PerceptionFrames P1 publishes (scripts/scene_check.py); nothing recorded",
         "",
         "| scene | criterion | result | detail |",

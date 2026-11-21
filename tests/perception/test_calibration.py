@@ -9,6 +9,7 @@ import pytest
 
 from perception.calibration import Calibration, CalibrationRun, CalibStep, build_steps, profile_path
 from perception.config import PerceptionConfig, load_config
+from perception.driver_cam.gaze_zones import FEATURES
 from perception.driver_cam.pipeline import DriverPipeline
 from tests.perception.driver_factory import FPS, H, W
 from tests.perception.zone_factory import calibrate_synthetic, zone_frame
@@ -107,7 +108,8 @@ def test_save_load_round_trip(cfg: PerceptionConfig, tmp_path: Path) -> None:
         ff = zone_frame(i, "mirror_rear", "lizard")
         a, b = pipe_a.update(ff), pipe_b.update(ff)
     assert a.gaze.zone == b.gaze.zone == "mirror_rear" and probe.gaze is not None
-    assert loaded.model.tau == pytest.approx(cal.model.tau, rel=1e-3)  # samples saved with 5 decimals
+    # samples saved with 5 decimals: tau is a p95 order statistic, the rounding can move it by a few 0.1 %
+    assert loaded.model.tau == pytest.approx(cal.model.tau, rel=1e-2)
 
 
 def test_quick_recalibration_replaces_road_and_mirrors_only(cfg: PerceptionConfig) -> None:
@@ -126,3 +128,21 @@ def test_profile_name_is_validated() -> None:
     assert profile_path("andrei").parts[-3:] == ("profiles", "andrei", "calibration.json")
     with pytest.raises(ValueError):
         profile_path("../etc")
+
+
+@pytest.mark.parametrize(("right_yaw", "warned"), [(4.0, True), (30.0, False)])
+def test_owl_step_without_a_head_turn_is_flagged(cfg: PerceptionConfig, right_yaw: float, warned: bool) -> None:
+    rng = np.random.default_rng(0)
+    rows, zones, modes = [], [], []
+    for zone, yaw, mode in (("road", 0.0, "owl"), ("mirror_right", right_yaw, "owl"), ("mirror_left", -25.0, "owl")):
+        for _ in range(20):
+            row = rng.normal(0.0, 0.5, size=len(FEATURES))
+            row[0] += yaw
+            rows.append(row)
+            zones.append(zone)
+            modes.append(mode)
+    n = len(rows)
+    cal = Calibration.from_samples(cfg, "t", np.asarray(rows), zones, modes, list(range(n)), [i / 30 for i in range(n)])
+    flagged = [w for w in cal.warnings(10.0) if "OWL step" in w]
+    assert flagged == ([flagged[0]] if warned else [])
+    assert not warned or flagged[0].startswith("mirror_right:")

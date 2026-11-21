@@ -231,3 +231,54 @@ def test_no_answer_outside_the_window_on_a_real_session() -> None:
         prev = a
     assert n_closed == 0
     assert still and not any(s.start <= t <= s.end for s in still for t in open_answers)
+
+
+# --- realistic answers with the yaml thresholds (A7: a normal nod is ~5-10 deg of pitch) -------------------------
+
+
+def _yaml_detector() -> HeadAnswerDetector:
+    from perception.config import load_config
+    from perception.module_config import head_answer_config
+
+    det = HeadAnswerDetector(head_answer_config(load_config()))
+    assert det.open_window(True, to="driver", until=100.0)
+    return det
+
+
+def _excursion(start: float, peak: float, out_s: float, hold_s: float) -> Signal:
+    """Smooth out-and-back move: 0 -> peak in out_s, held hold_s, back in out_s (a mirror glance)."""
+
+    def f(t: float) -> float:
+        x = t - start
+        if x < 0 or x > 2 * out_s + hold_s:
+            return 0.0
+        if x < out_s:
+            return peak * (1 - math.cos(math.pi * x / out_s)) / 2
+        if x < out_s + hold_s:
+            return peak
+        return peak * (1 + math.cos(math.pi * (x - out_s - hold_s) / out_s)) / 2
+
+    return f
+
+
+@pytest.mark.parametrize("p2p", [5.0, 7.0, 10.0])
+def test_realistic_nod_is_yes(p2p: float) -> None:
+    found = answers(run(_yaml_detector(), 4.0, pitch=osc(1.0, amp=p2p / 2, freq=1.8, cycles=2.0), noise=0.5))
+    assert [a for _, a in found] == ["yes"]
+
+
+def test_realistic_shake_is_no() -> None:
+    found = answers(run(_yaml_detector(), 4.0, yaw=osc(1.0, amp=4.0, freq=1.8, cycles=2.0), noise=0.5))
+    assert [a for _, a in found] == ["no"]
+
+
+@pytest.mark.parametrize(
+    ("yaw", "pitch"),
+    [
+        (_excursion(1.0, -25.0, 0.35, 0.4), zero),  # mirror glance and back inside the window
+        (zero, _excursion(1.0, -25.0, 0.4, 1.5)),  # look down at the lap and back
+        (osc(1.0, amp=1.0, freq=4.0, cycles=8.0), osc(1.0, amp=1.0, freq=3.0, cycles=6.0)),  # talking head bob
+    ],
+)
+def test_driving_head_moves_inside_the_window_are_not_answers(yaw: Signal, pitch: Signal) -> None:
+    assert answers(run(_yaml_detector(), 5.0, yaw=yaw, pitch=pitch, noise=0.5)) == []
