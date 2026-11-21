@@ -63,6 +63,8 @@ async def run(scenes: list[str], say: str | None) -> None:
         actions = await client.handle_event(event, state, now=event.ts)
         info = client.last_result
         print("-" * 78)
+        if info.error:
+            print(f"LLM error: {info.error}")
         print(f"source={info.source} reason={info.reason} total={info.latency_ms:.0f} ms "
               f"ttft={info.llm_ttft_ms and round(info.llm_ttft_ms)} ms llm_total={info.llm_total_ms and round(info.llm_total_ms)} ms")
         for action in actions:

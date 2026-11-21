@@ -122,3 +122,28 @@ async def test_memory_feeds_the_next_summary():
 def test_system_prompt_is_filled():
     prompt = system_prompt()
     assert "{language_name}" not in prompt and "Romanian" in prompt and "15 words" in prompt
+
+
+@pytest.mark.asyncio
+async def test_silence_on_a_direct_request_is_replaced():
+    """The driver spoke to the assistant: a lone stay_silent is not an acceptable answer."""
+    _, state = load_scene("scene3_message")
+    client = AssistantClient(FakeProvider({"actions": [{"type": "stay_silent", "reason": "nothing_to_add"}]}))
+    actions = await client.handle_event({"type": "driver_speech", "data": {"text": "amintește-mi ceva"}}, state, now=NOW)
+    assert client.last_result.reason == "silent_on_request"
+    assert actions[0].type == "speak" and actions[0].source == "RULE"
+
+
+@pytest.mark.asyncio
+async def test_refusal_silence_is_kept():
+    _, state = load_scene("scene3_message")
+    client = AssistantClient(FakeProvider({"actions": [{"type": "stay_silent", "reason": "driver_refused"}]}))
+    actions = await client.handle_event({"type": "driver_speech", "data": {"text": "nu mă mai bate la cap"}}, state, now=NOW)
+    assert [a.reason for a in actions] == ["driver_refused"] and client.last_result.source == "LLM"
+
+
+def test_short_error_keeps_code_and_status():
+    from assistant.client import _short_error
+
+    assert _short_error(Exception("Gemini API error 429: 429 RESOURCE_EXHAUSTED. {'error': ...}")) == "429 RESOURCE_EXHAUSTED"
+    assert _short_error(Exception("Gemini API error 503: 503 UNAVAILABLE. overloaded")) == "503 UNAVAILABLE"

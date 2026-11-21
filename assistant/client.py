@@ -53,8 +53,13 @@ _PROMPT_FILE = Path(__file__).resolve().parent / "prompts" / "system.md"
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _LANGUAGE_NAMES = {"ro": "Romanian", "en": "English"}
 
-#: Events answered without the LLM even when it is available.
-DETERMINISTIC_EVENTS = frozenset({"driver_refused"})
+#: Events answered without the LLM even when it is available: the refusal (plan D10)
+#: and the quiz offer after refused music (plan D8), whose follow-up is driven by
+#: ``assistant/dialog.py`` and needs the ``quiz_offer`` marker.
+DETERMINISTIC_EVENTS = frozenset({"driver_refused", "media_declined"})
+
+#: Events where a person spoke to the assistant: they always get a spoken answer.
+SPEECH_EVENTS = frozenset({"driver_speech", "passenger_speech"})
 
 
 @lru_cache(maxsize=1)
@@ -81,11 +86,14 @@ class AnswerInfo:
         source: ``"LLM"`` or ``"RULE"`` (fallback / policy / deterministic).
         reason: Why RULE was used (``"policy:muted"``, ``"timeout"``, ``"no_llm"``,
             ``"llm_disabled"``, ``"all_rejected"``, ``"llm_error"``, ``"invalid_json"``,
-            ``"deterministic"``) or ``"ok"``.
+            ``"deterministic"``, ``"silent_on_request"``) or ``"ok"``.
         latency_ms: Total time spent in :meth:`AssistantClient.handle_event`.
         llm_ttft_ms: Time to the first LLM chunk (plan J1 ``llm_ttft_ms``).
         llm_total_ms: Time to the complete LLM answer (``llm_total_ms``).
         rejected: ``(raw_action, reason)`` pairs rejected by validation.
+        error: Short description of the LLM failure when ``reason`` is ``llm_error``
+            (e.g. ``"429 RESOURCE_EXHAUSTED"`` = free-tier rate limit, ``"503 UNAVAILABLE"``
+            = Google overloaded), so it can be shown in the event log.
     """
 
     event_type: str = ""
@@ -95,6 +103,17 @@ class AnswerInfo:
     llm_ttft_ms: Optional[float] = None
     llm_total_ms: Optional[float] = None
     rejected: list[tuple[Any, str]] = field(default_factory=list)
+    error: Optional[str] = None
+
+
+def _short_error(exc: Exception) -> str:
+    """Compact form of an LLM error: HTTP code + status, e.g. ``"429 RESOURCE_EXHAUSTED"``."""
+    text = str(exc)
+    code = re.search(r"\b(4\d\d|5\d\d)\b", text)
+    status = re.search(r"\b([A-Z]+_[A-Z_]+|UNAVAILABLE|INTERNAL)\b", text)
+    if code or status:
+        return " ".join(part.group(1) for part in (code, status) if part)
+    return text[:120]
 
 
 class _StreamWatcher:
@@ -237,6 +256,7 @@ class AssistantClient:
             return self._fallback(event, state, info, skip_speech=bool(watcher and watcher.streamed))
         except LLMError as exc:
             info.reason = "llm_error"
+            info.error = _short_error(exc)
             log.warning("LLM error on %s: %s; using fallback.", event.type, exc)
             return self._fallback(event, state, info)
 
@@ -251,6 +271,14 @@ class AssistantClient:
 
         checked = actions_mod.validate_actions(raw_actions, state, event, source="LLM")
         info.rejected = [(r.raw, r.reason) for r in checked.rejected]
+        if event.type in SPEECH_EVENTS and not any(a.type in ("speak", "ask") for a in checked.accepted) and not any(
+            a.type == "stay_silent" and a.reason == "driver_refused" for a in checked.accepted
+        ):
+            # Someone spoke TO the assistant: silence is never an acceptable answer
+            # (only a refusal is). Use the fixed "n-am înțeles, poți repeta?" instead.
+            info.reason = "silent_on_request"
+            log.warning("LLM stayed silent on %s %r; using fallback.", event.type, event.data.get("text"))
+            return self._fallback(event, state, info)
         if not checked.accepted:
             if raw_actions:  # the LLM wanted to act but nothing was valid
                 info.reason = "all_rejected"
