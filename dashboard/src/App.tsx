@@ -1,4 +1,3 @@
-import {useDashboardEntrance} from "./useDashboardEntrance";
 import {MotionConfig, motion, useReducedMotion} from "motion/react";
 import type {StateProps, SessionData, Trip} from "./types";
 import React,{useState,useRef,useEffect} from "react";
@@ -8,6 +7,8 @@ import {Performance,Cabin,Scorecard,Metrics,Detail,Panel,Rows,fmt,words,time,yes
 import {Assistant} from "./Assistant";
 
 import "./design.css";
+import "./obsidian.css";
+import {NavigationShell,useMobileNavigation} from "./NavigationShell";
 import {Optic} from "./Optic";
 import {DataBars} from "./DataBars";
 import {ScoreHistory} from "./ScoreHistory";
@@ -35,7 +36,7 @@ function Feed({src,label}: {src: string; label: string}){
  return error?<div className="feed-error">{label} · indisponibil <button onClick={()=>{retry(attempt+1);setError(false)}}>Reîncearcă</button></div>:
  <img key={attempt} src={src} alt={label} onError={()=>setError(true)}/>;
 }
-function Cameras({live,socket,cue,trip,onLive,onDock,mini=false,onExpand}: {live: boolean; socket: WebSocket | null; cue: number; trip: Trip | undefined; onLive: () => void; onDock: (docked: boolean) => void; mini?:boolean; onExpand?:()=>void}){
+function Cameras({live,socket,cue,trip,onLive,onDock,mini=false,onExpand}: {live: boolean; socket: SessionData["socket"]; cue: number; trip: Trip | undefined; onLive: () => void; onDock: (docked: boolean) => void; mini?:boolean; onExpand?:()=>void}){
  const [passenger,showPassenger]=useState(false),[requested,setRequested]=useState<boolean | null>(null);
  const camera=useRef<HTMLElement>(null), boundary=useRef<HTMLDivElement>(null);
  const [compact,setCompact]=useState(false);
@@ -56,7 +57,7 @@ function Cameras({live,socket,cue,trip,onLive,onDock,mini=false,onExpand}: {live
    boundary.current?.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth",block:"start"});
    camera.current?.focus({preventScroll:true});
  }
- useEffect(()=>{if(cue && !matchMedia("(prefers-reduced-motion: reduce)").matches)camera.current?.animate([{outline:"3px solid #6699cd"},{outline:"3px solid transparent"}],300)},[cue]);
+ useEffect(()=>{if(cue && !matchMedia("(prefers-reduced-motion: reduce)").matches)camera.current?.animate([{outline:"3px solid var(--ui-info)"},{outline:"3px solid transparent"}],300)},[cue]);
  function debug(){
    if(socket?.readyState!==WebSocket.OPEN)return;
    const on=!requested;socket.send(JSON.stringify({type:"command",cmd:"debug",on}));setRequested(on);
@@ -132,8 +133,11 @@ function Monitor({live,change}: {live: boolean; change: (live: boolean) => void}
   return ()=>window.removeEventListener("hashchange",navigate);
  },[]);
  const shell=useRef<HTMLDivElement>(null);
- useDashboardEntrance(shell);
- const [view,setView]=useState<View>("overview"),[compact,setCompact]=useState(false),[docked,setDocked]=useState(false),[sidebarCollapsed,setSidebarCollapsed]=useState(false);
+ const mobile=useMobileNavigation();
+ const [view,setView]=useState<View>("overview"),[compact,setCompact]=useState(false),[docked,setDocked]=useState(false),[sidebarCollapsed,setSidebarCollapsed]=useState(()=>{
+  try{return localStorage.getItem("drivemate.sidebar.collapsed")==="true"}catch{return false}
+ });
+ useEffect(()=>{try{localStorage.setItem("drivemate.sidebar.collapsed",String(sidebarCollapsed))}catch{/* Navigation remains usable when storage is unavailable. */}},[sidebarCollapsed]);
  const reduced=useReducedMotion(),bar=useRef<HTMLElement>(null),tabButtons=useRef<(HTMLButtonElement | null)[]>([]);
  const alarm=s.safety?.alarm_ms_last??p.alarm_ms_last;
  const alert=s.safety?.alert;
@@ -153,19 +157,19 @@ function Monitor({live,change}: {live: boolean; change: (live: boolean) => void}
   setPage(next);location.hash="/"+next;
   shell.current?.scrollTo({top:0,behavior:"instant"});
  }
- const submenuVisible=sectionsOpen&&!sidebarCollapsed;
- const navTransition={type:"spring" as const,bounce:0,visualDuration:reduced?0:.28};
+ const submenuVisible=sectionsOpen&&(!sidebarCollapsed||mobile);
+ const navTransition={type:"spring" as const,bounce:0,visualDuration:reduced?0:.22};
  const navigation=(<nav className="page-nav" aria-label="Pagini">
   <div className="page-nav-group">
    <motion.div layout="position" layoutDependency={submenuVisible} transition={navTransition} className={"page-nav-row"+(page==="dashboard"?" page-current":"")}>
     {page==="dashboard"&&<motion.span className="page-active" layoutId="page-indicator" transition={navTransition}/>}
-    <motion.button className="page-link" title="Dashboard" aria-current={page==="dashboard"?"page":undefined} whileHover={reduced?undefined:{x:2}} whileTap={reduced?undefined:{scale:.97}} onClick={()=>{navigatePage("dashboard");setSectionsOpen(true)}}><Icon name="grid"/><span>Dashboard</span></motion.button>
+    <motion.button className="page-link" title="Dashboard" aria-label="Dashboard" aria-current={page==="dashboard"?"page":undefined} whileHover={reduced?undefined:{x:2}} whileTap={reduced?undefined:{scale:.97}} onClick={()=>{navigatePage("dashboard");setSectionsOpen(true)}}><Icon name="grid"/><span>Dashboard</span></motion.button>
     <motion.button className="sections-toggle" aria-label={sectionsOpen?"Ascunde secțiunile Dashboard":"Arată secțiunile Dashboard"} aria-expanded={submenuVisible} aria-controls="dashboard-sections" onClick={()=>{setSectionsOpen(!sectionsOpen);if(sidebarCollapsed)setSidebarCollapsed(false)}}><motion.svg animate={{rotate:submenuVisible?180:0}} transition={navTransition} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m6 9 6 6 6-6"/></motion.svg></motion.button>
    </motion.div>
    <motion.div id="dashboard-sections" className="nav-submenu" aria-hidden={!submenuVisible} inert={!submenuVisible} initial={false}
     animate={submenuVisible?"expanded":"collapsed"}
     variants={{
-     expanded:{height:"auto",opacity:1,transition:{height:{duration:reduced?0:.28},opacity:{duration:reduced?0:.16},delayChildren:reduced?0:.03,staggerChildren:reduced?0:.022}},
+     expanded:{height:"auto",opacity:1,transition:{height:{duration:reduced?0:.22},opacity:{duration:reduced?0:.16},delayChildren:reduced?0:.03,staggerChildren:reduced?0:.022}},
      collapsed:{height:0,opacity:0,transition:{duration:reduced?0:.18}}
     }}>
    <div className="section-nav" aria-label="Secțiuni dashboard">{views.map((item,i)=><motion.button key={item.id} variants={{expanded:{opacity:1,x:0},collapsed:{opacity:0,x:reduced?0:-8}}} transition={{duration:reduced?0:.16}} ref={el=>{tabButtons.current[i]=el}} aria-pressed={page==="dashboard"&&view===item.id} onClick={()=>{
@@ -176,16 +180,16 @@ function Monitor({live,change}: {live: boolean; change: (live: boolean) => void}
     selectView(views[next].id);tabButtons.current[next]?.focus();
    }} title={item.label} aria-label={item.label} whileHover={reduced?undefined:{x:3}} whileTap={reduced?undefined:{scale:.97}}>{page==="dashboard"&&view===item.id&&<motion.span className="nav-active" layoutId="section-indicator" transition={navTransition}/>}<Icon name={item.icon}/><span>{item.label}</span></motion.button>)}</div></motion.div>
   </div>
-  <motion.div layout="position" layoutDependency={submenuVisible} transition={navTransition} className={"page-nav-row"+(page==="simulator"?" page-current":"")}>{page==="simulator"&&<motion.span className="page-active" layoutId="page-indicator" transition={navTransition}/>}<motion.button className="page-link" title="Simulator" aria-current={page==="simulator"?"page":undefined} whileHover={reduced?undefined:{x:2}} whileTap={reduced?undefined:{scale:.97}} onClick={()=>navigatePage("simulator")}><Icon name="pulse"/><span>Simulator</span></motion.button></motion.div>
+  <motion.div layout="position" layoutDependency={submenuVisible} transition={navTransition} className={"page-nav-row"+(page==="simulator"?" page-current":"")}>{page==="simulator"&&<motion.span className="page-active" layoutId="page-indicator" transition={navTransition}/>}<motion.button className="page-link" title="Simulator" aria-label="Simulator" aria-current={page==="simulator"?"page":undefined} whileHover={reduced?undefined:{x:2}} whileTap={reduced?undefined:{scale:.97}} onClick={()=>navigatePage("simulator")}><Icon name="pulse"/><span>Simulator</span></motion.button></motion.div>
  </nav>);
- return <div ref={shell} className={"dashboard"+(compact?" density-compact":"")+(page==="simulator"||docked?" has-camera-dock":"")+(sidebarCollapsed?" sidebar-collapsed":"")}>
+ return <div ref={shell} className={"dashboard"+(compact?" density-compact":"")+(page==="simulator"||docked?" has-camera-dock":"")+(sidebarCollapsed&&!mobile?" sidebar-collapsed":"")}>
  <a className="skip-link" href="#workspace">Sari la conținut</a>
- <header className="app-header">
+ <NavigationShell mobile={mobile} navigationKey={page+":"+view}>
   <div className="sidebar-brand"><a href="#workspace" className="brand" aria-label="DriveMate · General" onClick={()=>selectView("overview")}><span className="road-mark" aria-hidden="true"><i/><i/></span><span className="brand-label">DriveMate</span></a><button className="nav-collapse" onClick={()=>setSidebarCollapsed(!sidebarCollapsed)} aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed?"Extinde navigarea":"Restrânge navigarea"} title={sidebarCollapsed?"Extinde navigarea":"Restrânge navigarea"}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d={sidebarCollapsed?"m9 5 7 7-7 7":"m15 5-7 7 7 7"}/></svg></button></div>
   {navigation}
   <div className="header-meta"><div className="sidebar-session"><span className="session-dot" aria-hidden="true"/><span>{data.connection}</span></div><label className="source-select"><span>Sursă</span><select aria-label="Sursa datelor" title="Sursa datelor" value={live?"live":"demo"} onChange={e=>change(e.target.value==="live")}><option value="demo">Simulat</option><option value="live">Live · local</option></select></label><button className="density-button" aria-label="Mod compact" aria-pressed={compact} onClick={()=>setCompact(!compact)} title="Schimbă densitatea cardurilor"><Icon name="grid"/><span>Mod compact</span></button></div>
- </header>
- <main id="workspace">
+ </NavigationShell>
+ <main id="workspace" tabIndex={-1}>
  {page==="dashboard"?<>
   <div className="title"><div className="title-copy"><h1>Monitorizare șofer</h1><p>Ultima actualizare <time>{time(s.ts)}</time></p></div><span className={"status-pill "+(live && data.connection!=="Live · conectat"?"waiting":"")} role="status">{data.connection}</span></div>
   {(alert||s.safety?.monitoring_ok===false)&&<div className="safety-banner" role="alert"><Icon name="pulse"/><strong>{s.safety?.monitoring_ok===false?"Monitorizare întreruptă":typeof alert==="object"?alert?.text??"Alertă activă":alert}</strong><span>Verifică starea șoferului.</span></div>}
