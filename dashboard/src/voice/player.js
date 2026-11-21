@@ -138,11 +138,13 @@ export class VoicePlayer {
 
   /**
    * Handle a `media` message: play / stop / change volume (plan D8).
-   * @param {{action: "play"|"stop"|"volume", url?: string, volume?: number}} message
+   * `loop` (default true) is false for YouTube songs and podcasts (`/media/yt/<id>.m4a`).
+   * @param {{action: "play"|"stop"|"volume", url?: string, volume?: number, loop?: boolean}} message
    */
   media(message) {
     if (message.action === "play" && message.url) {
       this.musicVolume = message.volume ?? this.musicVolume;
+      this.music.loop = message.loop ?? true;
       this.music.src = message.url;
       this.music.volume = this.current ? this.musicVolume * this.duckFactor : this.musicVolume;
       this.music.play().catch((err) => console.error("music failed", err));

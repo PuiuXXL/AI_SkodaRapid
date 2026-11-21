@@ -15,7 +15,7 @@ from typing import Iterable
 from assistant import cabin, music
 from assistant.contract import Event, State
 from assistant.memory import Turn
-from assistant.settings import poi_categories
+from assistant.settings import cfg, poi_categories
 
 
 def _pct(value: float) -> str:
@@ -86,11 +86,12 @@ def _media_line(state: State) -> str:
     now = "nothing playing"
     if state.media.playing:
         now = f"playing {state.media.track_id} \"{state.media.title or ''}\""
+    youtube = "YouTube search on" if cfg("youtube", "enabled", default=True) else "YouTube search off"
     found = music.candidates(state)
     if found:
         options = ", ".join(f"{t.id} ({t.genre}, energy {t.energy}) \"{t.title}\"" for t in found)
-        return f"{now}. Tracks you may suggest: {options}"
-    return f"{now}. No track available to suggest."
+        return f"{now}. {youtube}. Tracks you may suggest: {options}"
+    return f"{now}. {youtube}. No track available to suggest."
 
 
 def summarize(state: State, event: Event, turns: Iterable[Turn] = ()) -> str:

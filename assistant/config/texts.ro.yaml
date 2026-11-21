@@ -71,6 +71,19 @@ fallback:
   # D10: the driver refused the assistant ("lasă-mă în pace").
   refusal_ack: "Ok, te las în pace."
 
+  # YouTube music / podcasts on request (assistant/media_search.py). {o1} {o2} {o3} {title} are
+  # short spoken titles (2-4 words each); the whole question must stay within 15 words.
+  youtube_searching: "Caut."
+  youtube_choice_3: "Am găsit: {o1}, {o2} sau {o3}. Care?"
+  youtube_choice_2: "Am găsit: {o1} sau {o2}. Care?"
+  youtube_choice_1: "Pun {o1}?"
+  youtube_playing: "Pornesc {title}."
+  youtube_none: "N-am găsit nimic potrivit. Spune-mi altfel ce să caut."
+  youtube_no_more: "Altceva n-am găsit. Spune-mi ce să caut."
+  youtube_unavailable: "Nu pot căuta acum. Pun ceva din ce am?"
+  youtube_unavailable_no_catalog: "Nu pot căuta acum. Încearcă puțin mai târziu."
+  youtube_child_catalog: "Cu copil la bord pun doar din lista mea. Pun ceva?"
+
   # Free request the assistant could not handle without the LLM.
   not_understood: "Scuze, n-am înțeles. Poți repeta?"
   llm_unavailable: "Acum nu pot face asta. Încearcă puțin mai târziu."

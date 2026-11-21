@@ -18,6 +18,9 @@ Pipeline for one event:
    before the answer is finished (plan D1, section 8 rule 7).
 5. **Validation** (``assistant/actions.py``). If nothing valid survives, or on
    timeout / error -> fixed fallback texts (plan C9).
+6. **YouTube search** (``assistant/media_search.py``, docs/assistant.md 6.1): a
+   ``search_media`` action (from the LLM or the fallback) is resolved here into an
+   ``ask`` with ``expects="choice"`` listing the results; core never sees ``search_media``.
 
 Every answer is described in :attr:`AssistantClient.last_result` (source LLM/RULE,
 latency, rejected actions) so core can show it in the event log (plan H3, J1).
@@ -36,12 +39,12 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from assistant import actions as actions_mod
-from assistant import fallback
+from assistant import cabin, fallback, media_search, music
 from assistant.contract import Action, Event, State
 from assistant.llm import LLMError, LLMProvider, make_provider
 from assistant.memory import ShortMemory
 from assistant.policies import Policies
-from assistant.settings import cfg
+from assistant.settings import cfg, get_texts
 from assistant.summary import summarize
 
 log = logging.getLogger("drivemate.assistant.client")
@@ -225,6 +228,9 @@ class AssistantClient:
         else:
             result = await self._ask_llm(event, state, info, on_early_speech)
 
+        if any(a.type == "search_media" for a in result):
+            result = await self._resolve_media_search(result, event, state, info, on_early_speech)
+
         if any(a.type != "stay_silent" for a in result):
             self.policies.record(event, now)
         for action in result:
@@ -271,7 +277,8 @@ class AssistantClient:
 
         checked = actions_mod.validate_actions(raw_actions, state, event, source="LLM")
         info.rejected = [(r.raw, r.reason) for r in checked.rejected]
-        if event.type in SPEECH_EVENTS and not any(a.type in ("speak", "ask") for a in checked.accepted) and not any(
+        answers = ("speak", "ask", "search_media")  # a search becomes a spoken question (see _resolve_media_search)
+        if event.type in SPEECH_EVENTS and not any(a.type in answers for a in checked.accepted) and not any(
             a.type == "stay_silent" and a.reason == "driver_refused" for a in checked.accepted
         ):
             # Someone spoke TO the assistant: silence is never an acceptable answer
@@ -294,6 +301,55 @@ class AssistantClient:
                 for action, index in zip(checked.accepted, checked.accepted_indexes)
             ]
         return checked.accepted
+
+    async def _resolve_media_search(
+        self, result: list[Action], event: Event, state: State, info: AnswerInfo,
+        on_early_speech: Optional[EarlySpeechCallback],
+    ) -> list[Action]:
+        """Replace ``search_media`` with the spoken choice of YouTube results (docs/assistant.md 6.1).
+
+        "Caut." is said right away through ``on_early_speech`` (when given) because the search
+        takes ~0.5-5 s. Other questions in the same answer are dropped: one question at a time.
+        On failure / no results the driver hears why, and the local catalog is offered when
+        possible (plan C9: every component has a fallback).
+        """
+        search = next(a for a in result if a.type == "search_media")
+        kept = [a for a in result if a.type in ("speak", "stop_media")]
+        texts = get_texts().get("fallback", {})
+        if on_early_speech is not None and not any(a.type == "speak" and a.streamed for a in kept):
+            searching = Action(type="speak", to="driver", text=texts.get("youtube_searching", "Caut."),
+                               source="RULE", streamed=True)
+            try:
+                on_early_speech(searching)
+                kept.append(searching)
+            except Exception:  # noqa: BLE001 - a UI callback must never break the answer
+                log.exception("on_early_speech callback failed")
+        try:
+            found = await media_search.search(search.query or "", search.kind or "music",
+                                              kid_safe=cabin.has_child(state))
+        except media_search.MediaSearchError as exc:
+            info.error = f"media_search {exc}"
+            log.warning("YouTube search failed (%s) for %r", exc, search.query)
+            return kept + self._media_fallback(state, event, child=str(exc) == "kid_safe_needs_api")
+        if not found:
+            return kept + [Action(type="speak", to="driver", text=texts.get("youtube_none", ""), source="RULE")]
+        question, options = media_search.build_choice(found, media_search.offer_size(state))
+        media_search.prefetch(o["track_id"][len(media_search.TRACK_PREFIX):] for o in options if o["offered"])
+        ask = Action(type="ask", to="driver", question=question, expects="choice", options=options,
+                     reason="media_choice", source=search.source)
+        return kept + [ask]
+
+    def _media_fallback(self, state: State, event: Event, child: bool) -> list[Action]:
+        """Search impossible: offer a catalog track (kid_safe with a child), or just say so."""
+        texts = get_texts().get("fallback", {})
+        track = music.pick_track(state, "request")
+        if track is None:
+            raw = [{"type": "speak", "to": "driver", "text": texts.get("youtube_unavailable_no_catalog", "")}]
+        else:
+            key = "youtube_child_catalog" if child else "youtube_unavailable"
+            raw = [{"type": "ask", "to": "driver", "question": texts.get(key, ""), "expects": "yes_no"},
+                   {"type": "suggest_media", "track_id": track.id, "reason": "driver_request"}]
+        return actions_mod.validate_actions(raw, state, event, source="RULE").accepted
 
     def _fallback(self, event: Event, state: State, info: AnswerInfo, skip_speech: bool = False) -> list[Action]:
         """Fixed answer for ``event`` (validated, ``source="RULE"``).

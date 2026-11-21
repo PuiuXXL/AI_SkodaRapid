@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from assistant import cabin, music
+from assistant import cabin, media_search, music
 from assistant.contract import Action, Event, State
 from assistant.settings import cfg, get_texts
 from assistant.textutil import fill, word_count
@@ -180,6 +180,15 @@ def _not_understood(event: Event, state: State) -> list[dict]:
     return [_speak(_t("not_understood"))]
 
 
+def _speech(event: Event, state: State) -> list[dict]:
+    """Free request without the LLM: a music / podcast request still works (YouTube search), else 'n-am înțeles'."""
+    found = media_search.media_request(str(event.data.get("text", "")))
+    if found is not None and cfg("youtube", "enabled", default=True):
+        query, kind = found
+        return [{"type": "search_media", "query": query, "kind": kind}]
+    return _not_understood(event, state)
+
+
 #: Event type -> builder. Unknown events get :func:`_not_understood` for speech
 #: events and an empty answer otherwise.
 BUILDERS: dict[str, Callable[[Event, State], list[dict]]] = {
@@ -195,8 +204,8 @@ BUILDERS: dict[str, Callable[[Event, State], list[dict]]] = {
     "stop_suggested": _stop_suggested,
     "alert_explain": _alert_explain,
     "driver_refused": _driver_refused,
-    "driver_speech": _not_understood,
-    "passenger_speech": _not_understood,
+    "driver_speech": _speech,
+    "passenger_speech": _speech,
 }
 
 
