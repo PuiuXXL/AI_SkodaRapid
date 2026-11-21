@@ -111,7 +111,7 @@ python scripts/fake_perception.py --auto-answer        # nod "yes" to every dial
 | `3` | phone | `phone.in_use`, `source=detector`, glances at `lap` |
 | `4` | passenger x3 + their phone | 3 glances at `passenger` in 8 s, `passenger.holding_phone`, `foreign_seen` |
 | `5` | fixed gaze | road only, no head motion: entropy falls to 0 over 60 s; with `--auto-answer` answers in 2.5 s |
-| `6` | yawns, slow blinks, passenger asleep | yawn every 20 s, blinks of 450 ms, PERCLOS up, `passenger.awake=false` |
+| `6` | yawns, slow blinks, passenger asleep | yawn every 20 s, blinks of 420 ms every 2 s (PERCLOS ~0.21), `passenger.awake=false` |
 | `7` | eyes closed | `eyes.state=CLOSED`, `closed_ms` grows, `microsleep=false` (core decides) |
 | `8` | head down, no answer | pitch -35°, `nodding` for 1.5 s, eyes closed, never answers |
 | `9` | camera covered | `monitoring_ok=false`, `monitoring_reason=occluded`, the driver leaves `occupants` after 2 s |
@@ -226,7 +226,29 @@ pending question. Without P3's code installed, core and safety run, the assistan
 Checked end to end with P3's real client (no LLM key, its fixed texts): scene 1 greeting (paused at a mirror glance,
 resumed), scene 3 message ("Mesaj de la Mihai. Îl citesc tare?" -> "da" -> the text read as is), "oprește muzica".
 
-## 6. Testing without the others
+## 6. Scores (B): `core/scoring/`
+
+Updated every tick after the safety rules: `state.assessment` (attention, F, D, risk), `state.driver.reaction`,
+`state.conversation`, `state.blind_m`. A term without data yet (no reaction, no answer) is left out and the other
+weights are rescaled (`common.weighted`), so a missing measurement neither raises nor hides a score.
+
+| File | Score |
+|---|---|
+| `reaction.py` | **B1.** Visual: the off-road distraction's cue -> gaze back on the road. Verbal: `speak_done` of a question -> `speech_onset`. Gesture: the same question -> nod / gesture. Baseline = median of the first 3-5 per channel; `missed` and the response rate over 10 min; words per answer. |
+| `fatigue.py` | **B2, F.** PERCLOS, blink duration, yawns, slow reaction, nodding, trip duration, plan weights, EMA. Held while the camera is lost. |
+| `disengagement.py` | **B2, D.** Slow reaction, low gaze entropy, low response rate, short answers, monotony. Counts only in a monotonous context (highway, steady speed, `monotony.min_minutes` of trip time) with F under `max_fatigue`; otherwise it decays to 0. |
+| `attention.py` | **B3** attention (on-road share over 10 s, VATS and phone penalties) and risk 0-3 (inattention and F, times the speed factor); **B6** blind meters; **B9** conversation (alternating lips + microphone). |
+| `__init__.py` | Wiring, and the events for the assistant: `fatigue_high` (KSS conversation) and `disengagement_high` (the music offer) once per crossing of `high`, again after `low`, never while the assistant is silenced. |
+
+Calibrated on `fake_perception.py` (fake time, time x20): normal driving keeps F ~0 and D under `low` (the
+monotonous highway alone gives D ~0.3); key 5 on the highway crosses D 0.6 after ~20 s; key 6 crosses F 0.6 after
+~60 s (P1's PERCLOS is a 60 s window). `disengagement.norm.low_entropy` is [1.0, 0.3] bits because a normal scan is
+~1 bit; **both thresholds are to be tuned on P1's real data on Sunday.**
+
+Checked end to end (real processes, P3's real client): scene 5, fixed gaze on the highway -> `disengagement_high` ->
+"Pare monoton. Pun ceva mai energic, din ce-ți place?" -> "da" -> music with `reason=disengagement`.
+
+## 7. Testing without the others
 
 ```bash
 pytest tests/core                                   # the rules, scene by scene, in fake time
