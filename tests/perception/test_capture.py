@@ -10,12 +10,12 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 import pytest
-import yaml
 
 from perception import capture
 from perception.capture import (
     CameraDevice,
     CameraOpenError,
+    CameraSelection,
     CaptureInfo,
     Frame,
     LatestFrameCamera,
@@ -23,6 +23,7 @@ from perception.capture import (
     SyntheticSource,
     _list_v4l2_devices,
     _win_ids,
+    assignment_rows,
     decode_synthetic_id,
     effective_bits,
     is_mono,
@@ -30,11 +31,10 @@ from perception.capture import (
     normalize_fourcc,
     parse_usb_selector,
     resolve_device,
+    select_device,
     to_bgr8,
 )
 from perception.config import CameraConfig, load_config
-
-PENDING_IR = Path(__file__).resolve().parents[2] / "perception" / "config" / "pending" / "ir.yaml"
 
 
 @pytest.fixture
@@ -202,7 +202,7 @@ class FakeCapture:
         self.opened = not (params is not None and FakeCapture.refuse_params)
         FakeCapture.instances.append(self)
 
-    def isOpened(self) -> bool:  # noqa: N802 - cv2 API
+    def isOpened(self) -> bool:
         return self.opened
 
     def set(self, prop: int, value: float) -> bool:
@@ -222,7 +222,7 @@ class FakeCapture:
     def release(self) -> None:
         self.opened = False
 
-    def getBackendName(self) -> str:  # noqa: N802 - cv2 API
+    def getBackendName(self) -> str:
         return "FAKE"
 
 
@@ -233,7 +233,7 @@ def fake_cv(monkeypatch: pytest.MonkeyPatch) -> type[FakeCapture]:
     FakeCapture.frame = np.zeros((6, 8, 3), dtype=np.uint8)
     FakeCapture.fourcc = "MJPG"
     FakeCapture.fps = 30.0
-    monkeypatch.setattr(capture.cv2, "VideoCapture", FakeCapture)
+    monkeypatch.setattr(cv2, "VideoCapture", FakeCapture)  # the module capture.py uses
     monkeypatch.setattr(capture, "_PLATFORM", "linux")  # no Windows control writes, no DirectShow enumeration
     return FakeCapture
 
@@ -370,3 +370,81 @@ def test_list_v4l2_devices_from_sysfs(tmp_path: Path) -> None:
         (2, "/dev/video2", "045e", "0770", None),
         (10, "/dev/video10", "045e", "076f", None),
     ]
+
+
+def test_port_selector_tells_identical_cameras_apart() -> None:
+    from perception.capture import CameraDevice, _win_port
+
+    a = "\\\\?\\usb#vid_046d&pid_082c&mi_02#7&d60e892&0&0002#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global"
+    b = "\\\\?\\usb#vid_046d&pid_082c&mi_02#7&1f2e3d4&0&0002#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global"
+    assert _win_port(a) == "7&d60e892"
+    twins = [
+        CameraDevice(1, "C615", a, "046d", "082c", None, port=_win_port(a)),
+        CameraDevice(2, "C615", b, "046d", "082c", None, port=_win_port(b)),
+    ]
+    with pytest.raises(CameraOpenError, match="@<port>"):
+        match_device("usb:046d:082c", twins)
+    assert match_device("usb:046d:082c@d60e892", twins).index == 1
+    assert match_device("usb:046d:082c@1F2E3D4", twins).index == 2
+    with pytest.raises(CameraOpenError):
+        match_device("usb:046d:082c@nothere", twins)
+
+
+# --- camera selection: usb -> name -> development fallback ----------------------------------------------------------
+
+_INTEGRATED = CameraDevice(0, "Integrated Camera", "p0", "5986", "2175")
+_C615 = CameraDevice(1, "Logi C615 HD WebCam", "p1", "046d", "082c")
+_LIFECAM = CameraDevice(2, "Microsoft LifeCam HD-6000 for Notebooks", "p2", "045e", "076f")
+
+
+@pytest.fixture(autouse=False)
+def win(monkeypatch: pytest.MonkeyPatch) -> None:
+    import perception.capture as capture_mod
+
+    monkeypatch.setattr(capture_mod, "_PLATFORM", "win32")  # DirectShow numbering: the selection gives indices
+
+
+def _cams(**update: Any) -> Any:
+    cams = load_config().cameras
+    return cams.model_copy(update=update)
+
+
+def test_select_by_usb_then_by_name(win: None) -> None:
+    cams = _cams()
+    sel = select_device("driver", cams, [_INTEGRATED, _C615, _LIFECAM])
+    assert (sel.device, sel.via) == (1, "usb")
+    renamed = CameraDevice(5, "Logi C615 HD WebCam", "p5", None, None)  # ids unreadable: found by its name
+    sel = select_device("driver", cams, [_INTEGRATED, renamed])
+    assert (sel.device, sel.via) == (5, "name")
+    assert select_device("driver", cams, [_C615]).matched == _C615
+
+
+def test_missing_camera_without_fallback_is_not_found(win: None) -> None:
+    with pytest.raises(CameraOpenError, match="camera not found"):
+        select_device("driver", _cams(dev_fallback=False), [_INTEGRATED, _LIFECAM])
+
+
+def test_fallback_goes_to_the_driver_first_and_never_to_a_claimed_camera(win: None) -> None:
+    cams = _cams(dev_fallback=True)
+    sel = select_device("driver", cams, [_INTEGRATED, _LIFECAM])  # C615 missing
+    assert (sel.device, sel.via) == (0, "fallback")  # the integrated camera, not the passenger's LifeCam
+    assert select_device("passenger", cams, [_INTEGRATED, _LIFECAM]).via == "usb"
+    # both USB cameras missing, one integrated camera: the driver gets it, the passenger is unavailable
+    assert select_device("driver", cams, [_INTEGRATED]).via == "fallback"
+    with pytest.raises(CameraOpenError):
+        select_device("passenger", cams, [_INTEGRATED])
+    # only the LifeCam missing: the passenger may take the integrated camera
+    assert select_device("passenger", cams, [_INTEGRATED, _C615]).device == 0
+
+
+def test_explicit_index_is_used_as_is(win: None) -> None:
+    cams = _cams()
+    cams = cams.model_copy(update={"driver": cams.driver.model_copy(update={"device": 0})})
+    assert select_device("driver", cams, []) == CameraSelection(0, "index")
+
+
+def test_assignment_rows_show_every_device(win: None) -> None:
+    rows, assigned = assignment_rows(_cams(), [_INTEGRATED, _C615], ["driver", "passenger"])
+    assert [r["assigned"] for r in rows] == ["-", "driver (usb)"]
+    assert rows[1]["vid_pid"] == "046d:082c"
+    assert assigned["passenger"].startswith("NOT FOUND")

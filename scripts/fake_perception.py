@@ -151,6 +151,8 @@ class FakePerception:
         """Apply one key; returns a line describing what changed (None for an unknown key)."""
         if key in MODES:
             self.mode, self.mode_since = key, now
+            if key not in ("7", "8"):
+                self.closed_since = None  # the eyes open now: a long closure must not run on into the next blink
             if key == "1":
                 self.passenger_holding_phone = False
             if key == "4":

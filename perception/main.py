@@ -9,13 +9,15 @@
 * One :class:`~perception.worker.CameraWorker` process per enabled camera (docs/perception.md §2); the passenger
   camera only when enabled (``cameras.passenger.enabled`` or ``--passenger on``).
 * Every ``1 / output.publish_hz`` s the newest result of each camera is merged into one ``PerceptionFrame``
-  (perception/frame_builder.py) with its data age: a result older than ``output.result_max_age_ms`` (pending yaml)
+  (perception/frame_builder.py) with its data age: a result older than ``output.result_max_age_ms``
   counts as no data. ``ts`` = capture time of the newest driver frame.
 * WebSocket client to ``output.ws_url`` with exponential backoff and jitter: runs fine without core and logs the
   outage once until the next successful connection.
 * Commands from core, each answered with ``{"type": "ack", "cmd", "status", "detail"}``: ``debug`` (all cameras),
-  ``dialog_window`` (the addressed camera), ``calibrate`` (driver: ``started``, then ``calibration_prompt`` messages,
-  then ``done`` / ``error``); any other command (``enroll``, ...) goes to the addressed camera **only if its pipeline
+  ``dialog_window`` (the addressed camera), ``calibrate`` (always the driver camera: ``started``, then
+  ``calibration_prompt`` messages, then ``done`` / ``error``; the profile is then re-sent to the worker after any
+  restart), ``enroll`` (the camera in ``camera``, else ``to``, else the driver: ``started``, ``progress`` with the
+  frame count, then ``done`` / ``error``); any other command goes to the addressed camera **only if its pipeline
   declares it**, otherwise it is logged and answered ``not_implemented``.
 * MJPEG on ``output.mjpeg_port`` (perception/stream.py): ``/video/driver``, ``/video/passenger``, ``/``, ``/health``.
 * Degradation rule (perception/degrade.py): passenger rate first, then YOLO; the driver face never.
@@ -31,11 +33,9 @@ import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import orjson
-import yaml
-from pydantic import BaseModel, ConfigDict, PositiveFloat
 
 from perception.config import PerceptionConfig, load_config
 from perception.contract import CONTRACT_SOURCE, parse_command
@@ -46,40 +46,12 @@ from perception.perf import LatencyWindow, SystemMonitor, round_or_none
 from perception.stream import MjpegServer
 from perception.worker import CameraWorker, PipelineFactory, WorkerOptions
 
-__all__ = ["PENDING_CONFIG_PATH", "PendingConfig", "Perception", "WsClient", "build_frame", "load_pending", "main"]
+__all__ = ["Perception", "WsClient", "build_frame", "main"]
 
 log = get_logger("perception.main")
 
 POLL_S = 0.005
 DIALOG_DEFAULT_S = 6.0  # plan E1: 6 s dialog window when core gives no end time
-PENDING_CONFIG_PATH = Path(__file__).resolve().parent / "config" / "pending" / "output.yaml"
-
-
-# --- pending config keys (move into perception.yaml + config.py at integration) -----------------------------
-
-
-class _Pending(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class PendingOutput(_Pending):
-    result_max_age_ms: PositiveFloat
-    mjpeg_host: str
-
-
-class PendingWorkers(_Pending):
-    modules: dict[Literal["driver", "passenger"], list[str]]
-
-
-class PendingConfig(_Pending):
-    output: PendingOutput
-    workers: PendingWorkers
-
-
-def load_pending(path: str | Path | None = None) -> PendingConfig:
-    """Load ``perception/config/pending/output.yaml`` (every key required, unknown keys rejected)."""
-    p = Path(path) if path is not None else PENDING_CONFIG_PATH
-    return PendingConfig.model_validate(yaml.safe_load(p.read_text(encoding="utf-8")))
 
 
 # --- WebSocket client ---------------------------------------------------------------------------------------
@@ -180,12 +152,10 @@ class Perception:
         mjpeg_port: int | None = None,
         print_frames: bool = False,
         out: Callable[[str], None] | None = None,
-        pending: PendingConfig | None = None,
         factory: PipelineFactory | str | None = None,
     ) -> None:
         self.cfg = cfg
-        self.pending = pending or load_pending()
-        modules: dict[str, list[str]] = {str(k): v for k, v in self.pending.workers.modules.items()}
+        modules: dict[str, list[str]] = {str(k): v for k, v in cfg.workers.modules.items()}
         self.workers = {
             name: CameraWorker(name, cfg, options, factory=factory, modules=modules.get(name, [])) for name in cameras
         }
@@ -199,7 +169,7 @@ class Perception:
         self.stream: MjpegServer | None = (
             MjpegServer(
                 self.workers,
-                host=self.pending.output.mjpeg_host,
+                host=cfg.output.mjpeg_host,
                 port=cfg.output.mjpeg_port if mjpeg_port is None else mjpeg_port,
                 fps=cfg.output.video_fps,
                 health=self._health,
@@ -217,6 +187,8 @@ class Perception:
         self._pending_capture: float | None = None  # t_capture of a driver frame not yet published
         self.acks: list[dict[str, Any]] = []
         self._calib_seen: tuple[int, str, int | None] = (0, "idle", None)  # (id, state, prompt step)
+        self._enroll_seen: dict[str, tuple[int, str, int]] = {}  # camera -> (id, state, frame count)
+        self._last_seq: dict[str, int] = {}
 
     @property
     def bound_port(self) -> int | None:
@@ -258,10 +230,31 @@ class Perception:
         elif cal["state"] in ("done", "error"):
             detail = {k: v for k, v in cal.items() if k not in ("id", "state", "prompt")}
             self._send_event({"type": "ack", "cmd": "calibrate", "status": cal["state"], "detail": detail})
+            driver = self.workers.get("driver")
+            if cal["state"] == "done" and cal.get("profile") and driver is not None:
+                # persisted: a restarted driver worker loads this calibration again instead of starting uncalibrated
+                driver.send({"cmd": "load_profile", "profile": cal["profile"]}, persist=True)
+
+    def _enroll_events(self, camera: str, msg: dict[str, Any]) -> None:
+        """Persistent enrollment state of a camera (``identity.enroll``) -> ``progress`` / ``done`` / ``error`` acks."""
+        enroll = (msg.get("identity") or {}).get("enroll")
+        if not enroll or enroll.get("state") not in ("running", "done", "error"):
+            return
+        key = (int(enroll.get("id") or 0), str(enroll["state"]), int(enroll.get("count") or 0))
+        if self._enroll_seen.get(camera) == key:
+            return
+        self._enroll_seen[camera] = key
+        status = "progress" if enroll["state"] == "running" else enroll["state"]
+        detail = {k: v for k, v in enroll.items() if k not in ("id", "state")}
+        self._send_event({"type": "ack", "cmd": "enroll", "status": status, "detail": {"camera": camera, **detail}})
 
     def _route(self, cmd: Any) -> tuple[str, str | None]:
         """Send a command to the camera(s) it is for; returns the ack (status, detail)."""
         target = "passenger" if cmd.to in ("passenger", 2) else "driver"
+        if cmd.cmd == "calibrate":
+            target = "driver"  # gaze zones exist only on the driver camera
+        elif cmd.cmd == "enroll" and getattr(cmd, "camera", None):
+            target = cmd.camera
         if cmd.cmd == "debug":
             for w in self.workers.values():
                 w.send({"cmd": "debug", "on": cmd.on}, persist=True)
@@ -281,12 +274,16 @@ class Perception:
             return "started", f"profile {profile}{' (quick)' if cmd.quick else ''}"
         # enroll and any later command: only to a pipeline that declares it
         payload = {k: v for k, v in cmd.model_dump(mode="json").items() if v is not None}
+        if cmd.cmd == "enroll":
+            payload["camera"] = target
+            if not (cmd.name or cmd.profile):
+                return "error", "enroll needs a name"
         if worker.capabilities is None:  # the worker has not reported yet: send, it logs it if nothing handles it
             worker.send(payload)
             return "queued", f"camera {target} starting"
         if cmd.cmd in worker.capabilities:
             worker.send(payload)
-            return "ok", None
+            return ("started", f"camera {target}") if cmd.cmd == "enroll" else ("ok", None)
         log.info("command without a module yet: logged only", extra={"fields": {"cmd": cmd.cmd, "camera": target}})
         return "not_implemented", f"no module handles '{cmd.cmd}' on camera {target} yet"
 
@@ -309,12 +306,11 @@ class Perception:
         while True:
             for w in self.workers.values():
                 msg = w.poll()
-                if (
-                    msg is not None
-                    and w.name == "driver"
-                    and msg["kind"] == "frame"
-                    and msg["seq"] != self._last_driver_seq
-                ):
+                if msg is None or msg["kind"] != "frame" or msg["seq"] == self._last_seq.get(w.name):
+                    continue
+                self._last_seq[w.name] = msg["seq"]
+                self._enroll_events(w.name, msg)
+                if w.name == "driver":
                     self._last_driver_seq = msg["seq"]
                     self._pending_capture = msg["t_capture"]
                     self._calibration_events(msg)
@@ -351,7 +347,7 @@ class Perception:
             system=self.system.sample(),
             degrade_level=self.degrade.level,
             now_perf=now,
-            max_age_ms=self.pending.output.result_max_age_ms,
+            max_age_ms=self.cfg.output.result_max_age_ms,
             publish_ts=time.time(),
         )
         payload = orjson.dumps(frame)
@@ -364,12 +360,22 @@ class Perception:
         return frame
 
     async def _publish(self) -> None:
+        """``publish_hz`` on average, each frame sent as soon as a fresh driver result is in.
+
+        A free-running tick would make a driver result wait up to one period (66 ms at 15 Hz) before it is sent, and
+        that wait counts in the e2e budget (capture -> publication < 150 ms p95). Here a frame is due every period; it
+        goes out on the first fresh driver result within ``slack`` before the due time, or at ``due + slack`` without
+        one (driver camera down: the frame still goes out, with the camera reported unavailable).
+        """
         period = 1.0 / self.cfg.output.publish_hz
-        next_t = time.perf_counter()
+        slack = min(0.35 * period, 0.025)
+        due = time.perf_counter()
         while True:
-            next_t += period
-            self.publish_once()
-            await asyncio.sleep(max(0.0, next_t - time.perf_counter()))
+            now = time.perf_counter()
+            if (self._pending_capture is not None and now >= due - slack) or now >= due + slack:
+                self.publish_once()
+                due = max(due + period, now + 0.5 * period)  # average rate kept, no catch-up bursts
+            await asyncio.sleep(POLL_S)
 
     # run -------------------------------------------------------------------------------------------------
 
@@ -411,6 +417,27 @@ def _with_driver_device(cfg: PerceptionConfig, device: str) -> PerceptionConfig:
     return PerceptionConfig.model_validate(data)  # re-validated: e.g. the same device as the passenger is refused
 
 
+def log_camera_table(cfg: PerceptionConfig, cameras: list[str]) -> str:
+    """Start-up log: every capture device (index, name, VID:PID) and which camera gets it, with the same selection
+    the workers use (perception/capture.py ``select_device``). Returns the table text."""
+    from perception.capture import assignment_rows, list_devices
+
+    rows, assigned = assignment_rows(cfg.cameras, list_devices(), cameras)
+    lines = ["capture devices:", f"  {'idx':>3}  {'name':<44} {'vid:pid':<10} assigned"]
+    lines += [f"  {r['index']:>3}  {r['name'][:44]:<44} {r['vid_pid']:<10} {r['assigned']}" for r in rows]
+    if not rows:
+        lines.append("  (none found)")
+    lines += [f"  {cam}: {how}" for cam, how in assigned.items()]
+    text = "\n".join(lines)
+    log.info(text)
+    for cam, how in assigned.items():
+        if how.startswith("NOT FOUND"):
+            log.warning("camera_unavailable at start", extra={"fields": {"camera": cam}})
+        elif how.startswith("fallback"):
+            log.warning("camera on the development fallback", extra={"fields": {"camera": cam, "device": how}})
+    return text
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--print", dest="print_frames", action="store_true", help="PerceptionFrame JSON lines on stdout")
@@ -426,9 +453,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--seconds", type=float, default=0.0, help="stop after this long (0 = until Ctrl+C)")
     p.add_argument("--config", type=Path, default=None)
-    p.add_argument(
-        "--pending-config", type=Path, default=None, help="pending keys (default config/pending/output.yaml)"
-    )
     p.add_argument("--log-level", default="INFO")
     args = p.parse_args(argv)
 
@@ -441,6 +465,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.passenger == "on" or (args.passenger == "auto" and cfg.cameras.passenger.enabled):
         cameras.append("passenger")
     synthetic = args.synthetic or args.source == "synthetic"
+    if not synthetic:
+        log_camera_table(cfg, cameras)
     options = WorkerOptions(synthetic=synthetic, models=not args.no_models, log_level="WARNING")
     app = Perception(
         cfg,
@@ -450,7 +476,6 @@ def main(argv: list[str] | None = None) -> int:
         mjpeg=not args.no_mjpeg,
         mjpeg_port=args.mjpeg_port,
         print_frames=args.print_frames,
-        pending=load_pending(args.pending_config),
     )
     try:
         asyncio.run(app.run(args.seconds))

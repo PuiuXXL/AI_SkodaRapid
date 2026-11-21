@@ -71,8 +71,8 @@ export function RouteMap({simulation,disabled,pointsOpen,onOpenLayers}: {simulat
     const coordinates=simulation.route?.geometry??simulation.points;
     if(showRoute&&coordinates.length>1){
       const path=coordinates.map(p=>[p.lat,p.lon] as [number,number]);
-      L.polyline(path,{color:"#f7fff9",weight:9,opacity:.8,interactive:false}).addTo(group);
-      L.polyline(path,{color:"#009c73",weight:4.5,opacity:1,dashArray:simulation.route?undefined:"5 8",lineCap:"round"}).addTo(group);
+      L.polyline(path,{color:"var(--ui-inset)",weight:9,opacity:.8,interactive:false}).addTo(group);
+      L.polyline(path,{color:"var(--accent)",weight:4.5,opacity:1,dashArray:simulation.route?undefined:"5 8",lineCap:"round"}).addTo(group);
     }
     if(showPoints)simulation.points.forEach((point,index)=>{
       const tooltip=document.createElement("span");tooltip.textContent=point.name;

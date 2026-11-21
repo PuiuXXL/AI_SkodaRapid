@@ -23,7 +23,10 @@ Per frame:
    ratio inside ``squint_ear_band`` with eyeBlink below ``blendshape_closed`` (lids lowered, not meeting) is
    **SQUINT** (R-FL4); a fast fall that settles there for longer than a blink is cancelled (no event).
    ``min_state_frames`` frames below confirm CLOSED, but ``closed_ms`` counts from the (interpolated) drop.
-   The episode ends when r rises above ``reopen_ratio``.
+   A confirmed episode ends only after ``reopen_min_frames`` frames in a row back above half its depth (reopen
+   hysteresis): one bright frame (landmark jitter, a flutter of the lids) does not reset ``closed_ms``. Frames without
+   a face or with unreliable eyes keep a confirmed closure going for up to ``closure_gap_max_ms`` (state CLOSED,
+   ``reliable`` held: P2's microsleep rule needs both); a longer gap ends it as an event.
 6. **Duration = time below 50 % of the depth** (interpolated, perception/eye_signal.py); <= ``blink_max_ms`` =
    blink, longer = closure. Per event also ``reopen_ms`` (minimum -> 50 % on the way up, Schleicher et al. 2008) and
    ``close_speed`` (depth / time from the last open frame to the minimum).
@@ -38,7 +41,7 @@ from __future__ import annotations
 import math
 import statistics
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from perception.config import EyesConfig
@@ -66,6 +69,21 @@ _RECENT_MINIMA = 10  # blinks used for the closed level (PERCLOS P80)
 
 def _dist(a: Point2, b: Point2) -> float:
     return math.hypot(a[0] - b[0], a[1] - b[1])
+
+
+def _outer_crossings(times: list[float], values: list[float], half: float) -> tuple[float | None, float | None]:
+    """First crossing of ``half`` on the way down and last crossing on the way up (interpolated)."""
+    first: float | None = None
+    for k in range(1, len(values)):
+        if values[k - 1] > half >= values[k]:
+            first = crossing_time(times[k - 1], values[k - 1], times[k], values[k], half)
+            break
+    last: float | None = None
+    for k in range(len(values) - 2, -1, -1):
+        if values[k] <= half < values[k + 1]:
+            last = crossing_time(times[k], values[k], times[k + 1], values[k + 1], half)
+            break
+    return first, last
 
 
 def ear_from_points(p: list[Point2]) -> tuple[float, float]:
@@ -193,6 +211,11 @@ class EarReference:
         local = percentile([e for _, e in window], self.cfg.local_ref_percentile)
         return max(local, self.cfg.ref_floor_ratio * g)
 
+    def reset_local(self) -> None:
+        """Day <-> IR switch: the local references were learned on the other image; the global one stays."""
+        for window in self._local.values():
+            window.clear()
+
     def lose(self) -> None:
         """Face lost: the provisional baseline clock pauses; the local window ages out by time on its own."""
         self._last_valid_t = None
@@ -211,6 +234,7 @@ class _Episode:
     blinks: list[float] = field(default_factory=list)  # eyeBlink during the episode
     closed_frames: int = 0  # frames with ratio below the squint band AND eyeBlink >= blendshape_closed
     open_run: int = 0  # consecutive frames, after blink_max_ms, that do not look closed
+    reopen_run: int = 0  # consecutive frames back above the reopen level (confirmed episodes end at reopen_min_frames)
 
 
 class EyeTracker:
@@ -264,7 +288,7 @@ class EyeTracker:
         out = EyeOutput(perclos_60s=round(self._perclos.fraction(), 4), blink_ms=self._last_blink_ms)
         face = ff.face
         if not face.present or face.landmarks is None or face.blendshapes is None:
-            return self._lose(t, out)
+            return self._gap_or_lose(t, out)
 
         ears: dict[Side, tuple[float, float]] = {}
         for side in _SIDES:
@@ -288,7 +312,7 @@ class EyeTracker:
         }
         out.reliable = any(reliable.values())
         if not out.reliable:
-            return self._lose(t, out)
+            return self._gap_or_lose(t, out)
 
         self.reference.observe(t, ear_l, ear_r)
         base = self.reference.global_ref
@@ -327,7 +351,8 @@ class EyeTracker:
         )
         threshold = self.cfg.drop_ratio_relaxed if out.relaxed else self.cfg.drop_ratio
         low, high = self.cfg.squint_ear_band
-        cnn = self._cnn_closed(face.eye_closed_p, reliable)
+        # eyes.cnn.enabled false: ignore p(closed) even when a frame carries it (recordings made with the CNN on)
+        cnn = self._cnn_closed(face.eye_closed_p, reliable) if self.cfg.cnn.enabled else None
         out.cnn_closed = None if cnn is None else round(cnn, 4)
         cnn_open = cnn is not None and cnn < self.cfg.cnn.open_max
         cnn_closed = cnn is not None and cnn >= self.cfg.cnn.closed_min
@@ -433,14 +458,19 @@ class EyeTracker:
             ) and not self._cnn_open  # the pixels show an open eye: a hard squint, not a closure
             ep.closed_frames += looks_closed
             since_drop = t - ep.t_drop
+            # reopen level: back above half the depth of this episode (same 50 % rule as the duration)
+            above = r >= max(r_min + 0.5 * (ep.r_open - r_min), min(threshold, ep.r_open - cfg.min_fall_depth))
+            ep.reopen_run = ep.reopen_run + 1 if above else 0
             if head_moving and since_drop <= cfg.head_motion_window_s:
                 # the eyes lead the head: a fall followed at once by a head movement is a gaze shift, not a closure
                 self._episode = None
-            elif r >= max(r_min + 0.5 * (ep.r_open - r_min), min(threshold, ep.r_open - cfg.min_fall_depth)):
-                # reopened: back above half the depth of this episode (same 50 % rule as the duration)
-                if ep.confirmed:
+            elif above and not ep.confirmed:
+                self._episode = None  # a one-frame dip that never confirmed: no event
+            elif above:
+                # reopen hysteresis: the closure (and closed_ms) goes on until reopen_min_frames frames in a row
+                if ep.reopen_run >= cfg.reopen_min_frames:
                     self._finish(ep, out)
-                self._episode = None
+                    self._episode = None
             elif since_drop > cfg.plateau_check_ms / 1000.0:
                 # longer than most blinks: it stays closed only while the lids look closed (R-FL4); checked before
                 # blink_max_ms so a squint never reports closed_ms above it
@@ -466,6 +496,15 @@ class EyeTracker:
 
     def _finish(self, ep: _Episode, out: EyeOutput, end: float | None = None) -> None:
         shape = measure_dip(ep.times, ep.values, max(ep.r_open, max(ep.values)))
+        if shape is not None:
+            # measure_dip searches the crossings outwards from the minimum, so a bright frame inside a closure would
+            # cut its duration; a confirmed episode spans from the FIRST down crossing to the LAST up crossing
+            first, last = _outer_crossings(ep.times, ep.values, shape.ref - (shape.ref - shape.minimum) / 2.0)
+            shape = replace(
+                shape,
+                t_down=first if first is not None else shape.t_down,
+                t_up=last if last is not None else shape.t_up,
+            )
         if end is not None or shape is None or shape.t_down is None or shape.t_up is None:
             t_down = shape.t_down if shape is not None and shape.t_down is not None else ep.t_drop
             min_ratio = min(ep.values)
@@ -497,6 +536,23 @@ class EyeTracker:
         if kind == "blink":
             self._last_blink_ms = round(duration_ms)
             self._blinks.append(end)
+
+    def _gap_or_lose(self, t: float, out: EyeOutput) -> EyeOutput:
+        """No face / unreliable eyes. Inside a confirmed closure, a gap up to ``closure_gap_max_ms`` keeps it going
+        (closed_ms keeps counting, ``reliable`` is held: a dropout frame must not reset P2's microsleep timer); a
+        longer gap ends the closure as an event at its last valid frame."""
+        ep = self._episode
+        if ep is not None and ep.confirmed:
+            last = ep.times[-1]
+            if (t - last) * 1000.0 <= self.cfg.closure_gap_max_ms:
+                out.state = "CLOSED"
+                out.reliable = True
+                out.closed_ms = max(0, round((t - ep.t_drop) * 1000))
+                out.long_closure = out.closed_ms > self.cfg.blink_max_ms
+                out.blink_rate = self._blink_rate(t)
+                return out
+            self._finish(ep, out, end=last)
+        return self._lose(t, out)
 
     def _lose(self, t: float, out: EyeOutput) -> EyeOutput:
         """Face missing or eyes unreliable: no state, no closure in progress (monitoring is P2's rule C7)."""

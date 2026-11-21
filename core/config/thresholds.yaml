@@ -32,7 +32,7 @@ safety:
   escalation:                   # C2: discrete signal (event visual_cue) -> voice -> alarm, for P2 distractions
     voice_after_ms: 1500        # still distracted this long after the visual cue -> voice
     alarm_after_ms: 3000        # still distracted this long after the visual cue -> alarm
-    cooldown_s: 10              # after an episode ends, the next visual cue waits this long (no nagging)
+    cooldown_s: 10              # the same spoken warning is not repeated within this (the cue and the alarm always fire)
 
   monitoring:                   # C7: "Nu te mai văd, monitorizarea e întreruptă"
     lost_after_ms: 500          # driver.monitoring_ok=false this long -> announce (P1 already waits face_lost_s=2 s)
@@ -40,12 +40,19 @@ safety:
 
 sos:                            # P0 (C4, C5): alarm -> "Ești bine?" -> countdown -> SOS on three channels (F6)
   ask_after_alarm_s: 1.5        # pause between the alarm clip and "Ești bine?"
+  ask_clip_s: 1.5               # length of the "Ești bine?" clip: the answer window starts after it
   answer_window_s: 6            # time to answer "Ești bine?" (voice / nod / thumbs up) before the countdown
   countdown_s: 10               # countdown before the call; any "yes" (voice / nod / thumbs up) cancels it
-  realarm_s: 3                  # the alarm is replayed this often while waiting for an answer
+  instructions_clip_s: 6        # length of the passenger instructions clip (no alarm over it)
+  realarm_s: 3                  # during the countdown, after the instructions, the alarm is replayed this often
 
 dialog:
   window_s: 6                   # E1: dialog window opened at speak_done of a question (interaction.dialog_window_open)
+
+assistant:                      # C: core <-> P3's assistant (core/assistant_link.py)
+  greet_after_s: 2              # trip_start once the driver has been seen this long (scene 1: "Salut Andrei")
+  kss_break_min: 7              # a KSS answer at or above -> core picks a stop and sends stop_suggested (D3, K3)
+  yield_zones: [mirror_left, mirror_right, mirror_rear]   # D4: the voice pauses while the driver looks here
 
 # C8: thumbs down adjusts only P3-P4 thresholds, inside fixed limits. Microsleep, distraction, SOS: never.
 tuning:

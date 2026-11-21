@@ -173,3 +173,23 @@ def test_num_faces_other_than_one_is_refused() -> None:
     bad = cfg.model_copy(update={"face": cfg.face.model_construct(**{**cfg.face.model_dump(), "num_faces": 2})})
     with pytest.raises(ValueError, match="R-FL1"):
         FaceLandmarkerModel(bad)
+
+
+def test_nod_survives_a_short_face_dropout_and_is_held() -> None:
+    """The falling head leaves the face tracker for a few frames: the pitch history is kept (<= nod.max_gap_s), and a
+    detected nod stays reported for nod.hold_s, frames without a face included."""
+    cfg = load_config()
+    head = HeadTracker(cfg.head, cfg.filters)
+    outs = []
+    for i in range(75):
+        t = i / FPS
+        down = 0.0 if t < 1.0 else 25.0 * min(1.0, (t - 1.0) / 0.5)
+        lost = 1.2 <= t < 1.4 or 1.8 <= t < 2.0  # face lost in the middle of the fall, and again once down
+        outs.append(head.update(t, None if lost else rotation_matrix(pitch=down), eyes_closing=True))
+    first = next(i for i, o in enumerate(outs) if o.nodding)
+    assert first / FPS < 1.6  # right after the face comes back, no new 1.5 s history needed
+    lost_after = [o for i, o in enumerate(outs) if i > first and o.pitch is None]
+    assert lost_after and all(o.nodding for o in lost_after)
+    head2 = HeadTracker(cfg.head, cfg.filters)
+    head2.update(0.0, rotation_matrix(), eyes_closing=True)
+    assert head2.update(1.0, None, eyes_closing=True).nodding is False  # no nod: nothing to hold

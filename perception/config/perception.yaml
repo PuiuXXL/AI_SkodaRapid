@@ -3,9 +3,14 @@
 # Safety thresholds (when an alarm sounds, microsleep) belong to P2 in core/config/thresholds.yaml, NOT here.
 
 cameras:
-  driver:                      # USB webcam (Logi C615), facing the driver only
+  # Both USB webcams run on ONE laptop: with MJPG requested at open they share a root hub (probe 2026-11-21:
+  # C615 + LifeCam at 720p, 30.3 / 29.5 fps at once; docs/benchmark/cameras-<host>.md, scripts/camera_probe.py).
+  # Devices by USB id (usb:<vid>:<pid>[:<serial>][@<port>]): the role survives re-plugging and index shifts; two
+  # cameras of the same model need @<port> (camera_probe.py prints it).
+  driver:                      # USB webcam (Logi C615, 1080p max), facing the driver only
     enabled: true
-    device: 1                  # OpenCV index (or a path / URL). 0 = integrated laptop camera, 1 = Logi C615 (dshow)
+    device: "usb:046d:082c"    # Logi C615 (an OpenCV index, path or URL also works)
+    device_name: "C615"        # no usb match -> unique friendly-name substring (null = off)
     backend: auto              # auto | dshow | msmf | v4l2 | any   (Windows: dshow opens MJPG reliably)
     width: 1280
     height: 720
@@ -27,9 +32,10 @@ cameras:
       gain: null
       auto_white_balance: true # venue with lamp: false
       white_balance_k: null    # venue with lamp: 4600
-  passenger:                   # phone via DroidCam over USB, facing the front-right seat only
-    enabled: false             # switch on once DroidCam is connected
-    device: 2                  # on Windows DroidCam is a virtual webcam index (after integrated 0 + Logi 1)
+  passenger:                   # USB webcam (Microsoft LifeCam HD-6000, 720p max), facing the front-right seat only
+    enabled: true
+    device: "usb:045e:076f"    # LifeCam HD-6000
+    device_name: "LifeCam"
     backend: auto
     width: 1280
     height: 720
@@ -38,7 +44,7 @@ cameras:
     buffer_size: 1
     reconnect_s: 1.0
     max_read_failures: 15
-    controls:                  # DroidCam exposes few controls; leave the phone's auto modes on
+    controls:                  # auto modes: the passenger rules (presence, asleep) need no fixed exposure
       power_line_hz: null
       autofocus: null
       focus: null
@@ -47,6 +53,11 @@ cameras:
       gain: null
       auto_white_balance: null
       white_balance_k: null
+  # Selection order per camera: usb selector -> device_name -> (only with dev_fallback) a device no camera claims,
+  # preferring a name containing fallback_name; the driver has priority. A camera still not found is reported
+  # camera_unavailable (no restart loop). The start-up log prints the device table and the assignment.
+  dev_fallback: false          # development only (laptop without the USB cams); the frame says camera_fallback
+  fallback_name: "Integrated"  # DirectShow name of the laptop camera ("Integrated Camera")
 
 models:
   dir: perception/models       # relative to the repo root; gitignored, filled by scripts/download_models.sh
@@ -67,6 +78,7 @@ models:
   gaze_providers:              # MobileGaze is small: CUDA adds jitter (p95 15.4 vs 8.2 ms, docs/benchmark/)
     - OpenVINOExecutionProvider
     - CPUExecutionProvider
+  onnx_threads: 4              # ORT intra-op threads per session (0 = all cores); two camera processes share the CPU
 
 face:                          # MediaPipe Face Landmarker, rules R-FL1..R-FL5 in docs/perception.md
   num_faces: 1                 # R-FL1: one face per camera (internal tracking/smoothing needs it)
@@ -109,6 +121,9 @@ eyes:                          # docs/perception.md §3.2; values from docs/eval
   slow_close_ratio: 0.47       # a SLOW fall counts only below this (2 s closures: 0.42-0.47; a hard squint
                                # hovered at 0.48-0.51). Tuned on ONE session: re-check on every new one
   min_state_frames: 2          # frames below drop_ratio before CLOSED is reported (closed_ms starts at the drop)
+  reopen_min_frames: 2         # a confirmed closure ends only after this many frames in a row above the reopen level:
+                               # one bright frame (landmark jitter) no longer resets closed_ms (diag 2026-11-21)
+  closure_gap_max_ms: 200      # face lost / eyes unreliable this long inside a closure: the closure goes on
   blink_max_ms: 500            # longer than this = closure (separate state), shorter = blink
   plateau_check_ms: 300        # from here on, CLOSED needs ratio < squint band low AND eyeBlink >= blendshape_closed
   blendshape_closed: 0.45      # eyeBlink needed to accept a SLOW fall (drowsy lids); 2 s closures reach ~0.5,
@@ -131,11 +146,16 @@ eyes:                          # docs/perception.md §3.2; values from docs/eval
   perclos_window_s: 60
   min_eye_width_px: 18         # eye corner distance below this -> that eye is unreliable
   cnn:                         # second opinion from the pixels for what EAR cannot separate (hard squint vs closed)
-    enabled: true              # active only if perception/models/open_closed_eye.onnx exists
+    enabled: false             # OFF after the live test of 2026-11-21 (docs/eval/eyes-laptop-closures-2026-11-21.md):
+                               # in one session class "open" was ~1.0 also for shut eyes (EAR 0.06), so its veto hid
+                               # 4/4 real closures; with it off they are 4/4 detected. A veto that can hide a closure
+                               # is a safety risk; the code stays for a model validated on our cameras
     crop_scale: 1.6            # crop side = 1.6 x eye-corner distance (the model was trained on loose eye crops)
-    open_max: 0.30             # p(closed) < 0.30 = clearly open -> a closure plateau is a squint (veto)
-    closed_min: 0.70           # p(closed) >= 0.70 = clearly closed -> confirms. Both: softmax defaults, to be tuned
-                               # live (recordings hold no pixels, so the CNN cannot be replayed on old sessions)
+    open_max: 0.30             # p(closed) < 0.30 = clearly open -> a closure plateau is a squint (veto). Live
+                               # 2026-11-21 (C615, docs/eval/eyes-laptop-cnn-2026-11-21.md): wide-open eyes 0.00-0.06,
+                               # shut eyes 0.99-1.00, so the veto never blocks a real closure
+    closed_min: 1.0            # confirmation OFF: hard squints and big smiles read 0.6-0.97 (a 32 px crop of a nearly
+                               # shut eye looks closed), so "confirmed closed" made squints worse (false closures 3 -> 2)
 
 yawn:
   jaw_open_threshold: 0.50     # jawOpen blendshape
@@ -153,10 +173,19 @@ head:
   nod:                         # fatigue head drop (with eyes closing)
     pitch_drop_deg: 15
     window_s: 1.5
-  answer:                      # yes/no head answer, only while the dialog window is open
-    min_reversals: 2
+    closed_recent_s: 2.0       # a closure > blink_max_ms within this long arms the nod: with the head down the shut
+                               # lids often read SQUINT (eval 2026-11-21); only a confirmed reopen disarms it
+    max_gap_s: 0.5             # face lost this long keeps the pitch history (the falling head leaves the tracker)
+    hold_s: 1.0                # a detected nod is reported this long, frames without a face included
+  answer:                      # AS8 yes / no, only while the dialog window is open (driver_cam/head_answer.py)
+    min_reversals: 2           # zero crossings of the detrended angle within window_s
     window_s: 1.2
-    min_amplitude_deg: 6
+    min_amplitude_deg: 6       # peak-to-peak; zero crossings use a Schmitt trigger at +- half of it
+    slow_tau_s: 1.0            # slow mean (EMA time constant) subtracted: a step / slow drop never crosses zero
+    dominance_ratio: 1.5       # both axes oscillating: the answer axis needs 1.5 x the RMS of the other
+    max_closed_ms: 400         # eyes closed longer than this reset the count (a blink does not; a fatigue nod does)
+    answer_hold_s: 1.5         # a detected answer is reported this long, then counting restarts
+    max_gap_s: 0.25            # no angles for longer (face lost, implausible pose) -> state reset
   plausible_deg:               # beyond these the landmarks are garbage (near-profile face: roll 80, yaw -23 while
     yaw: 70                    # the head was turned +50 left, diag 2026-11-21) -> head angles reported as unknown
     pitch: 50
@@ -204,7 +233,12 @@ phone:
   conf_min: 0.40
   vote_window: 5               # last N YOLO runs
   vote_min: 3                  # seen in at least this many -> in use
-  near_face_ratio: 1.2         # phone centre within ratio * face width of the face centre -> near_face
+  near_face_ratio: 1.2         # phone centre within ratio * face width of the face centre -> near_face / call
+  hand_radius_ratio: 0.6       # palm / wrist within 0.6 x face width of the box -> phone in that hand (start)
+  foreign_dx_ratio: 1.5        # passenger side, > 1.5 x face width from the face centre, not near the face -> not
+                               # the driver's phone: it does not vote (scene 4) (start)
+  passenger_side: right        # the passenger's side in the DRIVER's terms (left-hand-drive car)
+  mirrored: false              # the camera image is not mirrored: image right = the driver's left
   lap_pattern:
     min_glances: 3
     window_s: 20
@@ -215,22 +249,53 @@ phone:
 gesture:
   allowed: [Thumb_Up, Thumb_Down, Open_Palm]
   min_score: 0.60
-  min_duration_s: 0.5
+  min_duration_s: 0.5          # a gesture must be held this long
 
-identity:
+hands:                         # Gesture Recognizer as hand tracker (perception/hands.py): AS9 / AP6, hands for AS7
+  num_hands: 2
+  min_hand_detection_conf: 0.5
+  min_hand_presence_conf: 0.5
+  min_tracking_conf: 0.5
+  background_hz: 2.0           # outside the dialog window: hand positions (phone geometry, lap pattern), raised hand
+  dialog_hz: 0.0               # inside the dialog window: 0 = every frame (Gesture Recognizer ~18 ms p50)
+  dropout_ms: 200.0            # a run without the gesture is tolerated this long (recognizer flicker to "None")
+  max_gap_s: 0.7               # observations further apart break the hold (background 2 Hz -> 0.5 s period)
+  raised_margin: 0.5           # palm above face bottom + 0.5 x face height = raised hand (AS9 outside the window)
+  raised_y_frac: 0.6           # no face box: palm above 60 % of the frame height = raised (start)
+  raised_boost_s: 2.0          # a raised hand outside the window switches to the dialog rate this long
+
+identity:                      # AS10 / AP1: YuNet + SFace, embeddings per camera profiles/<name>/face_<camera>.npy
   cosine_threshold: 0.363      # OpenCV's recommended SFace value
   yunet_score_threshold: 0.80
   yunet_nms_threshold: 0.30
   enroll_frames: 10
+  top_k: 50
+  min_face_px: 60.0            # smaller YuNet boxes are ignored
+  retry_s: 1.0                 # Face Landmarker sees a face but YuNet did not: retry this soon
+  lost_s: 1.0                  # face absent this long -> the next face is a NEW face (identified at once)
+  enroll_interval_s: 0.2       # at least this between two enrollment frames (different expressions / poses)
+  enroll_min_face_px: 120.0    # enrollment needs a closer face than recognition
+  enroll_min_sharpness: 40.0   # variance of the Laplacian on the 112x112 aligned crop (start)
+  enroll_min_consistency: 0.5  # every enrolled frame must have cosine >= this to the mean, else the enrollment fails
 
 monitoring:
   face_lost_s: 2.0             # driver face missing longer than this, unexplained -> monitoring_ok=false
   frozen_frame_s: 1.0          # identical frames for this long -> camera frozen
   frozen_pixel_diff: 0.5       # mean absolute pixel difference below this = identical
   dark_luma: 60                # mean frame luma (0-255) below this -> "TOO DARK" warning
+  no_frames_s: 1.0             # no frame for this long -> no_frames
+  occluded_std_max: 8.0        # luma std below this = uniform image (lens covered) (start, synthetic only)
+  blur_var_min: 20.0           # Laplacian variance (160 px wide image) below this = blurred (start, synthetic only)
+  mono_chroma_max: 2.0         # mean |R-G|,|B-G| below this = monochrome (IR night mode) (start)
+  mode_switch_luma_delta: 50.0 # luma jump between consecutive frames, image still structured -> mode_switch (start)
+  mode_switch_hold_s: 1.5      # monitoring_ok=false this long after a day/night switch (0 = never)
+  analysis_width: 160          # luma / std / blur / chroma measured on a frame resized to this width
 
 passenger:
-  asleep_closed_s: 10          # AP2: passenger eyes closed this long -> awake = false
+  asleep_closed_s: 10          # AP2: eyes not seen open for this long while the passenger is there -> awake = false
+  asleep_closed_head_s: 5      # ... or this long with the head dropped (plan AP2: "ochi închiși + capul lăsat")
+  head_drop_deg: 15            # pitch this far below the passenger's upright pitch = head dropped
+  upright_window_s: 30         # upright pitch = median pitch with the eyes open over the last 30 s
 
 filters:
   one_euro:                    # default for continuous signals without their own tuning
@@ -250,17 +315,25 @@ filters:
   unknown_below_conf: 0.5      # any output below this confidence is reported as unknown
 
 workers:                       # one OS process per camera (docs/perception.md §2)
+  modules:                     # extra PipelineModule classes ("package.module:Class") after the built-in ones,
+    driver: []                 # constructed as Class(ctx, extractor) (docs/notes/output.md §1)
+    passenger: []
   restart_backoff_s: 1.0       # a dead camera process is restarted after 1, 2, 4 ... s
   restart_backoff_max_s: 10.0
   stale_s: 5.0                 # a running process silent this long is hung: kill and restart
   startup_s: 30.0              # before its first frame: DSHOW opens 720p in ~4 s, models load in ~2 s
-  first_frame_timeout_s: 10.0
+  first_frame_timeout_s: 10.0   # no first frame by then (and no open error yet) -> camera_unavailable logged
+  unavailable_report_s: 5.0    # missing camera: its worker logs camera_unavailable this often and never exits
 
 output:
   ws_url: ws://localhost:8000/ws/perception
   ws_reconnect_s: 1.0          # first retry; doubles up to ws_reconnect_max_s (works without core)
   ws_reconnect_max_s: 10.0
   proposed_fields: true        # also send the fields proposed for the contract (§9); false = strict plan §7
+  result_max_age_ms: 1000      # a camera's newest result older than this = no data from that camera (its block keeps
+                               # the contract defaults, perf.cameras.<cam>.available = false); above the slowest
+                               # degraded passenger rate (2.5 Hz -> 400 ms between results) plus processing
+  mjpeg_host: 0.0.0.0          # MJPEG bind address (port: mjpeg_port)
   publish_hz: 15
   mjpeg_port: 8001
   video_width: 640

@@ -39,7 +39,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 #: Bumped on every contract change (section 13).
-CONTRACT_VERSION = "2.0"
+CONTRACT_VERSION = "2.1"
 
 
 class ContractModel(BaseModel):
@@ -227,7 +227,7 @@ class DriverPerception(ContractModel):
     monitoring_reason: str | None = None  # one of MONITORING_REASONS
     monitoring_warnings: list[str] = Field(default_factory=list)  # too_dark / blurred / face_too_small, face seen
     face_too_small: bool = False
-    face_conf: float = 0.0
+    face_conf: float | None = None  # 0..1 from the face width (R-FL3); null = no monitoring result yet
     camera_mode: Literal["color", "mono"] | None = None
     gesture_score: float | None = None
 
@@ -242,7 +242,12 @@ class Passenger(ContractModel):
     holding_phone: bool = False
     gesture: str | None = None
     answer: HeadAnswer | None = None
-    monitoring_reason: str | None = None  # P1 addition: why the passenger camera does not see anyone
+    # P1 additions: the passenger camera's own monitoring, same meaning as for the driver
+    monitoring_reason: str | None = None  # why the passenger camera does not see anyone
+    monitoring_ok: bool = True
+    monitoring_warnings: list[str] = Field(default_factory=list)
+    camera_mode: Literal["color", "mono"] | None = None
+    face_conf: float | None = None
 
 
 class CameraPerf(ContractModel):
@@ -553,9 +558,12 @@ EVENT_TYPES: tuple[str, ...] = (
 
 #: Events core only logs on ``/ws/ui`` (event log H3, visual cue C2); they never go to the LLM.
 CORE_EVENT_TYPES: tuple[str, ...] = (
-    "visual_cue",             # C2: discrete signal, the UI flashes a light / border
+    "visual_cue",             # C2: discrete signal, the UI flashes a light / border   data: alert, level
+    "distraction_end",        # C2: the distraction is over                  latency_ms = time to come back
+    "naive_alert",            # B8: the simple threshold would have alerted  data: reason
     "alert",                  # an alert was raised                          data: level, alert
     "alarm",                  # C3: the alarm clip was sent                  data: alarm_id, clip
+    "alarm_played",           # C3: the browser played it                    latency_ms = alarm_ms, data: on_target
     "are_you_ok",             # C4: "Ești bine?" asked
     "sos_countdown",          # C5: countdown started                        data: countdown_s
     "sos_cancelled",          # C5: cancelled                                channel: voice / nod / gesture
@@ -569,6 +577,13 @@ CORE_EVENT_TYPES: tuple[str, ...] = (
     "action_rejected",        # C8: an LLM action was rejected               data: action, reason
     "input",                  # E3: an answer / request arrived              channel, data: value, from
     "llm_toggled",            # C6: director switched the LLM                data: enabled
+    "message_queued",         # a new message entered the queue (phone / Contact page / panel)   data: msg_id
+    "perception_connected",   # P1 connected to /ws/perception
+    "perception_disconnected",
+    "phone_bridge_connected", "phone_bridge_disconnected",  # P3's bridge on /ws/phone
+    "calibration_prompt",     # P1 calibration step, for the voice           data: zone, step, steps
+    "calibrate_done", "calibrate_error", "enroll_done", "enroll_error",  # P1 acks   data: detail
+    "reset",                  # director reset: a new trip
 )
 
 ALL_EVENT_TYPES: tuple[str, ...] = EVENT_TYPES + tuple(t for t in CORE_EVENT_TYPES if t not in EVENT_TYPES)

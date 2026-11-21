@@ -59,26 +59,53 @@ class HeadTracker:
         self._nod = head.nod
         self._plausible = head.plausible_deg
         self._pitch_history = RollingWindow(head.nod.window_s)
+        self._last_pitch_t: float | None = None  # last frame that fed the pitch history
+        self._nod_until = float("-inf")  # nodding is held until then (hold_s)
+
+    def reset(self) -> None:
+        """Forget the filter state (day <-> IR switch: the angles jump with the new image)."""
+        for f in self._filters.values():
+            f.reset()
+        self._pitch_history.clear()
+        self._last_pitch_t = None
+        self._nod_until = float("-inf")
+
+    def _nodding(self, t: float, pitch: float, eyes_closing: bool) -> bool:
+        """Fatigue nod on the RAW pitch (the head One Euro, min_cutoff 0.05 Hz, lags a slow drop by ~1 s): a drop of
+        more than ``pitch_drop_deg`` within ``window_s`` with the eyes closing; held ``hold_s``."""
+        self._pitch_history.add(t, pitch)
+        self._last_pitch_t = t
+        if eyes_closing and self._pitch_history.max() - pitch > self._nod.pitch_drop_deg:
+            self._nod_until = t + self._nod.hold_s
+        return t <= self._nod_until
 
     def update(self, t: float, matrix: Sequence[float] | None, eyes_closing: bool) -> HeadOutput:
-        """``eyes_closing``: the eye state is CLOSED or the EAR ratio is below ``reopen_ratio`` (needed for nodding)."""
+        """``eyes_closing``: the eyes are closed now or were in a closure that has not visibly reopened yet
+        (DriverPipeline's latch: with the head down the shut lids often read SQUINT). Needed for nodding."""
         if matrix is None:
+            # the falling head often leaves the face tracker: a short gap keeps the pitch history (and a nod that was
+            # just detected stays reported for hold_s); a longer one starts over
             for f in self._filters.values():
                 f.reset()
-            self._pitch_history.clear()
-            return HeadOutput()
+            if self._last_pitch_t is None or t - self._last_pitch_t > self._nod.max_gap_s:
+                self._pitch_history.clear()
+            return HeadOutput(nodding=t <= self._nod_until)
         pitch, yaw, roll = euler_from_matrix(matrix)
         lim = self._plausible
         if abs(yaw) > lim.yaw or abs(pitch) > lim.pitch or abs(roll) > lim.roll:
-            # near-profile face: the landmark fit is garbage; report unknown, do not feed the filters
+            # near-profile face: the landmark fit is garbage; report unknown, do not feed the filters. A pitch beyond
+            # the limit DOWNWARDS with plausible yaw / roll is a deep head drop (chin to chest): it still feeds the nod
             for f in self._filters.values():
                 f.reset()
-            return HeadOutput(raw_pitch=round(pitch, 2), raw_yaw=round(yaw, 2), raw_roll=round(roll, 2))
+            out = HeadOutput(raw_pitch=round(pitch, 2), raw_yaw=round(yaw, 2), raw_roll=round(roll, 2))
+            if pitch < -lim.pitch and abs(yaw) <= lim.yaw and abs(roll) <= lim.roll:
+                out.nodding = self._nodding(t, pitch, eyes_closing)
+            else:
+                out.nodding = t <= self._nod_until
+            return out
         out = HeadOutput(raw_pitch=round(pitch, 2), raw_yaw=round(yaw, 2), raw_roll=round(roll, 2))
         out.pitch = round(self._filters["pitch"].update(t, pitch), 2)
         out.yaw = round(self._filters["yaw"].update(t, yaw), 2)
         out.roll = round(self._filters["roll"].update(t, roll), 2)
-        self._pitch_history.add(t, out.pitch)
-        drop = self._pitch_history.max() - out.pitch
-        out.nodding = eyes_closing and drop > self._nod.pitch_drop_deg
+        out.nodding = self._nodding(t, pitch, eyes_closing)
         return out

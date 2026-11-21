@@ -84,12 +84,20 @@ class CameraConfig(_Section):
     buffer_size: Annotated[int, Field(ge=1, le=4)]
     reconnect_s: PositiveFloat
     max_read_failures: Annotated[int, Field(ge=1, le=1000)]
+    # second way to find the camera when the usb: selector matches nothing: a unique, case-insensitive substring of
+    # the device's friendly name ("C615"); null = no name fallback
+    device_name: Annotated[str, StringConstraints(min_length=1)] | None
     controls: CameraControls
 
 
 class CamerasConfig(_Section):
     driver: CameraConfig
     passenger: CameraConfig
+    # development only: a camera found neither by usb: selector nor by name takes a device no camera claims (preferring
+    # one whose name contains fallback_name, e.g. the laptop's integrated camera); the driver has priority. The frame
+    # then reports monitoring_reason="camera_fallback".
+    dev_fallback: bool
+    fallback_name: Annotated[str, StringConstraints(min_length=1)] | None
 
     @model_validator(mode="after")
     def _driver_enabled(self) -> Self:
@@ -120,6 +128,9 @@ class ModelsConfig(_Section):
     onnx_providers: Annotated[list[OnnxProvider], Field(min_length=1)]
     gaze_providers: Annotated[list[OnnxProvider], Field(min_length=1)]
     eye_state: str  # open-closed-eye-0001 (eye-crop CNN, perception/driver_cam/eye_cnn.py)
+    # ONNX Runtime intra-op threads per session (0 = ORT default = all physical cores). One process per camera, each
+    # with several sessions: the default oversubscribes the CPU when both cameras run (docs/benchmark/*-dual.md).
+    onnx_threads: Annotated[int, Field(ge=0, le=64)] = 0
 
     @model_validator(mode="after")
     def _cpu_fallback(self) -> Self:
@@ -203,6 +214,8 @@ class EyesConfig(_Section):
     min_fall_depth: RatioOfRef
     slow_close_ratio: RatioOfRef
     min_state_frames: Annotated[int, Field(ge=1, le=10)]
+    reopen_min_frames: Annotated[int, Field(ge=1, le=10)]  # consecutive frames above the reopen level end a closure
+    closure_gap_max_ms: Annotated[float, Field(ge=0)]  # face / eyes unreliable this long keeps a closure going
     blink_max_ms: PositiveInt
     plateau_check_ms: PositiveFloat
     blendshape_closed: Fraction  # eyeBlink needed to accept a SLOW closure (drowsy lids), never needed for a fast one
@@ -252,12 +265,22 @@ class SpeakingConfig(_Section):
 class NodConfig(_Section):
     pitch_drop_deg: PositiveFloat
     window_s: PositiveFloat
+    closed_recent_s: PositiveFloat  # a closure longer than a blink within this long arms the nod (lids may read SQUINT)
+    max_gap_s: Annotated[float, Field(ge=0)]  # face lost this long keeps the pitch history (the head falls out of view)
+    hold_s: Annotated[float, Field(ge=0)]  # a detected nod is reported this long, also on frames without a face
 
 
 class HeadAnswerConfig(_Section):
-    min_reversals: Annotated[int, Field(ge=1, le=10)]
+    """AS8 yes / no from the head (perception/driver_cam/head_answer.py), only inside an open dialog window."""
+
+    min_reversals: Annotated[int, Field(ge=1, le=10)]  # zero crossings of the detrended angle (Schmitt trigger)
     window_s: PositiveFloat
-    min_amplitude_deg: PositiveFloat
+    min_amplitude_deg: PositiveFloat  # peak-to-peak; the Schmitt trigger sits at +- half of it
+    slow_tau_s: PositiveFloat  # slow mean (EMA time constant) subtracted from yaw and pitch
+    dominance_ratio: Annotated[float, Field(ge=1)]  # both axes oscillate: the answer axis needs this x the other RMS
+    max_closed_ms: Annotated[float, Field(ge=0)]  # eyes closed longer than this reset the count (a fatigue nod)
+    answer_hold_s: Annotated[float, Field(ge=0)]  # a detected answer is reported this long
+    max_gap_s: PositiveFloat  # no angles for longer (face lost, implausible pose) -> state reset
 
 
 class PlausibleAnglesConfig(_Section):
@@ -348,6 +371,10 @@ class PhoneConfig(_Section):
     vote_window: Annotated[int, Field(ge=1, le=30)]
     vote_min: Annotated[int, Field(ge=1, le=30)]
     near_face_ratio: PositiveFloat
+    hand_radius_ratio: PositiveFloat  # palm / wrist within this x face width of the box -> phone in that hand
+    foreign_dx_ratio: PositiveFloat  # passenger side, farther than this x face width, not near the face -> foreign
+    passenger_side: Literal["left", "right"]  # the passenger's side in the DRIVER's terms (left-hand-drive car)
+    mirrored: bool  # the camera image is mirrored (False: image right = the driver's left)
     lap_pattern: LapPatternConfig
 
     @model_validator(mode="after")
@@ -368,6 +395,14 @@ class IdentityConfig(_Section):
     yunet_score_threshold: Fraction
     yunet_nms_threshold: Fraction
     enroll_frames: Annotated[int, Field(ge=1, le=100)]
+    top_k: PositiveInt
+    min_face_px: PositiveFloat  # smaller YuNet boxes are ignored
+    retry_s: PositiveFloat  # Face Landmarker sees a face but YuNet did not: retry this soon
+    lost_s: PositiveFloat  # face absent this long -> the next face is a NEW face (identified at once)
+    enroll_interval_s: Annotated[float, Field(ge=0)]  # at least this between two enrollment frames
+    enroll_min_face_px: PositiveFloat  # enrollment needs a closer face than recognition
+    enroll_min_sharpness: Annotated[float, Field(ge=0)]  # variance of the Laplacian on the aligned 112x112 crop
+    enroll_min_consistency: Annotated[float, Field(gt=-1, lt=1)]  # every frame's cosine to the mean at least this
 
 
 class MonitoringConfig(_Section):
@@ -375,6 +410,13 @@ class MonitoringConfig(_Section):
     frozen_frame_s: PositiveFloat
     frozen_pixel_diff: Annotated[float, Field(ge=0)]
     dark_luma: Annotated[float, Field(ge=0, le=255)]
+    no_frames_s: PositiveFloat  # no frame for this long -> no_frames
+    occluded_std_max: Annotated[float, Field(ge=0)]  # luma std below this = uniform image (lens covered)
+    blur_var_min: Annotated[float, Field(ge=0)]  # Laplacian variance below this = blurred
+    mono_chroma_max: Annotated[float, Field(ge=0)]  # mean |R-G|, |B-G| below this = monochrome (IR night mode)
+    mode_switch_luma_delta: PositiveFloat  # luma jump between frames, image still structured -> mode_switch
+    mode_switch_hold_s: Annotated[float, Field(ge=0)]
+    analysis_width: Annotated[int, Field(ge=16, le=1920)]  # image statistics on a frame resized to this width
 
 
 class OneEuroConfig(_Section):
@@ -399,15 +441,36 @@ class FiltersConfig(_Section):
 
 
 class PassengerConfig(_Section):
-    asleep_closed_s: PositiveFloat  # AP2: eyes closed this long -> awake = false
+    asleep_closed_s: PositiveFloat  # AP2: eyes not seen open for this long (passenger present) -> awake = false
+    asleep_closed_head_s: PositiveFloat  # ... or this long with the head dropped (plan AP2: eyes closed + head down)
+    head_drop_deg: PositiveFloat  # head pitch this far below the passenger's upright pitch = dropped
+    upright_window_s: PositiveFloat  # upright pitch = median pitch with the eyes open over this window
+
+
+class HandsConfig(_Section):
+    """MediaPipe Gesture Recognizer as a hand tracker (perception/hands.py): AS9 / AP6 + hand positions (AS7)."""
+
+    num_hands: Annotated[int, Field(ge=1, le=4)]
+    min_hand_detection_conf: Fraction
+    min_hand_presence_conf: Fraction
+    min_tracking_conf: Fraction
+    background_hz: Annotated[float, Field(ge=0)]  # outside the dialog window (hand positions, raised hand); 0 = off
+    dialog_hz: Annotated[float, Field(ge=0)]  # inside the dialog window; 0 = every frame
+    dropout_ms: Annotated[float, Field(ge=0)]  # a run without the gesture is tolerated this long (flicker)
+    max_gap_s: PositiveFloat  # observations further apart break the hold
+    raised_margin: float  # palm above face bottom + this x face height = raised hand
+    raised_y_frac: Fraction  # no face box: palm above this fraction of the frame height = raised
+    raised_boost_s: Annotated[float, Field(ge=0)]  # a raised hand outside the window switches to the dialog rate
 
 
 class WorkersConfig(_Section):
+    modules: dict[Literal["driver", "passenger"], list[str]]  # extra PipelineModule classes "package.module:Class"
     restart_backoff_s: PositiveFloat  # first restart delay after a camera process died
     restart_backoff_max_s: PositiveFloat
     stale_s: PositiveFloat  # no message from a running worker for this long -> it hangs: restart it
     startup_s: PositiveFloat  # allowed silence before the first frame (camera open + model load)
-    first_frame_timeout_s: PositiveFloat
+    first_frame_timeout_s: PositiveFloat  # still opening after this long -> reported camera_unavailable
+    unavailable_report_s: PositiveFloat  # a camera that is not there: camera_unavailable logged this often (no restart)
 
 
 class OutputConfig(_Section):
@@ -415,6 +478,8 @@ class OutputConfig(_Section):
     ws_reconnect_s: PositiveFloat
     ws_reconnect_max_s: PositiveFloat
     proposed_fields: bool  # also send the fields proposed for the contract (docs/perception.md §9)
+    result_max_age_ms: PositiveFloat  # a camera's newest result older than this = no data from that camera
+    mjpeg_host: Annotated[str, StringConstraints(min_length=1)]
     publish_hz: Annotated[float, Field(gt=0, le=60)]
     mjpeg_port: Annotated[int, Field(ge=1024, le=65535)]
     video_width: Annotated[int, Field(ge=160, le=1920)]
@@ -437,6 +502,7 @@ class PerceptionConfig(_Section):
     gaze: GazeConfig
     phone: PhoneConfig
     gesture: GestureConfig
+    hands: HandsConfig
     identity: IdentityConfig
     monitoring: MonitoringConfig
     passenger: PassengerConfig

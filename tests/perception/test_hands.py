@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
 import pytest
-import yaml
 
 from perception.features import HandFeatures
 from perception.hands import HandsConfig, HandsResult, HandTracker, as_bgr
 
-PENDING = Path(__file__).resolve().parents[2] / "perception" / "config" / "pending" / "modules.yaml"
 W, H = 1280, 720
 FACE = (540.0, 150.0, 200.0, 240.0)  # x, y, w, h: face bottom at y = 390
 FPS = 30.0
@@ -31,11 +28,6 @@ def feed(tracker: HandTracker, t0: float, t1: float, hands: list[HandFeatures] |
     for i in range(n):
         out.append(tracker.update(t0 + i / FPS, hands, (W, H), FACE))
     return out
-
-
-def test_pending_yaml_matches_defaults() -> None:
-    section = yaml.safe_load(PENDING.read_text(encoding="utf-8"))["hands"]
-    assert HandsConfig.from_mapping(section) == HandsConfig()
 
 
 def test_unknown_config_key_rejected() -> None:

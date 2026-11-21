@@ -1,8 +1,12 @@
 """Newest camera results -> one ``PerceptionFrame`` (plan §7, the fields P1 writes), validated with Pydantic.
 
 * Input: the newest worker message of each camera (``kind="frame"``, perception/worker.py). A camera whose newest
-  result is older than ``max_age_ms`` (pending ``output.result_max_age_ms``) counts as having **no data**: its block
-  keeps the contract defaults and it is reported unavailable.
+  result is older than ``max_age_ms`` (``output.result_max_age_ms``) counts as having **no data**: its block
+  keeps the contract defaults and it is reported unavailable (proposed ``monitoring_reason``: ``no_frames`` while
+  the worker runs, ``camera_unavailable`` when it is down).
+* **Modules.** ``phone`` = the phone tracker (owner vote, lap pattern folded in), ``monitoring`` = CameraMonitor
+  (presence needs a camera that really delivers images: not ``no_frames`` / ``frozen``), ``identity`` ->
+  ``occupants[].profile``, ``passenger_state`` (AP2) -> ``passenger.present / awake / eyes_closed_s``.
 * **Time.** ``ts`` = ``time.time()`` at the **capture** of the newest driver frame (the worker stamps ``t_wall``), so
   P2 can line it up with core and browser events. Without fresh driver data, ``ts`` falls back to the publication
   time. Internal durations (age, e2e, model timings) stay on ``time.perf_counter()``.
@@ -79,19 +83,61 @@ def fresh_result(
     return msg
 
 
+# CameraMonitor reasons under which a face "seen" in the image proves nothing about the cabin
+_CAMERA_FAILURES = frozenset({"no_frames", "frozen"})
+
+
+def _present(cfg: PerceptionConfig, mon: Mapping[str, Any]) -> bool:
+    """Face seen within ``monitoring.face_lost_s`` on a camera that is really delivering images."""
+    missing = float(mon.get("face_missing_s", 0.0))
+    return missing < cfg.monitoring.face_lost_s and mon.get("reason") not in _CAMERA_FAILURES
+
+
+def _num(value: Any, default: float = 0.0) -> float:
+    """A required numeric contract field: a missing / None source value becomes ``default`` (never null)."""
+    return default if value is None else float(value)
+
+
 def _phone(cfg: PerceptionConfig, phone: Mapping[str, Any], gaze: Mapping[str, Any]) -> dict[str, Any]:
-    """AS7: the detector (YOLO vote) first; the lap pattern (gaze) only when the detector sees no phone."""
-    if phone["in_use"]:
-        return {"in_use": True, "conf": phone["conf"], "source": "detector"}
+    """AS7 from the phone tracker (YOLO + hands + owner vote; the lap pattern is already folded in there). A
+    message without a tracker result falls back to the lap pattern alone."""
+    if phone.get("in_use"):
+        return {"in_use": True, "conf": _num(phone.get("conf")), "source": phone.get("source") or "detector"}
     if gaze.get("lap_pattern"):
         return {"in_use": True, "conf": cfg.phone.lap_pattern.conf, "source": "lap_pattern"}
-    return {"in_use": False, "conf": phone["conf"], "source": None}
+    return {"in_use": False, "conf": _num(phone.get("conf")), "source": None}
+
+
+def _occupant(cfg: PerceptionConfig, oid: int, seat: str, source: str, msg: Mapping[str, Any]) -> dict[str, Any]:
+    ident = msg.get("identity") or {}
+    occ: dict[str, Any] = {"id": oid, "seat": seat, "source": source, "profile": ident.get("profile")}
+    if cfg.output.proposed_fields:
+        score = ident.get("score")
+        occ["profile_score"] = None if score is None else round(float(score), 3)
+    return occ
+
+
+def _monitoring_extras(mon: Mapping[str, Any], msg: Mapping[str, Any]) -> dict[str, Any]:
+    """Proposed monitoring fields. ``face_conf`` is 0.0 without a face (the contract field is a float, never null).
+    A camera opened through the development fallback (``capture.via == "fallback"``, perception/capture.py) reports
+    ``monitoring_reason = "camera_fallback"`` unless the monitor has a real reason."""
+    reason = mon.get("reason")
+    if reason is None and (msg.get("capture") or {}).get("via") == "fallback":
+        reason = "camera_fallback"
+    return {
+        "monitoring_ok": bool(mon.get("ok", True)),
+        "monitoring_reason": reason,
+        "monitoring_warnings": list(mon.get("warnings") or ()),
+        "camera_mode": mon.get("mode"),
+        "face_conf": _num(mon.get("confidence")),
+    }
 
 
 def _driver_block(cfg: PerceptionConfig, d: Mapping[str, Any], frame: dict[str, Any]) -> None:
     st = d["state"]
     e, h, g = st["eyes"], st["head"], st["gaze"]
-    mon = d["monitoring"]
+    mon = d.get("monitoring") or {}
+    phone = d.get("phone") or {}
     frame["driver"] = {
         "eyes": {
             "ear": e["ear"],
@@ -112,11 +158,11 @@ def _driver_block(cfg: PerceptionConfig, d: Mapping[str, Any], frame: dict[str, 
         },
         "yawn": st["yawn"],
         "speaking": st["speaking"],
-        "phone": _phone(cfg, d["phone"], g),
-        "gesture": d["gesture"],
+        "phone": _phone(cfg, phone, g),
+        "gesture": d.get("gesture"),
     }
-    if mon["face_missing_s"] < cfg.monitoring.face_lost_s:
-        frame["occupants"].append({"id": DRIVER_ID, "seat": "driver", "source": "cam_driver", "profile": None})
+    if _present(cfg, mon):
+        frame["occupants"].append(_occupant(cfg, DRIVER_ID, "driver", "cam_driver", d))
     if cfg.output.proposed_fields:
         ref = e["ref_left"] if e["eye_used"] == "left" else e["ref_right"]
         frame["driver"]["eyes"].update(
@@ -127,34 +173,41 @@ def _driver_block(cfg: PerceptionConfig, d: Mapping[str, Any], frame: dict[str, 
             blink_rate=e["blink_rate"],
             open_baseline=ref,
         )
-        frame["driver"]["phone"].update(near_face=d["phone"]["near_face"], side=d["phone"]["side"])
+        frame["driver"]["phone"].update(
+            near_face=phone.get("near_face", False),
+            side=phone.get("side"),
+            usage=phone.get("usage") if frame["driver"]["phone"]["in_use"] else None,
+            foreign_seen=phone.get("foreign", False),
+        )
         frame["driver"]["gaze"].update(
             calibrated=g["calibrated"], off_road_60s_ms=g["off_road_60s_ms"], lap_pattern=g["lap_pattern"]
         )
-        frame["driver"].update(
-            face_too_small=st["face"]["too_small"], monitoring_ok=mon["ok"], monitoring_reason=mon["reason"]
-        )
+        frame["driver"].update(face_too_small=bool(st["face"]["too_small"]), **_monitoring_extras(mon, d))
 
 
 def _passenger_block(cfg: PerceptionConfig, p: Mapping[str, Any], frame: dict[str, Any]) -> None:
-    st, mon = p["state"], p["monitoring"]
-    present = mon["face_missing_s"] < cfg.monitoring.face_lost_s
-    closed_s = st["eyes"]["closed_ms"] / 1000.0
+    st = p["state"]
+    mon = p.get("monitoring") or {}
+    ps = p.get("passenger_state")  # AP2 module (eyes not seen open + head drop); else the eye detector alone
+    if ps is not None:
+        present, awake, closed_s = bool(ps["present"]), bool(ps["awake"]), float(ps["eyes_closed_s"])
+    else:
+        present = _present(cfg, mon)
+        closed_s = _num(st["eyes"]["closed_ms"]) / 1000.0
+        awake = closed_s < cfg.passenger.asleep_closed_s
     frame["passenger"] = {
         "present": present,
-        "awake": closed_s < cfg.passenger.asleep_closed_s,
+        "awake": awake,
         "eyes_closed_s": round(closed_s, 2),
-        "speaking": st["speaking"],
-        "holding_phone": p["phone"]["in_use"],
-        "gesture": p["gesture"],
+        "speaking": st["speaking"] if present else False,
+        "holding_phone": bool((p.get("phone") or {}).get("in_use")) if present else False,
+        "gesture": p.get("gesture"),
         "answer": None,
     }
     if present:
-        frame["occupants"].append(
-            {"id": PASSENGER_ID, "seat": "front_right", "source": "cam_passenger", "profile": None}
-        )
+        frame["occupants"].append(_occupant(cfg, PASSENGER_ID, "front_right", "cam_passenger", p))
     if cfg.output.proposed_fields:
-        frame["passenger"]["monitoring_reason"] = mon["reason"]
+        frame["passenger"].update(_monitoring_extras(mon, p))
 
 
 def _apply_modules(
@@ -218,17 +271,21 @@ def build_frame(
 
     if d is not None:
         _driver_block(cfg, d, frame)
-    elif proposed:
+    elif proposed:  # worker up but no fresh frame = no_frames; worker down / disabled = camera_unavailable
         frame["driver"] = {
             "eyes": {"state": "UNKNOWN"},
             "monitoring_ok": False,
-            "monitoring_reason": "camera_unavailable",
+            "monitoring_reason": "no_frames" if cameras.get("driver") else "camera_unavailable",
         }
 
     if p is not None:
         _passenger_block(cfg, p, frame)
     elif proposed and "passenger" in cameras:
-        frame["passenger"] = {"present": False, "monitoring_reason": "camera_unavailable"}
+        frame["passenger"] = {
+            "present": False,
+            "monitoring_ok": False,
+            "monitoring_reason": "no_frames" if cameras.get("passenger") else "camera_unavailable",
+        }
 
     raw = {"driver": driver, "passenger": passenger}
     timing: dict[str, tuple[float | None, float | None]] = {}

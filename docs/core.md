@@ -3,11 +3,16 @@
 > Work in progress. This page starts with the contract; the core loop, the safety rules and the scores are added as
 > they land.
 
-## 1. The contract: `shared/contracts.py` (v2.0)
+## 1. The contract: `shared/contracts.py` (v2.1)
 
 One file, Pydantic v2, imported by every module. It follows `DriveMate-PLAN-FINAL.md` section 7 (state), section 6
 (actions) and section 13 (interfaces). Changes: `CONTRACT: <field>, <type>, <who writes it>, <why>` on the group, new
 fields optional with a default, bump `CONTRACT_VERSION`, update `tests/core/fixtures/state_example.json`.
+
+**Changes since 2.0:**
+- **2.1:** `driver.face_conf` may be `null` (P1 sends null before the first monitoring result; with a number-only
+  field those frames failed validation); `passenger.monitoring_ok / monitoring_warnings / camera_mode / face_conf`
+  declared (P1 already sends them); `alarm_played` and other log types added to `CORE_EVENT_TYPES` (list only).
 
 ### 1.1 What is in it
 
@@ -127,3 +132,110 @@ Commands from core (`dialog_window`, `calibrate`, `debug`, `enroll`) get an `ack
   the demo overrides, the C8 limits, every template's fields, no phone number in the templates.
 - `tests/core/test_fake_perception.py`: every key, the answers and gestures, the acks, and a round trip over a real
   WebSocket.
+
+## 2. The core process (`core/main.py`)
+
+```bash
+pip install -r requirements/p2-core.txt -r requirements/p3-assistant.txt   # P3's for /tts and /media
+python -m core.main                         # http://127.0.0.1:8000
+python -m core.main --host 0.0.0.0          # the phone bridge runs on another laptop (plan decision 9)
+python scripts/fake_perception.py           # second terminal: P1's stand-in
+curl http://127.0.0.1:8000/health           # connections, data age, simulator in use
+```
+
+| File | What it does |
+|---|---|
+| `core/main.py` | FastAPI: `/ws/perception`, `/ws/ui`, `/ws/phone`, `GET /health`; the 10 Hz loop; mounts `assistant.router` (P3) and `integrations.contact_app.router` (P4) when they import. An error in one tick or one message handler is logged once; the loop and the connections go on. |
+| `core/engine.py` | The state. Takes P1's frames, the browser's messages and the bridge's messages; builds `State` every tick; the event log (`log_event`). Plug-in points for the next steps: `add_frame_listener` (fast safety path, runs on every frame, not at the next tick), `add_browser_listener`, `add_tick_listener`. |
+| `core/hub.py` | One queue and one sender task per WebSocket peer: sending never blocks; old `state` messages go first when a browser is slow. |
+| `core/simulation.py` | P4's `simulator.Simulator` when it exists; otherwise `FakeSimulator`: a straight route with OMV (fuel, km 42) and a cafe, scene presets (scenes 5-9 on the highway at 118 km/h, scene 7 stopped at OMV). |
+
+**How the state is built.** P1's blocks (`driver` without `reaction`, `passenger`, `occupants`, `perf`) come from the
+newest frame if it is younger than `loop.perception_stale_ms`; otherwise the driver block is reset with
+`monitoring_ok=false` and `monitoring_reason` `no_frames` (connected, no data) or `camera_unavailable` (not
+connected). `safety.monitoring_ok` = fresh frame and P1's `driver.monitoring_ok`. Declared rear occupants (ids 3+) are
+added after the camera ones. Message texts stay in core: the `/ws/ui` state has no `messages[].text`.
+
+**Director commands handled now** (`{"type": "command", "cmd": ...}` on `/ws/ui`): `debug`, `calibrate`, `enroll`
+(forwarded to P1), `llm` (`on`: C6 switch), `declare_occupant` (`value: {profile, role}` or `{remove: id}`),
+`fake_message` (`value: {from, app, text}`), `scene`, `speed`, `time_scale`, `start`, `pause`, `stop_at_next_poi`,
+`reset`.
+
+Checked end to end (core + `fake_perception.py` + a `/ws/ui` client): 10.3 states/s, 15 frames/s, scene 8 on the
+highway, eyes closed up to 1.9 s, covered camera -> `monitoring_ok=false` (`occluded`), no invalid or dropped message.
+
+## 3. Safety (`core/safety/`, plan C): deterministic, no LLM
+
+| File | Rule |
+|---|---|
+| `sos.py` | **C3, C4, C5.** `normal -> alarm (P1) -> asking (P1) -> countdown (P0) -> sos_sent (P0)`. Alarm when `driver.eyes.closed_ms >= safety.microsleep.closed_ms` (eyes reliable) or `driver.head.nodding`, **on the frame itself** (fast path, not at the next tick). After `sos.ask_after_alarm_s`: the "Ești bine?" clip + a dialog window. No answer (or "nu"): the passenger instructions clip by name, the countdown, the alarm again every `realarm_s` after the instructions, then the report to every SOS channel. Any yes (voice, nod, thumbs up) cancels before the end. One alarm per closure: the eyes must open before the next one. |
+| `alarm.py` | `alarm` message with `alarm_<driver>.mp3`; `alarm_ms` = core detection -> `alarm_played` from the browser, both on core's clock -> `safety.alarm_ms_last`, `perf.alarm_ms_last`, event `alarm_played` (`on_target` vs `safety.alarm_target_ms`). |
+| `monitoring.py` | **C7.** `safety.monitoring_ok` false for `lost_after_ms` -> P2 + "Nu te mai văd" clip + the reason in the log, repeated every `repeat_s`; "Te văd din nou" when it is back. Silent until the camera has seen the driver once in this trip, and never over a more critical alert. |
+| `arbiter.py` | **C1, C8 veto.** Every rule raises / clears its alert; `safety.level` = the most critical, `safety.alert`, `llm_allowed` = level not in P0-P2. A rise to a more critical level sends `speak_control: stop` and `media: stop` before the rule's own sound. |
+| `answers.py` | Yes / no from the voice (phrases in `templates.yaml`, the first one in the sentence wins), the nod (`head.answer`), the gesture (`Thumb_Up` / `Thumb_Down`). |
+| `../dialog_window.py` | Opens the window on both sides: `dialog_window` to P1 (nods and gestures) and `interaction.dialog_window_open` for the voice (no wake word needed). |
+| `../clips.py` | Picks P3's clips (`clips.json`) by name: `alarm_<driver>`, `passenger_instructions_<passenger>_<driver>`; default names while P1 does not recognise the person. |
+
+**SOS channels** (`core.safety.default_sos_channels`): `contact_page` (P4's `integrations.contact_app.push_sos`
+when it exists), `call` (Twilio) and `sms` (the driver's phone through the bridge) report `not_connected` until the
+phone part is wired. A channel that fails is logged as `error: ...` and the others still run (C9).
+
+Checked end to end (core + `fake_perception.py` + a client playing the browser): scene 8 (eyes closed -> stop +
+alarm in 31-36 ms detection -> `alarm_played`, "Ești bine?" -> "Da" -> normal, LLM allowed again) and scene 9 (head
+drop -> alarm -> no answer -> "Maria, Andrei nu răspunde..." -> 10 s countdown with re-alarms -> SOS report).
+
+## 4. Distractions (C2) and the A/B counter (B8)
+
+| File | Rule |
+|---|---|
+| `safety/distraction.py` | **C2.** Above `safety.distraction.min_speed_kmh`: `driver.gaze.off_road_ms` past `off_road_ms` (`off_road_ms_high_speed` from `high_speed_kmh`), or `driver.phone.in_use` for `phone_min_ms`. One episode: at once `visual_cue` + a P2 alert (voice and music stop, LLM silent); after `escalation.voice_after_ms` a fixed sentence ("Ochii pe drum." / "Lasă telefonul." / "Lasă telefonul, ți-l citesc eu." when a message is waiting); after `alarm_after_ms` the alarm. The same sentence is not repeated within `cooldown_s`; nothing is said over the SOS; `unknown` zones and low gaze confidence never alert. `distraction_end` logs the time to come back (visual reaction). |
+| `ab_baseline.py` | **B8.** The simple threshold on the same perception, without zones, calibration, context or speed: head past `yaw_deg` / `pitch_deg` for `min_ms` (a mirror check counts), eyes closed `closed_ms`, any phone in the driver camera (the passenger's too). One per episode, one per `cooldown_s`, logged as `naive_alert`. DriveMate's side counts each distraction episode and each microsleep alarm. Both go to `state.ab`. |
+
+Fixed texts without a clip go through P3's TTS (`/tts/...`); P3's player falls back to the browser's voice. Clip ids
+for them are already in `templates.yaml` (`eyes_on_road`, `phone_down`, `phone_read_for_you`): once P3 generates
+those clips they are used automatically.
+
+Checked end to end: scene 2 (mirror glance -> "prag simplu 1 / DriveMate 0") and scene 3 (phone in hand with a
+message waiting -> cue at 1.1 s -> "Lasă telefonul, ți-l citesc eu." -> alarm at 3 s -> phone down -> end; counter
+"prag simplu 2 / DriveMate 1").
+
+## 5. The assistant link (C): `core/assistant_link.py`
+
+The slow path. Safety never waits for it: events go to `assistant.handle_event` one at a time in a background task
+(an answer can take seconds), the actions that come back are checked again (C8) and executed.
+
+| Events core sends | When |
+|---|---|
+| `trip_start` | the driver has been seen for `assistant.greet_after_s` (once per trip); new messages wait for it |
+| `driver_speech` | an addressed final utterance that answers neither the SOS nor the assistant's pending question |
+| `driver_refused` | a refusal while the fatigue dialog is on (`assessment.fatigue >= safe_contact.fatigue_min`); C10 in step H |
+| `message_received` / `safe_contact_reply` | the F2 rule allows it, with `delivery` `ask` or `read` |
+| `stop_suggested` | after a KSS answer of `assistant.kss_break_min` or more: the stop picked by `core/reminders.py` (K3) |
+| follow-ups | what P3's `DialogManager` returns (`media_declined`, `kss_answer`, `driver_refused`, ...) |
+
+| File | What it does |
+|---|---|
+| `validator.py` | **C8.** Rejects an unknown or internal type (`search_media`), a missing parameter, a level that does not allow it (the veto at P0-P2, `null` = P4), an action that needs a "yes" and did not get it (volume excepted). Logged as `action_rejected`. |
+| `messages_timing.py` | **F2.** Defer (alert, risk, speed, distraction cause; "Ți-l citesc imediat ce e liniște." once, retried every `retry_s`), ask (someone else in the car), read (alone). |
+| `reminders.py` | **K3** (first version): the next POI in range, solving an open reminder of the same category. |
+| `assistant_link.py` | Events, early speech while the LLM streams (said once), execution (speech, music with `loop` / `source` / `reason`, volume, reading a message as is, the reply through the phone bridge with `send_reply`, reminders, stops, screen text, silence), answers on every channel through P3's `DialogManager`, the dialog window after a question (`speak_done`), **D4** (the voice pauses at a mirror glance, resumes "...cum ziceam"), ✋ to silence it, LLM latency and status (`perf.llm_*`, `integrations.llm`), the scorecard (accepted / rejected suggestions, hands-free messages, reminders done). |
+
+The SOS has priority: an input that answered "Ești bine?" never reaches the assistant, and a safety alert drops the
+pending question. Without P3's code installed, core and safety run, the assistant is off.
+
+Checked end to end with P3's real client (no LLM key, its fixed texts): scene 1 greeting (paused at a mirror glance,
+resumed), scene 3 message ("Mesaj de la Mihai. Îl citesc tare?" -> "da" -> the text read as is), "oprește muzica".
+
+## 6. Testing without the others
+
+```bash
+pytest tests/core                                   # the rules, scene by scene, in fake time
+python -m core.main                                 # terminal 1
+python scripts/fake_perception.py                   # terminal 2: keys 1-9 instead of the camera
+python scripts/core_command.py watch                # terminal 3: alarms, voice, events, level, A/B counter
+python scripts/core_command.py scene 8              # director commands until P4's panel has them
+python scripts/core_command.py message Mihai "Unde ești?"
+```
+
+With the dashboard (`cd dashboard && npm run dev`, Google Chrome, Sursă -> "Live · local", "Activează vocea") the
+alarms and the voice are heard; without a browser, `watch --ack-alarms` answers `alarm_played` in its place.

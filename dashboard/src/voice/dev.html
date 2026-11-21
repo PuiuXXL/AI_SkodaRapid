@@ -10,133 +10,82 @@
   - the real assistant (Gemini or fixed texts) answering what you say;
   - pause / "...cum ziceam" resume, alarms interrupting everything, music ducking;
   - speech_onset timestamps (verbal reaction channel).
-
-  Look: plain terminal style (monospace, phosphor green on black), no emoji.
 -->
 <html lang="ro">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DriveMate voice console</title>
+  <title>DriveMate voice test</title>
+  <link rel="stylesheet" href="/voice/obsidian-tokens.css">
   <style>
-    :root {
-      --bg: #0b0d0b; --panel: #0f130f; --fg: #b8f5b8; --dim: #5f8f5f; --line: #2a3d2a;
-      --hot: #39ff6a; --amber: #ffb000; --red: #ff5c5c; --cyan: #6fd6ff;
-    }
+    :root { --bg: var(--ui-bg); --fg: var(--ui-text); --card: var(--ui-surface-1); --ok: var(--ui-success); --warn: var(--ui-warning); }
     * { box-sizing: border-box; }
-    html, body { background: var(--bg); }
-    body {
-      margin: 0; padding: 14px 16px; color: var(--fg);
-      font: 13px/1.5 "Cascadia Mono", "JetBrains Mono", Consolas, "DejaVu Sans Mono", ui-monospace, monospace;
-    }
-    ::selection { background: var(--hot); color: var(--bg); }
-    header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; border-bottom: 1px solid var(--line);
-             padding-bottom: 8px; margin-bottom: 12px; }
-    header h1 { font-size: 14px; font-weight: 700; margin: 0; color: var(--hot); letter-spacing: .08em; }
-    header .sub { color: var(--dim); }
-    .status { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
-    .flag { color: var(--dim); }
-    .flag::before { content: "["; } .flag::after { content: "]"; }
-    .flag b { font-weight: 400; color: var(--dim); }
-    .flag.on b { color: var(--hot); }
-    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-    .panel { border: 1px solid var(--line); background: var(--panel); padding: 10px 12px 12px; min-width: 0; }
-    .panel h2 { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--amber); letter-spacing: .1em; }
-    .panel h2::before { content: "== "; color: var(--dim); } .panel h2::after { content: " =="; color: var(--dim); }
-    button {
-      font: inherit; margin: 2px 4px 2px 0; padding: 2px 6px; cursor: pointer;
-      background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 0;
-    }
-    button::before { content: "[ "; color: var(--dim); } button::after { content: " ]"; color: var(--dim); }
-    button:hover { border-color: var(--hot); color: var(--hot); }
-    button:active { background: var(--hot); color: var(--bg); }
-    button:disabled { color: var(--dim); border-color: var(--line); cursor: default; background: transparent; }
-    button.primary { color: var(--hot); border-color: var(--hot); }
-    input {
-      font: inherit; width: 100%; margin-bottom: 6px; padding: 4px 6px; border-radius: 0;
-      background: var(--bg); color: var(--fg); border: 1px solid var(--line); caret-color: var(--hot);
-    }
-    input:focus { outline: none; border-color: var(--hot); }
-    .hint { color: var(--dim); margin: 8px 0 0; }
-    .hint::before { content: "# "; }
-    /* STT + LOG: their own row, full width, tall, resizable (drag the bottom-right corner). */
-    .readers { display: grid; gap: 12px; margin-top: 12px; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
-    @media (max-width: 900px) { .readers { grid-template-columns: minmax(0, 1fr); } }
-    #log, #transcript {
-      height: 58vh; min-height: 160px; resize: vertical; overflow-y: auto;
-      white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.6;
-      background: var(--bg); border: 1px solid var(--line); padding: 8px 10px; margin: 0;
-    }
-    #log:hover, #transcript:hover { border-color: var(--dim); }
-    #log div, #transcript div { min-height: 1.5em; }
-    .t { color: var(--dim); }
-    .interim { color: var(--dim); }
-    .addressed { color: var(--hot); }
-    .ignored { color: var(--fg); opacity: .75; }
-    .speak { color: var(--cyan); }
-    .err { color: var(--red); }
-    .warn { color: var(--amber); }
-    .cursor::after { content: "_"; color: var(--hot); animation: blink 1s steps(1) infinite; }
-    @keyframes blink { 50% { opacity: 0; } }
-    ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: var(--line); }
+    body { margin: 0 auto; max-width: 1600px; padding: 24px; font: 16px/1.5 "Segoe UI Variable", "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    .grid { display: grid; gap: 16px; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(min(100%,300px), 1fr)); }
+    .card { min-width: 0; background: var(--card); border: 1px solid var(--ui-stroke); border-radius: var(--ui-radius); padding: 20px; }
+    .card h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    button { min-height: 44px; font: inherit; margin: 4px 4px 4px 0; padding: 8px 12px; border: 1px solid var(--ui-stroke-strong); border-radius: 10px; background: var(--ui-surface-2); color: var(--fg); cursor: pointer; transition: background-color var(--ui-fast); }
+    button:hover:not(:disabled) { border-color: var(--ui-accent-stroke); background: var(--ui-inset); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--ui-on-accent); }
+    button.primary:hover:not(:disabled) { background: var(--ui-accent-hover); }
+    button:disabled { opacity: .5; cursor: default; }
+    :where(button,input):focus-visible { outline: 2px solid var(--ui-accent-hover); outline-offset: 3px; }
+    input { width: 100%; padding: 7px; border-radius: 7px; border: 1px solid var(--muted); background: transparent; color: var(--fg); }
+    #log, #transcript { height: 260px; overflow-y: auto; font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 12px; border: 1px solid var(--muted); }
+    .pill.on { border-color: var(--ok); color: var(--ok); }
+    .interim { color: var(--muted); }
+    .addressed { color: var(--ok); }
+    @media (max-width:400px) { body { padding: 16px; } .card { padding: 16px; } }
+    @media (prefers-reduced-motion:reduce) { * { transition: none !important; } }
   </style>
 </head>
 <body>
-  <header>
-    <h1>DRIVEMATE // VOICE CONSOLE</h1>
-    <span class="sub">P3 test bench &middot; fake core &middot; Google Chrome</span>
-  </header>
-
-  <div class="status">
-    <button id="start" class="primary">START mic + audio</button>
-    <span id="conn" class="flag">LINK <b>OFFLINE</b></span>
-    <span id="dialog" class="flag">DIALOG WINDOW <b>--</b></span>
-    <span id="speaking" class="flag">TTS <b>IDLE</b></span>
-  </div>
-
+  <h1>DriveMate · test voce (P3)</h1>
+  <p>
+    <button id="start" class="primary">Start (microfon + audio)</button>
+    <span id="conn" class="pill">deconectat</span>
+    <span id="dialog" class="pill">fereastră dialog</span>
+    <span id="speaking" class="pill">asistentul vorbește</span>
+  </p>
   <div class="grid">
-    <section class="panel">
-      <h2>CORE EVENTS</h2>
+    <section class="card">
+      <h2>Evenimente (ca de la core)</h2>
       <button data-event="trip_start">trip_start</button>
       <button data-event="cause_detected">cause_detected</button>
       <button data-event="fatigue_high">fatigue_high</button>
       <button data-event="disengagement_high">disengagement_high</button>
       <button data-event="message_received" data-data='{"msg_id":"m17","delivery":"ask"}'>message_received</button>
       <button data-event="stop_suggested" data-data='{"poi_id":"omv_km42","poi_name":"OMV","dist_km":12,"task":"lichidul de parbriz"}'>stop_suggested</button>
-      <p class="hint">Vorbește cu „copilot …” sau „DriveMate …”. După o întrebare: 6 s fără nume.</p>
+      <p style="color:var(--muted);font-size:13px">Vorbește cu „copilot …” sau „DriveMate …”. După o întrebare ai 6 s fără nume.</p>
     </section>
-
-    <section class="panel">
-      <h2>AUDIO OUT</h2>
-      <input id="sayText" value="Salut Andrei. Asta e vocea asistentului, propoziție cu propoziție. Merge bine?">
-      <button id="say">say (TTS)</button>
-      <button data-control="pause">pause</button>
-      <button data-control="resume">resume</button>
-      <button data-control="stop">stop</button><br>
-      <button id="alarm">alarm ANDREI</button>
-      <button id="music">music</button>
-      <button id="stopMusic">stop music</button>
+    <section class="card">
+      <h2>Voce și audio</h2>
+      <input id="sayText" aria-label="Text de redat vocal" value="Salut Andrei. Asta e vocea asistentului, propoziție cu propoziție. Merge bine?">
+      <button id="say">Spune textul (TTS)</button>
+      <button data-control="pause">Pauză</button>
+      <button data-control="resume">Reia („…cum ziceam”)</button>
+      <button data-control="stop">Stop</button><br>
+      <button id="alarm">Alarmă „ANDREI!”</button>
+      <button id="music">Muzică</button>
+      <button id="stopMusic">Oprește muzica</button>
     </section>
-
-    <section class="panel">
-      <h2>CAMERA INPUT (P1 SIM)</h2>
-      <button data-input="gesture:Thumb_Up">thumb up</button>
-      <button data-input="gesture:Thumb_Down">thumb down</button>
-      <button data-input="gesture:Open_Palm">open palm</button><br>
-      <button data-input="nod:yes">nod yes</button>
-      <button data-input="nod:no">shake no</button>
-      <p class="hint">Doar când asistentul așteaptă un răspuns („Bine?”, „Trimit?”, „Care?”, KSS, quiz).</p>
+    <section class="card">
+      <h2>Răspuns fără voce (simulează camera lui P1)</h2>
+      <button data-input="gesture:Thumb_Up">👍 deget sus</button>
+      <button data-input="gesture:Thumb_Down">👎 deget jos</button>
+      <button data-input="gesture:Open_Palm">✋ palmă</button><br>
+      <button data-input="nod:yes">dă din cap (da)</button>
+      <button data-input="nod:no">clatină din cap (nu)</button>
+      <p style="color:var(--muted);font-size:13px">Merg doar când asistentul așteaptă un răspuns („Bine?”, „Trimit?”, „Pun ceva?”, KSS, quiz).</p>
     </section>
-  </div>
-
-  <div class="readers">
-    <section class="panel">
-      <h2>STT</h2>
-      <div id="transcript"><div class="cursor"></div></div>
+    <section class="card">
+      <h2>Ce aude (transcriere)</h2>
+      <div id="transcript"></div>
     </section>
-
-    <section class="panel">
-      <h2>LOG</h2>
+    <section class="card">
+      <h2>Jurnal</h2>
       <div id="log"></div>
     </section>
   </div>
@@ -145,43 +94,18 @@
     import { initVoice, onTranscript, isSpeaking } from "/voice/index.js";
 
     const $ = (id) => document.getElementById(id);
-    const stamp = () => new Date().toTimeString().slice(0, 8);
-    const classOf = (text) => /EROARE|error|failed/i.test(text) ? "err"
-      : /429|503|504|REJECT|ÎN AȘTEPTARE|simulat/i.test(text) ? "warn" : "";
-
-    /** Append one timestamped line to the log (never parsed as HTML). */
-    function log(text, css = classOf(text)) {
-      const line = document.createElement("div");
-      const time = document.createElement("span");
-      time.className = "t";
-      time.textContent = `${stamp()} `;
-      line.append(time, document.createTextNode(text));
-      if (css) line.classList.add(css);
-      $("log").append(line);
-      $("log").scrollTop = 1e9;
-    }
-
-    /** Set a status flag: [NAME VALUE], highlighted when on. */
-    function flag(id, on, value) {
-      $(id).classList.toggle("on", on);
-      $(id).querySelector("b").textContent = value;
-    }
-
+    const log = (text) => { $("log").textContent += text + "\n"; $("log").scrollTop = 1e9; };
     let ws;
 
     function connect() {
       ws = new WebSocket(`ws://${location.host}/ws/ui`);
-      ws.addEventListener("open", () => flag("conn", true, "ONLINE"));
-      ws.addEventListener("close", () => flag("conn", false, "OFFLINE"));
+      ws.addEventListener("open", () => { $("conn").textContent = "conectat"; $("conn").classList.add("on"); });
+      ws.addEventListener("close", () => { $("conn").textContent = "deconectat"; $("conn").classList.remove("on"); });
       ws.addEventListener("message", (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "dev_log") log(message.text);
-        else if (message.type === "state") {
-          const open = Boolean(message.state?.interaction?.dialog_window_open);
-          flag("dialog", open, open ? "OPEN" : "--");
-        } else if (message.type === "speak") {
-          log(`SAY${message.is_question ? " (Q)" : ""}  ${message.text}`, "speak");
-        }
+        else if (message.type === "state") $("dialog").classList.toggle("on", Boolean(message.state?.interaction?.dialog_window_open));
+        else if (message.type === "speak") log(`▶ speak ${message.is_question ? "(întrebare) " : ""}${message.text}`);
       });
       return new Promise((resolve) => ws.addEventListener("open", resolve, { once: true }));
     }
@@ -202,20 +126,18 @@
         log(`[voce] EROARE la pornire: ${err}`);
         return;
       }
-      const transcript = $("transcript");
-      transcript.textContent = "";
       onTranscript((r) => {
-        if (r.final || !transcript.lastChild?.classList?.contains("interim")) {
-          transcript.append(document.createElement("div"));
+        const css = r.final ? (r.addressed ? "addressed" : "") : "interim";
+        if (r.final || !$("transcript").lastChild?.classList?.contains("interim")) {
+          $("transcript").insertAdjacentHTML("beforeend", "<div></div>");
         }
-        const line = transcript.lastChild;
-        line.className = r.final ? (r.addressed ? "addressed" : "ignored") : "interim cursor";
-        const tag = r.final ? (r.addressed ? "  [ADRESAT]" : "  [IGNORAT]") : "";
-        const speed = r.final ? (r.early ? `  early ${r.waitMs}ms` : `  ${r.waitMs}ms`) : "";
-        line.textContent = `${r.final ? ">" : "~"} ${r.text}${tag}${speed}`;
-        transcript.scrollTop = 1e9;
+        const line = $("transcript").lastChild;
+        line.className = css;
+        const speed = r.final ? (r.early ? ` ⚡${r.waitMs} ms` : ` (${r.waitMs} ms)`) : "";
+        line.textContent = `${r.final ? "✓" : "…"} ${r.text}${r.final ? (r.addressed ? "  [adresat]" : "  [ignorat]") : ""}${speed}`;
+        $("transcript").scrollTop = 1e9;
       });
-      setInterval(() => flag("speaking", isSpeaking(), isSpeaking() ? "SPEAKING" : "IDLE"), 150);
+      setInterval(() => $("speaking").classList.toggle("on", isSpeaking()), 150);
       $("start").disabled = true;
       log("voce pornită");
     });

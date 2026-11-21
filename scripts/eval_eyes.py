@@ -63,6 +63,17 @@ class Step:
     kind: str = "window"  # "window" (start/end labels), "cue" (one instant label) or "keyed" (SPACE start/end)
 
 
+def only_steps(steps: list[Step], labels: set[str]) -> list[Step]:
+    """The first (calibration) step, then each step with one of ``labels`` and the unlabelled step after it."""
+    out = steps[:1]
+    for k, step in enumerate(steps[1:], start=1):
+        if step.label in labels:
+            out.append(step)
+            if k + 1 < len(steps) and steps[k + 1].label is None:
+                out.append(steps[k + 1])
+    return out
+
+
 def guided_protocol() -> list[Step]:
     steps = [
         Step("Priveste camera, ochii deschisi (calibrare)", 5.0),
@@ -91,9 +102,17 @@ def guided_protocol() -> list[Step]:
     for k in range(3):
         steps += [
             Step(
-                f"SPATIU + INCHIDE OCHII ~2 s, apoi SPATIU cand ii deschizi  ({k + 1}/3)", 7.0, "eyes_closed", "keyed"
+                f"Ochii DESCHISI. SPATIU exact cand INCHIZI ochii, ~2 s, SPATIU exact cand ii DESCHIZI  ({k + 1}/3)",
+                8.0,
+                "eyes_closed",
+                "keyed",
             ),
             Step("Ochii deschisi", 2.0),
+        ]
+    for k in range(2):  # fatigue nodding (plan scene 9): closed eyes + the head falling forward
+        steps += [
+            Step(f"INCHIDE ochii, apoi lasa capul sa CADA in fata, ca atipit  ({k + 1}/2)", 5.0, "nod"),
+            Step("Ridica capul, ochii deschisi", 3.0),
         ]
     for k in range(3):
         steps += [Step(f"CASCA larg, natural  ({k + 1}/3)", 6.0, "yawn"), Step("Pauza", 3.0)]
@@ -168,7 +187,7 @@ def _print_result(result: EvalResult) -> None:
 # --- guided live ---------------------------------------------------------------------------------------
 
 
-def run_guided(cfg: PerceptionConfig, name: str) -> int:
+def run_guided(cfg: PerceptionConfig, name: str, only: set[str] | None = None) -> int:
     session_dir = DATA_DIR / "features" / f"{dt.datetime.now():%Y%m%d-%H%M%S}_eval-{_slug(name)}"
     session = RecordingSession(
         cfg, session_dir / "features.jsonl.gz", label=f"eval_eyes guided: {name}", gesture_hz=None
@@ -181,10 +200,27 @@ def run_guided(cfg: PerceptionConfig, name: str) -> int:
     states: list[DriverState] = []
     rate = RateMeter()
     aborted = False
-    steps = guided_protocol()
+    steps = guided_protocol() if not only else only_steps(guided_protocol(), only)
     total = sum(s.duration_s for s in steps)
     print(f"guided protocol: {len(steps)} steps, {total:.0f} s. Session: {session_dir}", flush=True)
     try:
+        # the closures are labelled with SPACE, which only reaches the window when it has the keyboard focus (the
+        # 2026-11-21 session recorded no key at all): wait for one SPACE here first, so a missing focus shows now
+        while not aborted:
+            step_out = session.step(timeout=0.5)
+            if step_out is None:
+                continue
+            frame, ff = step_out
+            img = draw_driver(frame.image, ff, None, fps=0.0, banner="CLICK pe aceasta fereastra, apoi apasa SPATIU")
+            cv2.imshow(WINDOW, img)
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord("q"), 27):
+                aborted = True
+            elif key == ord(" "):
+                print("SPACE received: the window has the keyboard, starting", flush=True)
+                break
+        if aborted:
+            steps = []
         for idx, step in enumerate(steps):
             start = session.now()
             keyed_open = False
@@ -202,6 +238,8 @@ def run_guided(cfg: PerceptionConfig, name: str) -> int:
                 rate.tick()
                 left = step.duration_s - elapsed
                 show = step.prompt if step.kind != "cue" or elapsed < 0.8 else "..."
+                if step.kind == "keyed":  # visible confirmation that the key arrived
+                    show += "   [SPATIU primit: INCHISI]" if keyed_open else "   [astept SPATIU]"
                 banner = f"{show}   {left:3.1f}s   [{idx + 1}/{len(steps)}]"
                 img = draw_driver(
                     frame.image,
@@ -557,6 +595,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--tune-tracking", action="store_true")
     p.add_argument("--ab-num-faces", action="store_true", help="R-FL1 A/B: num_faces 1 vs 2 on the same frames")
     p.add_argument("--config", type=Path, default=None)
+    p.add_argument("--only", nargs="*", default=None, help="guided: only these labels (e.g. eyes_closed nod squint)")
     args = p.parse_args(argv)
     configure_logging("WARNING", json=False)
     cfg = load_config(args.config)
@@ -566,7 +605,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_ab_num_faces(cfg)
     if args.session:
         return run_session(cfg, args.session, args.name if args.name != "laptop" else None)
-    return run_guided(cfg, args.name)
+    return run_guided(cfg, args.name, set(args.only) if args.only else None)
 
 
 if __name__ == "__main__":

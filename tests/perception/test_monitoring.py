@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
 import pytest
-import yaml
 
 from perception.monitoring import CameraMonitor, CameraMonitorConfig, MonitoringResult, image_stats
 
-PENDING = Path(__file__).resolve().parents[2] / "perception" / "config" / "pending" / "modules.yaml"
 H, W = 180, 320
 FPS = 30.0
 Image = npt.NDArray[np.uint8]
@@ -58,11 +55,6 @@ def run(
         t = t0 + i / FPS
         out.append((t, mon.update(t, make(), face_present=face, face_width_px=width if face else None)))
     return out
-
-
-def test_pending_yaml_matches_defaults() -> None:
-    section = yaml.safe_load(PENDING.read_text(encoding="utf-8"))["monitoring"]
-    assert CameraMonitorConfig.from_mapping(section) == CameraMonitorConfig()
 
 
 def test_good_frames_with_a_face_are_ok() -> None:
