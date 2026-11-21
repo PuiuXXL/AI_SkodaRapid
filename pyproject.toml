@@ -29,6 +29,13 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 [tool.ruff.lint.isort]
 known-first-party = ["perception"]
 
+[tool.pytest.ini_options]
+# plain `pytest` = the fast suite; `pytest -m slow` = the slow tests only; `pytest -m "slow or not slow"` = everything
+addopts = '-m "not slow"'
+markers = [
+    "slow: real models, recorded data, camera, spawned processes or > 2 s (skipped by default; run with -m slow)",
+]
+
 [tool.mypy]
 python_version = "3.11"
 files = ["perception", "tests/perception", "scripts/benchmark.py", "scripts/preview.py", "scripts/label_session.py",

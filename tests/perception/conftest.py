@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -45,3 +46,26 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if "realdata" in item.keywords:
             item.add_marker(skip)
+
+
+@pytest.fixture(scope="session")
+def mobilegaze_model() -> Any:
+    """MobileGaze, loaded once per test session (skipped without the model file)."""
+    from perception.config import load_config
+    from perception.driver_cam.gaze_model import MobileGazeModel
+
+    cfg = load_config()
+    if not cfg.models.path(cfg.models.gaze).exists():
+        pytest.skip("MobileGaze model missing (scripts/download_models.sh)")
+    return MobileGazeModel(cfg)
+
+
+@pytest.fixture(scope="session")
+def phone_detector_cpu() -> Any:
+    """YOLO26 phone detector on the CPU, loaded once per test session (skipped without the exported model)."""
+    from perception.phone import PhoneConfig, PhoneDetector
+
+    cfg = PhoneConfig(device="cpu")
+    if not cfg.path(cfg.cpu_model).exists():
+        pytest.skip(f"{Path(cfg.cpu_model).name} not exported")
+    return PhoneDetector(cfg)

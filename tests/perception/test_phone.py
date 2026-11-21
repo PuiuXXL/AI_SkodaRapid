@@ -185,17 +185,16 @@ def test_detector_rate() -> None:
     assert pd.should_run(0.8)
 
 
+@pytest.mark.slow
 @pytest.mark.models
-def test_real_yolo_on_a_black_frame() -> None:
-    cfg = PhoneConfig(device="cpu")
-    if not cfg.path(cfg.cpu_model).exists():
-        pytest.skip("yolo26n_416.onnx not exported")
-    pd = PhoneDetector(cfg)
-    assert pd.imgsz == 416
+def test_real_yolo_on_a_black_frame(phone_detector_cpu: PhoneDetector) -> None:
+    pd = phone_detector_cpu
+    assert pd.imgsz == 640  # yolo26s@640 (docs/eval/phone-compare-2026-11-21.md)
     assert pd.detect(np.zeros((480, 640), dtype=np.uint8), 0.0).boxes == ()
 
 
 @pytest.mark.realdata
+@pytest.mark.slow
 def test_vote_on_the_labelled_phone_in_a_real_session() -> None:
     """desk-test session: the phone label (held in front of the camera ~3 s) must produce an in-use vote."""
     if not (SESSION / "features.jsonl.gz").exists():

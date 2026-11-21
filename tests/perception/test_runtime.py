@@ -10,9 +10,10 @@ from onnx import TensorProto, helper
 from perception.runtime import OnnxModel, available_providers
 
 
-@pytest.fixture
-def tiny_model(tmp_path: Path) -> Path:
-    """y = (x + 1) * 2 on a [1, 3, 4, 4] float tensor."""
+@pytest.fixture(scope="session")
+def tiny_model(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """y = (x + 1) * 2 on a [1, 3, 4, 4] float tensor; built once per session."""
+    tmp_path = tmp_path_factory.mktemp("onnx")
     x = helper.make_tensor_value_info("x", TensorProto.FLOAT, [1, 3, 4, 4])
     y = helper.make_tensor_value_info("y", TensorProto.FLOAT, [1, 3, 4, 4])
     one = helper.make_tensor("one", TensorProto.FLOAT, [], [1.0])

@@ -49,6 +49,7 @@ class DriverEyes(_Out):
     # proposed additions (docs/perception.md §9)
     closed_ms: int = 0
     blink_rate: float | None = None
+    blink_count: int = 0  # blinks since the start (monotonic: a 15 Hz consumer cannot miss a 150 ms blink)
     squint: bool = False
     state: Literal["OPEN", "CLOSED", "SQUINT", "UNKNOWN"] = "UNKNOWN"
     ear_left: float | None = None
@@ -256,6 +257,7 @@ class DriverPipeline:
                 reliable=eyes.reliable,
                 closed_ms=eyes.closed_ms,
                 blink_rate=eyes.blink_rate,
+                blink_count=self.eyes.blink_count,
                 squint=eyes.squint,
                 state=eyes.state,
                 ear_left=eyes.ear_left,

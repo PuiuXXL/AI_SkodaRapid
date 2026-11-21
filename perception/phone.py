@@ -79,10 +79,10 @@ class InferenceModel(Protocol):
 @dataclass(frozen=True)
 class PhoneConfig:
     class_id: int = 67
-    conf_min: float = 0.40
+    conf_min: float = 0.48  # yolo26s@640, live comparison 2026-11-21 (docs/eval/phone-compare-2026-11-21.md)
     device: str = "auto"  # auto | cpu | gpu
-    cpu_model: str = "perception/models/yolo26n_416.onnx"
-    cpu_imgsz: int = 416
+    cpu_model: str = "perception/models/yolo26s_640.onnx"
+    cpu_imgsz: int = 640
     gpu_model: str = "perception/models/yolo26s_640.onnx"
     gpu_imgsz: int = 640
     cpu_providers: tuple[str, ...] = ("OpenVINOExecutionProvider", "CPUExecutionProvider")
@@ -95,6 +95,7 @@ class PhoneConfig:
     passenger_side: str = "right"
     mirrored: bool = False
     lap_conf: float = 0.40
+    threads: int = 2  # CPU threads for the detector model (0 = the process-wide onnx_threads)
 
     def __post_init__(self) -> None:
         if not 0 <= self.class_id <= 79:
@@ -159,7 +160,7 @@ class PhoneDetector:
         use_gpu = cfg.device == "gpu" or (cfg.device == "auto" and CUDA in available_providers())
         path = cfg.path(cfg.gpu_model if use_gpu else cfg.cpu_model)
         providers = [CUDA, "CPUExecutionProvider"] if use_gpu else list(cfg.cpu_providers)
-        onnx = OnnxModel(path, providers=providers, name="phone")
+        onnx = OnnxModel(path, providers=providers, name="phone", threads=cfg.threads or None)
         self.model = onnx
         self.imgsz = cfg.gpu_imgsz if use_gpu else cfg.cpu_imgsz
         self.provider = onnx.provider
