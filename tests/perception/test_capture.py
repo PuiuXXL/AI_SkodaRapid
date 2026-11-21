@@ -10,7 +10,6 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 import pytest
-import yaml
 
 from perception import capture
 from perception.capture import (
@@ -33,8 +32,6 @@ from perception.capture import (
     to_bgr8,
 )
 from perception.config import CameraConfig, load_config
-
-PENDING_IR = Path(__file__).resolve().parents[2] / "perception" / "config" / "pending" / "ir.yaml"
 
 
 @pytest.fixture
@@ -202,7 +199,7 @@ class FakeCapture:
         self.opened = not (params is not None and FakeCapture.refuse_params)
         FakeCapture.instances.append(self)
 
-    def isOpened(self) -> bool:  # noqa: N802 - cv2 API
+    def isOpened(self) -> bool:
         return self.opened
 
     def set(self, prop: int, value: float) -> bool:
@@ -222,7 +219,7 @@ class FakeCapture:
     def release(self) -> None:
         self.opened = False
 
-    def getBackendName(self) -> str:  # noqa: N802 - cv2 API
+    def getBackendName(self) -> str:
         return "FAKE"
 
 
@@ -233,7 +230,7 @@ def fake_cv(monkeypatch: pytest.MonkeyPatch) -> type[FakeCapture]:
     FakeCapture.frame = np.zeros((6, 8, 3), dtype=np.uint8)
     FakeCapture.fourcc = "MJPG"
     FakeCapture.fps = 30.0
-    monkeypatch.setattr(capture.cv2, "VideoCapture", FakeCapture)
+    monkeypatch.setattr(cv2, "VideoCapture", FakeCapture)  # the module capture.py uses
     monkeypatch.setattr(capture, "_PLATFORM", "linux")  # no Windows control writes, no DirectShow enumeration
     return FakeCapture
 
@@ -370,3 +367,21 @@ def test_list_v4l2_devices_from_sysfs(tmp_path: Path) -> None:
         (2, "/dev/video2", "045e", "0770", None),
         (10, "/dev/video10", "045e", "076f", None),
     ]
+
+
+def test_port_selector_tells_identical_cameras_apart() -> None:
+    from perception.capture import CameraDevice, _win_port
+
+    a = "\\\\?\\usb#vid_046d&pid_082c&mi_02#7&d60e892&0&0002#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global"
+    b = "\\\\?\\usb#vid_046d&pid_082c&mi_02#7&1f2e3d4&0&0002#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global"
+    assert _win_port(a) == "7&d60e892"
+    twins = [
+        CameraDevice(1, "C615", a, "046d", "082c", None, port=_win_port(a)),
+        CameraDevice(2, "C615", b, "046d", "082c", None, port=_win_port(b)),
+    ]
+    with pytest.raises(CameraOpenError, match="@<port>"):
+        match_device("usb:046d:082c", twins)
+    assert match_device("usb:046d:082c@d60e892", twins).index == 1
+    assert match_device("usb:046d:082c@1F2E3D4", twins).index == 2
+    with pytest.raises(CameraOpenError):
+        match_device("usb:046d:082c@nothere", twins)
