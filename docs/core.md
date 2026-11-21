@@ -3,11 +3,16 @@
 > Work in progress. This page starts with the contract; the core loop, the safety rules and the scores are added as
 > they land.
 
-## 1. The contract: `shared/contracts.py` (v2.0)
+## 1. The contract: `shared/contracts.py` (v2.1)
 
 One file, Pydantic v2, imported by every module. It follows `DriveMate-PLAN-FINAL.md` section 7 (state), section 6
 (actions) and section 13 (interfaces). Changes: `CONTRACT: <field>, <type>, <who writes it>, <why>` on the group, new
 fields optional with a default, bump `CONTRACT_VERSION`, update `tests/core/fixtures/state_example.json`.
+
+**Changes since 2.0:**
+- **2.1:** `driver.face_conf` may be `null` (P1 sends null before the first monitoring result; with a number-only
+  field those frames failed validation); `passenger.monitoring_ok / monitoring_warnings / camera_mode / face_conf`
+  declared (P1 already sends them); `alarm_played` and other log types added to `CORE_EVENT_TYPES` (list only).
 
 ### 1.1 What is in it
 
