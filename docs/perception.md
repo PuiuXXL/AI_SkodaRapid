@@ -117,7 +117,10 @@ python scripts/ws_sink.py --show --send debug      # stand-in for core's /ws/per
   - `debug {on}`: full debug overlay in the MJPEG preview (landmarks, EAR, reference, head angles, fps, luma);
   - `dialog_window {open, to, until}`: turns the Gesture Recognizer on for that camera until `until` (6 s default);
     the head yes/no detector (AS8) plugs in here (step 4);
-  - `calibrate {profile}`, `enroll {name}`: answered `not_implemented` until steps 3 and 4.
+  - `calibrate {profile, quick}`: forwarded to the driver worker, which runs the gaze calibration (§3.4); ack
+    `started`, one `calibration_prompt` per step, then ack `done` / `error`. The state rides on every worker frame,
+    so a dropped result cannot lose the outcome.
+  - `enroll {name}`: answered `not_implemented` until step 4.
 - **MJPEG** `:8001/video/driver`, `/video/passenger` (`/` shows both, `/health` is JSON): the worker encodes the
   overlay JPEG (`output.video_width` px, `output.jpeg_quality`, `output.video_fps`) **only while a client is
   connected** (1.5 ms per JPEG measured).
@@ -292,22 +295,84 @@ closed eyes as open in the venue light, set `eyes.cnn.enabled: false` (safety: a
   leave their rest level), not per frame.
 
 ### 3.4 Gaze zones: MobileGaze + kNN
+Code: `perception/driver_cam/gaze_model.py`, `gaze_zones.py`, `gaze_metrics.py`, `perception/calibration.py`;
+tools `scripts/calibrate.py`, `scripts/eval_zones.py`.
+
 - **Why a gaze model.** Euro NCAP distinguishes **owl** glances (the head turns) from **lizard** glances (only the
   eyes move). Head pose alone misses lizard glances: a glance down at a phone in the lap, or a quick look at the
-  mirror. We add **MobileGaze MobileOne-S0** (ONNX, `yakhyo/gaze-estimation`), a lightweight appearance-based gaze estimator.
-- **Features**, standardized with a z-score from the calibration data:
-  - head yaw / pitch;
-  - MobileGaze gaze yaw / pitch;
+  mirror. We add **MobileGaze MobileOne-S0** (ONNX, `yakhyo/gaze-estimation`), a lightweight appearance-based gaze
+  estimator, at `rates.gaze_hz` (15) on the driver camera only.
+- **Pre-processing checked in the repo's code** (`onnx_inference.py`, 2026-11-21), not assumed:
+  - crop = the face detector box (RetinaFace there), **no expansion, no squaring**; here the landmark face-oval box x
+    `gaze.crop_expand` (1.0). The old inline code used 1.2; `scripts/eval_zones.py --ab-crop` compares both on the
+    same live frames (jitter with the gaze still, Fisher separation road vs. mirrors / lap / cluster);
+  - BGR -> RGB, `cv2.resize` to 448 x 448 (bilinear), / 255, ImageNet mean / std, NCHW float32;
+  - decoding: softmax over 90 bins x 4 - 180 = degrees; outputs read **by name** (the export orders them yaw, pitch);
+  - the released weights are trained on **Gaze360 only**.
+  - Unit tests compare our pre-processing and decoding with a transcription of theirs (`tests/perception/test_gaze_model.py`).
+- **Signs.** The FeatureFrame keeps the raw model angles; `GAZE_SIGNS` maps them to the head convention (yaw > 0 =
+  driver's left, pitch > 0 = up). yakhyo draws on a mirrored webcam image, so on our non-mirrored frames the raw yaw
+  is reversed: measured on the laptop session 2026-11-21 (1899 frames), corr(head yaw, raw gaze yaw) = **-0.51**,
+  corr(head pitch, raw gaze pitch) = **+0.65**. `eval_zones` re-checks both live (`sign_ok`).
+- **Smoothing.** One Euro on the driver-convention yaw / pitch (`filters.one_euro_gaze`); between model runs the last
+  value is used for at most `gaze.max_age_ms`, then the zone is `unknown`. Raw yaw std with the head still: 4.3 deg.
+- **Features (14)**, one function for calibration and runtime (`GazeFeatureBuilder`):
+  - head yaw / pitch, **unfiltered** (the head One Euro is tuned for jitter, min cutoff 0.05 Hz, and lags fast
+    glances; the raw noise, 0.1-0.2 deg, is negligible next to the zone spacing);
+  - MobileGaze yaw / pitch (smoothed);
   - the 8 `eyeLook{In,Out,Up,Down}{Left,Right}` blendshapes;
-  - the iris offset relative to the eye corners (iris centres 468 / 473).
-- **Classifier:** distance-weighted kNN, k = 5. **Rejection:** if the nearest calibrated samples are too far away,
-  the result is `unknown`. `unknown` never triggers an alert.
-- **Calibration** (`scripts/calibrate.py` or the `calibrate` command from core):
-  - ~2 s per zone: road, left mirror, right mirror, rear mirror, cluster, infotainment, lap, passenger;
-  - each zone is recorded **both owl and lizard** (head turned, then eyes only);
-  - saved to `profiles/<name>/calibration.json`, gitignored.
-- **Window metrics:** `off_road_ms`, VATS (off-road glances < 2 s, counted over 60 s), and the entropy of the zone
-  distribution over 60 s.
+  - the iris offset (centres 468 / 473) from the eye-corner midpoint, in eye widths (x > 0 = driver's left, y > 0 =
+    up), averaged over the reliable eyes (`eyes.min_eye_width_px`, `eyes.unilateral_width_ratio`).
+  - **No features -> `unknown`, never a guessed zone:** no face, R-FL3 `face_too_small`, face confidence below
+    `filters.unknown_below_conf` (R-FL2), implausible head angles, no fresh gaze, no reliable eye. Squinted eyes
+    (R-FL4) stay valid. The reason is reported (`driver.gaze.reason` in the worker state, overlay).
+- **Classifier:** z-score with the calibration mean / std (std floored per group, `gaze.std_floor`), group weights
+  (`gaze.feature_weights`: the 8 correlated eyeLook features at half weight), distance-weighted kNN (k = 5, 1/d).
+- **Rejection:** mean distance to the k neighbours > tau, or vote share < `gaze.min_conf`.
+  - tau = p95 of the **blocked leave-one-out** distances of the calibration samples x `gaze.reject_factor`. Each sample
+    is classified without the frames of its own calibration segment closer than `gaze.loo_exclude_s` (0.5 s).
+    Leaving out only the sample compares it with its near-identical neighbour frames (tau far too small, everything
+    unknown live); leaving out the whole segment leaves road (one segment) without road neighbours (tau inflated,
+    LOO accuracy meaningless: 11 % on synthetic data before this fix, 100 % after).
+  - A rejected frame with the head beyond the calibrated range by `gaze.away_margin_deg` is **`away`** (off-road);
+    otherwise **`unknown`**, which never triggers an alert.
+- **Stable zone** (`ZoneTracker`): a new zone after `gaze.zone_min_frames` frames (3, ~100 ms at 30 fps, inside the
+  300 ms budget); during a blink (`CLOSED`) the previous zone is held for at most `eyes.blink_max_ms`.
+- **Calibration** (`scripts/calibrate.py --name <n>` or the `calibrate` command from core; same state machine,
+  `CalibrationRun`):
+  - per zone: OWL then LIZARD, `gaze.calibration.s_per_zone` (2 s) each; road x `road_factor` (3); passenger = the
+    passenger's hands; "back to the road" (`transition_s`) between steps, not recorded; the first `discard_s` (0.3 s)
+    after every prompt dropped; frames without features and closed-eye frames not used; a step with fewer than
+    `min_samples_per_zone` samples is repeated once, then reported missing. ~1 min 10 s in total;
+  - saved to `profiles/<name>/calibration.json` (gitignored): the raw samples (so k / weights / reject factor from
+    the yaml apply on load without recalibrating), the blocked-LOO confusion matrix, the open-eye **EAR baseline**
+    (p90 per eye on the road samples, given to the eye detector as the global reference) and a per-zone EAR reference
+    (stored for `EarReference.get(side, zone)`, not used yet);
+  - warnings when the LOO shows road <-> mirror_left or passenger <-> mirror_right confusions;
+  - **quick recalibration** (`--quick` / `quick: true`, ~15 s): road + the three mirrors, merged into the profile;
+  - the active profile: `gaze.default_profile` at start, then the last calibrated one (identity: step 4).
+- **Window metrics** (`gaze_metrics.py`), on the stable zone:
+  - **`off_road_ms`** = the current continuous time away from `gaze.on_road_zones` (a run of glances, broken only by
+    the road; `away` counts). **Mirror rule:** a glance at a `gaze.mirror_zones` zone is part of driving and counts
+    only once it lasts longer than `gaze.mirror_glance_max_ms` (2 s), then from its start. **`unknown` freezes** the
+    counter (adds nothing, resets nothing); a lost face is the monitoring rule's job ("Nu te mai văd");
+  - **`vats_60s`** = completed off-road runs shorter than `vats_max_glance_s` (2 s) in the last 60 s; short mirror
+    glances are not off-road, so not counted. Extra: `off_road_60s_ms`;
+  - **`entropy_60s`** = Shannon entropy (bits) of the time-weighted zone distribution over 60 s, `unknown` excluded;
+  - **lap pattern** (AS7): >= `phone.lap_pattern.min_glances` (3) glances at `lap` in `window_s` (20 s), or one longer
+    than `long_glance_s` (2 s), with no hand seen in the last `hands_recent_s`. The gesture model runs only inside
+    the dialog window, so "not run" counts as not seen. `driver.phone` = `source: "lap_pattern"`, `conf =
+    phone.lap_pattern.conf` (0.40) **only when the YOLO vote sees no phone**.
+- **Evaluation** (`scripts/eval_zones.py`): every zone 5x owl + 5x lizard (road 5x) in random order (seed saved),
+  2.5 s each + 1.5 s back to the road (~5 min), post-it targets on the laptop. Trials are scored from the movement
+  onset (raw head > 4 deg or gaze > 8 deg away from the 0.5 s before the prompt) + 0.3 s; latency = onset -> first
+  frame with the target zone. Report: confusion matrix, owl / lizard accuracy, watched confusions, latency, signs
+  (`docs/eval/zones-<name>-<date>.md`). `--session` replays a recorded session; `--sweep` re-runs only the classifier
+  on the stored features over k / reject factor / eyeLook weight / zone_min_frames (one session: check the winner
+  on a second live session). Exit criteria: owl >= 95 %, lizard >= 90 %, road <-> mirror_left 0, passenger <->
+  mirror_right <= 5 %, latency < 300 ms (median).
+- **Cost** (laptop, 2026-11-21, runtime): MobileGaze crop + pre-processing + inference **~22 ms p50** on OpenVINO CPU
+  (~18 ms alone), every 2nd frame; zone features + kNN + metrics < 1 ms.
 
 ### 3.5 Hands and gestures: MediaPipe Gesture Recognizer
 - `Thumb_Up`, `Thumb_Down` and `Open_Palm`, run only inside the dialog window or when a hand is raised.
@@ -389,7 +454,7 @@ closed eyes as open in the venue light, set `eyes.cnn.enabled: false` (safety: a
 | MediaPipe (Face Landmarker, Gesture Recognizer) | Apache-2.0 | OK. |
 | OpenCV + OpenCV Zoo models (YuNet, SFace) | Apache-2.0 / per-model licence | Check the licence file of each model in OpenCV Zoo. |
 | Ultralytics YOLO26 | **AGPL-3.0** | Fine for a public hackathon repo. A product needs an Ultralytics enterprise licence or another detector. |
-| MobileGaze (`yakhyo/gaze-estimation`) | the code's repo licence | **Check the licence of the weights and of the training data (Gaze360) before using it.** |
+| MobileGaze (`yakhyo/gaze-estimation`) | code: MIT | **Weights trained on Gaze360 only (README); Gaze360 is released for research use: check before any commercial use. Fine for the hackathon demo; name it on the slide.** |
 | open-closed-eye-0001 (Intel Open Model Zoo, eye-state CNN) | Apache-2.0 (`openvino_training_extensions`) | Trained on the MRL Eye Dataset (check its terms before a product). |
 | DMD | CC BY-NC-ND 4.0 | Evaluation only, nothing derived committed. |
 
@@ -446,9 +511,9 @@ the CONTRACT texts below; with `false` only the plan §7 fields are sent.
 | R-FL4 squint / smile | proposed `driver.eyes.squint` | done (hard squints: see §3.2) | amber "squint" tag, not counted as closed |
 | AS3 yawn | `driver.yawn` | done | yawn icon + event in the log |
 | AS4 head pose, fatigue nod | `driver.head.yaw`, `pitch`, `roll`, `nodding` | done | three small angle dials, NODDING badge |
-| AS5 gaze zone | `driver.gaze.zone`, `conf`, `source` | step 3 (calibration) | zone highlighted on a cabin sketch; `unknown` = grey |
-| AS6 VATS, gaze entropy | `driver.gaze.vats_60s`, `entropy_60s`, `off_road_ms` | step 3 | counters next to the zone |
-| AS7 driver phone | `driver.phone.in_use`, `conf`, `source` + proposed `near_face`, `side` | detector done (3-of-5 YOLO vote); lap pattern needs AS5 | phone icon, red when in use; "near face" tag |
+| AS5 gaze zone | `driver.gaze.zone`, `conf`, `source` + proposed `calibrated` | done (needs a calibrated profile; eval: `docs/eval/zones-*`) | zone highlighted on a cabin sketch; `unknown` = grey, `away` = red |
+| AS6 VATS, gaze entropy | `driver.gaze.vats_60s`, `entropy_60s`, `off_road_ms` + proposed `off_road_60s_ms` | done | counters next to the zone |
+| AS7 driver phone | `driver.phone.in_use`, `conf`, `source` + proposed `near_face`, `side`, `driver.gaze.lap_pattern` | done (3-of-5 YOLO vote + lap pattern, `source: "lap_pattern"`, conf 0.40) | phone icon, red when in use; "near face" / "lap" tag |
 | AS8 head yes / no | `driver.head.answer` | step 4 (dialog window already wired) | answer chip in the dialog log |
 | AS9 gestures | `driver.gesture` | done (inside the dialog window, held 0.5 s) | 👍 👎 ✋ icon |
 | AS10 identity | `occupants[].profile` | step 4 (YuNet + SFace) | name on the occupant card |
@@ -486,6 +551,13 @@ CONTRACT: driver.head.yaw / pitch / roll, float|null (default null), P1, null c�
 CONTRACT: perf.cameras.<cam>.available, bool (default true), P1, procesul camerei rulează și livrează cadre (J1)
 CONTRACT: perf.degrade_level, int (default 0), P1, pasul curent al regulii de degradare (J1, plan §8)
 CONTRACT: perf.stages_ms, dict[str, dict[str, {p50, p95, n}]] (default {}), P1, ms pe model și pe etapă, pe cameră, pentru panoul de performanță (J1)
+CONTRACT: driver.gaze.zone, adaugă "away" la valorile folosite (există deja în listă), P1, privire departe de toate zonele calibrate cu capul în afara intervalului calibrat; se numără ca off-road (unknown nu)
+CONTRACT: driver.gaze.calibrated, bool (default false), P1, există un profil de calibrare încărcat; fără el zona e mereu unknown și dashboard-ul poate cere calibrarea
+CONTRACT: driver.gaze.off_road_60s_ms, float (default 0), P1, timpul total cu privirea în afara drumului în ultimele 60 s (oglinzile scurte nu se numără); ajută atenția (B3)
+CONTRACT: driver.gaze.lap_pattern, bool (default false), P1, tiparul „poală” (≥3 priviri spre lap în 20 s sau una > 2 s, mâini nevăzute); P1 îl pune și în driver.phone cu source="lap_pattern"
+CONTRACT: comanda core -> perception "calibrate" primește "quick": bool (default false), P1, recalibrare de ~15 s doar pentru drum + oglinzi, peste profilul existent
+CONTRACT: mesaj perception -> core {"type": "calibration_prompt", "profile", "step", "steps", "zone", "mode": "owl"|"lizard", "text", "remaining_s"}, P1, câte unul pe pas, ca P3 să citească instrucțiunea cu voce
+CONTRACT: ack-ul comenzii "calibrate" are status "started", apoi "done" (detail: loo_accuracy, warnings, samples) sau "error" (detail cu motivul), P1
 ```
 
 Until P2 decides, `driver.eyes.microsleep` stays `false` from P1.

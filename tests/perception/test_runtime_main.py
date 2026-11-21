@@ -354,7 +354,10 @@ def test_ws_frames_reach_core_and_commands_are_acked() -> None:
 
     asyncio.run(scenario())
     acks = {m["cmd"]: m["status"] for m in received if m.get("type") == "ack"}
-    assert acks == {"debug": "ok", "calibrate": "not_implemented"}
+    assert acks == {"debug": "ok", "calibrate": "started"}  # the full calibration takes ~1 min: not done in 6 s
+    prompts = [m for m in received if m.get("type") == "calibration_prompt"]
+    assert prompts and prompts[0]["zone"] == "road" and prompts[0]["profile"] == "andrei"
+    assert [p["step"] for p in prompts] == sorted({p["step"] for p in prompts})  # one message per step
     frames = [validate_frame(m) for m in received if "seq" in m]
     assert len(frames) >= 30
 

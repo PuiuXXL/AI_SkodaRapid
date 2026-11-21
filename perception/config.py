@@ -7,6 +7,7 @@ hidden in code. Unknown keys are rejected too (typos fail loudly).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
@@ -271,16 +272,46 @@ class HeadConfig(_Section):
     plausible_deg: PlausibleAnglesConfig
 
 
+class GazeGroupValues(_Section):
+    """One value per gaze feature group: head yaw/pitch, MobileGaze yaw/pitch, eyeLook blendshapes, iris offset."""
+
+    head: Annotated[float, Field(ge=0)]
+    gaze: Annotated[float, Field(ge=0)]
+    eye_look: Annotated[float, Field(ge=0)]
+    iris: Annotated[float, Field(ge=0)]
+
+
+class GazeCalibrationConfig(_Section):
+    s_per_zone: PositiveFloat  # per zone and mode (owl / lizard)
+    modes: Annotated[list[Literal["owl", "lizard"]], Field(min_length=1)]
+    road_factor: Annotated[float, Field(ge=1)]  # road gets this many times more data
+    discard_s: Annotated[float, Field(ge=0)]  # dropped after every prompt (reaction time)
+    transition_s: Annotated[float, Field(ge=0)]  # "back to the road" between zones, not recorded
+    min_samples_per_zone: PositiveInt
+    quick_zones: Annotated[list[CalibratedZone], Field(min_length=1)]
+    quick_s_per_zone: PositiveFloat
+    quick_transition_s: Annotated[float, Field(ge=0)]
+
+
 class GazeConfig(_Section):
     zones: Annotated[list[CalibratedZone], Field(min_length=2)]
+    crop_expand: Annotated[float, Field(ge=1.0, le=2.0)]  # MobileGaze crop = face box x this (yakhyo: 1.0)
+    max_age_ms: PositiveFloat  # a MobileGaze result older than this is not used
     k: Annotated[int, Field(ge=1, le=50)]
-    weighted: bool
-    reject_distance: PositiveFloat
+    feature_weights: GazeGroupValues  # applied to the z-scored groups before the kNN distance
+    std_floor: GazeGroupValues  # z-score std floor per group (feature units), so a near-constant feature cannot explode
+    reject_factor: PositiveFloat  # tau = p95 of the blocked-LOO kNN distances x this
+    loo_exclude_s: Annotated[float, Field(ge=0)]  # blocked LOO: same-segment samples this close in time are left out
     min_conf: Fraction
-    calibration_s_per_zone: PositiveFloat
-    calibration_modes: Annotated[list[Literal["owl", "lizard"]], Field(min_length=1)]
+    zone_min_frames: PositiveInt
+    away_margin_deg: Annotated[float, Field(ge=0)]
+    on_road_zones: Annotated[list[CalibratedZone], Field(min_length=1)]
+    mirror_zones: list[CalibratedZone]
+    mirror_glance_max_ms: PositiveFloat
     vats_max_glance_s: PositiveFloat
     window_s: PositiveFloat
+    default_profile: str | None
+    calibration: GazeCalibrationConfig
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -288,6 +319,18 @@ class GazeConfig(_Section):
             raise ValueError("gaze.zones must contain 'road'")
         if len(set(self.zones)) != len(self.zones):
             raise ValueError("gaze.zones contains duplicates")
+        for key, listed in (
+            ("on_road_zones", self.on_road_zones),
+            ("mirror_zones", self.mirror_zones),
+            ("calibration.quick_zones", self.calibration.quick_zones),
+        ):
+            missing = set(listed) - set(self.zones)
+            if missing:
+                raise ValueError(f"gaze.{key} has zones not in gaze.zones: {sorted(missing)}")
+        if set(self.on_road_zones) & set(self.mirror_zones):
+            raise ValueError("gaze.on_road_zones and gaze.mirror_zones overlap")
+        if self.default_profile is not None and not re.fullmatch(r"[A-Za-z0-9_-]+", self.default_profile):
+            raise ValueError("gaze.default_profile must be letters, digits, '-' or '_'")
         return self
 
 
@@ -296,6 +339,7 @@ class LapPatternConfig(_Section):
     window_s: PositiveFloat
     long_glance_s: PositiveFloat
     conf: Fraction
+    hands_recent_s: PositiveFloat  # hands seen within this -> no lap pattern
 
 
 class PhoneConfig(_Section):
@@ -350,6 +394,7 @@ class HeadOneEuroConfig(_Section):
 class FiltersConfig(_Section):
     one_euro: OneEuroConfig  # default for continuous signals without their own tuning
     one_euro_head: HeadOneEuroConfig
+    one_euro_gaze: OneEuroConfig  # MobileGaze yaw / pitch (runs at rates.gaze_hz)
     unknown_below_conf: Fraction
 
 

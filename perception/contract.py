@@ -176,6 +176,7 @@ class Command(_Model):
     # calibrate / enroll
     profile: str | None = None
     name: str | None = None
+    quick: bool = False  # calibrate: ~15 s road + mirrors only, merged into the existing profile (proposed, §9)
 
 
 # --- switch to P2's contract when it exists --------------------------------------------------------------

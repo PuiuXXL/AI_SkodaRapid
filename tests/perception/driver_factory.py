@@ -41,7 +41,10 @@ def face(
     min_width: float = 250.0,
     matrix: list[float] | None = None,
     cnn: list[float] | None = None,
+    iris: tuple[float, float] = (0.0, 0.0),
+    eye_look: Mapping[str, float] | None = None,
 ) -> FaceFeatures:
+    """``iris`` = iris offset in eye widths (x > 0 = driver's left = image right, y > 0 = up)."""
     pts: list[tuple[float, float, float]] = [(0.5, 0.5, 0.0)] * len(LANDMARK_INDICES)
 
     def put(index: int, x_px: float, y_px: float) -> None:
@@ -60,6 +63,7 @@ def face(
         put(p6, cx - dx / 3, cy + v)
         put(p3, cx + dx / 3, cy - v)
         put(p5, cx + dx / 3, cy + v)
+        put(468 if side == "right" else 473, cx + iris[0] * eye_w, cy - iris[1] * eye_w)
     top_y = 200.0
     put(10, 640.0, top_y)
     put(152, 640.0, top_y + FACE_HEIGHT_PX)
@@ -75,6 +79,7 @@ def face(
         eyeLookDownRight=look_down,
         jawOpen=jaw,
     )
+    blend.update(eye_look or {})
     return FaceFeatures(
         present=True,
         conf=min(1.0, width_px / min_width),

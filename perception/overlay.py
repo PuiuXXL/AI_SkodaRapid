@@ -1,12 +1,14 @@
 """Debug overlay for the driver camera (key D on the dashboard; preview / live_driver / eval windows).
 
 Draws on a COPY of the frame: eye and mouth landmarks, EAR per eye + baseline, eyeSquint, eye state, head angles,
-YAWN / SPEAKING, face width + FACE TOO SMALL (R-FL3), mean luma + TOO DARK, fps and stage timings.
+YAWN / SPEAKING, face width + FACE TOO SMALL (R-FL3), the gaze ray (MobileGaze), zone + confidence, kNN distance /
+tau, off-road time, VATS, entropy, the calibration prompt, mean luma + TOO DARK, fps and stage timings.
 Nothing is stored: the image is only shown or streamed.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 import cv2
@@ -14,10 +16,11 @@ import numpy as np
 import numpy.typing as npt
 
 from perception.driver_cam.eyes import EAR_POINTS
+from perception.driver_cam.gaze_zones import IRIS_CENTRES
 from perception.driver_cam.pipeline import DriverState
 from perception.features import LANDMARK_GROUPS, FeatureFrame
 
-__all__ = ["draw_driver", "mean_luma"]
+__all__ = ["draw_driver", "draw_gaze_ray", "mean_luma"]
 
 Image = npt.NDArray[np.uint8]
 
@@ -49,6 +52,23 @@ def _points(img: Image, ff: FeatureFrame, indices: Sequence[int], colour: tuple[
         cv2.circle(img, (round(x * w), round(y * h)), 2, colour, -1, cv2.LINE_AA)
 
 
+def draw_gaze_ray(img: Image, ff: FeatureFrame, yaw: float, pitch: float, colour: tuple[int, int, int]) -> None:
+    """Ray from between the irises. Driver convention (yaw > 0 = driver's left = image right, pitch > 0 = up)."""
+    if ff.face.landmarks is None:
+        return
+    h, w = img.shape[:2]
+    pts = [ff.face.point(i) for i in IRIS_CENTRES.values()]
+    cx = sum(p[0] for p in pts) / len(pts) * w
+    cy = sum(p[1] for p in pts) / len(pts) * h
+    length = (ff.face.width_px or 200.0) * 0.8
+    dx = length * math.sin(math.radians(yaw)) * math.cos(math.radians(pitch))
+    dy = -length * math.sin(math.radians(pitch))
+    cv2.arrowedLine(img, (round(cx), round(cy)), (round(cx + dx), round(cy + dy)), colour, 2, cv2.LINE_AA, 0, 0.2)
+
+
+ZONE_COLOURS = {"unknown": GREY, "away": RED, "road": GREEN}
+
+
 def draw_driver(
     image: Image,
     ff: FeatureFrame | None,
@@ -67,6 +87,9 @@ def draw_driver(
         for idx in EAR_POINTS.values():
             _points(img, ff, idx, eye_colour)
         _points(img, ff, _MOUTH, AMBER if state and state.yawn else (GREEN if state and state.speaking else GREY))
+        if state is not None and state.gaze.gaze_yaw is not None and state.gaze.gaze_pitch is not None:
+            zone_colour = ZONE_COLOURS.get(state.gaze.zone, AMBER)
+            draw_gaze_ray(img, ff, state.gaze.gaze_yaw, state.gaze.gaze_pitch, zone_colour)
 
     lines: list[tuple[str, tuple[int, int, int]]] = []
     if state is not None:
@@ -94,6 +117,27 @@ def draw_driver(
             )
         flags = " ".join(f for f, on in (("YAWN", state.yawn), ("SPEAKING", state.speaking)) if on)
         lines.append((flags or "mouth: -", AMBER if state.yawn else GREEN))
+        g = state.gaze
+        gz = (
+            f"gaze {g.gaze_yaw:+5.1f}/{g.gaze_pitch:+5.1f}"
+            if g.gaze_yaw is not None and g.gaze_pitch is not None
+            else "gaze -"
+        )
+        if g.calibrated:
+            dist = f"d {g.knn_dist:.2f}/{g.tau:.2f}" if g.knn_dist is not None and g.tau is not None else "d -"
+            lines.append(
+                (
+                    f"ZONE {g.zone} {g.conf:.2f}  ({g.raw_zone or g.reason or '-'})  {dist}",
+                    ZONE_COLOURS.get(g.zone, AMBER),
+                )
+            )
+            ent = f"{g.entropy_60s:.2f}" if g.entropy_60s is not None else "-"
+            lap = "  LAP PATTERN" if g.lap_pattern else ""
+            lines.append(
+                (f"off-road {g.off_road_ms:.0f} ms  VATS {g.vats_60s}  entropy {ent}  {gz}{lap}", RED if lap else GREEN)
+            )
+        else:
+            lines.append((f"ZONE: not calibrated ({g.reason or 'ok'})  {gz}", GREY))
         f = state.face
         if f.present:
             lines.append((f"face {f.width_px:.0f} px  conf {f.conf:.2f}", AMBER if f.too_small else GREEN))

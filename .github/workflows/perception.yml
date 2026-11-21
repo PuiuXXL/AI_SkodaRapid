@@ -12,6 +12,7 @@ on:
       - "scripts/eval_eyes.py"
       - "scripts/enroll_face.py"
       - "scripts/calibrate.py"
+      - "scripts/eval_zones.py"
       - "scripts/*.sh"
       - "requirements/p1-*.txt"
       - "pyproject.toml"

@@ -4,6 +4,7 @@
     python scripts/live_driver.py --print               # also one DriverState JSON per second in the terminal
     python scripts/live_driver.py --record-features data/features/test/features.jsonl.gz
     python scripts/live_driver.py --gaze --phone        # also run MobileGaze and YOLO (for timing)
+    python scripts/live_driver.py --profile andrei      # gaze zones with a calibrated profile (implies --gaze)
 
 The camera image is only shown, never stored. --record-features writes FeatureFrames (no pixels).
 """
@@ -37,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seconds", type=float, default=0.0, help="0 = until q / Esc")
     p.add_argument("--gaze", action="store_true")
     p.add_argument("--phone", action="store_true")
+    p.add_argument("--profile", default=None, help="calibrated gaze profile (profiles/<name>/calibration.json)")
     p.add_argument("--no-window", action="store_true")
     p.add_argument("--synthetic", action="store_true")
     p.add_argument("--config", type=Path, default=None)
@@ -56,8 +58,15 @@ def main(argv: list[str] | None = None) -> int:
         if first is None or info is None:
             print("camera delivered no frame", file=sys.stderr)
             return 1
-        extractor = FeatureExtractor(cfg, camera_fps=info.fps or cam_cfg.fps, gaze=args.gaze, phone=args.phone)
+        use_gaze = args.gaze or args.profile is not None
+        extractor = FeatureExtractor(cfg, camera_fps=info.fps or cam_cfg.fps, gaze=use_gaze, phone=args.phone)
         pipeline = DriverPipeline(cfg, (info.width, info.height))
+        if args.profile:
+            from perception.calibration import Calibration, profile_path
+
+            cal = Calibration.load(cfg, profile_path(args.profile))
+            pipeline.set_calibration(cal.model, cal.ear_baseline)
+            print(f"profile {cal.name}: LOO {cal.loo_accuracy()}, tau {cal.model.tau:.3f}", flush=True)
         writer = None
         if args.record_features:
             meta = build_metadata(

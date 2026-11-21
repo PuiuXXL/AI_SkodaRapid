@@ -3,9 +3,9 @@
 # Safety thresholds (when an alarm sounds, microsleep) belong to P2 in core/config/thresholds.yaml, NOT here.
 
 cameras:
-  driver:                      # laptop webcam, facing the driver only
+  driver:                      # USB webcam (Logi C615), facing the driver only
     enabled: true
-    device: 0                  # OpenCV index (or a path / URL)
+    device: 1                  # OpenCV index (or a path / URL). 0 = integrated laptop camera, 1 = Logi C615 (dshow)
     backend: auto              # auto | dshow | msmf | v4l2 | any   (Windows: dshow opens MJPG reliably)
     width: 1280
     height: 720
@@ -29,7 +29,7 @@ cameras:
       white_balance_k: null    # venue with lamp: 4600
   passenger:                   # phone via DroidCam over USB, facing the front-right seat only
     enabled: false             # switch on once DroidCam is connected
-    device: 1                  # on Windows DroidCam is a virtual webcam index
+    device: 2                  # on Windows DroidCam is a virtual webcam index (after integrated 0 + Logi 1)
     backend: auto
     width: 1280
     height: 720
@@ -162,16 +162,42 @@ head:
     pitch: 50
     roll: 45
 
-gaze:
+gaze:                          # docs/perception.md §3.4. Starting values: tuned with scripts/eval_zones.py --sweep
   zones: [road, mirror_left, mirror_right, mirror_rear, cluster, infotainment, lap, passenger]
-  k: 5
-  weighted: true               # distance-weighted kNN
-  reject_distance: 3.0         # mean distance to the k neighbours (z-score units) above this -> unknown
+  crop_expand: 1.0             # MobileGaze crop = landmark face box x this (yakhyo/gaze-estimation: detector box, 1.0)
+  max_age_ms: 250              # MobileGaze runs at rates.gaze_hz; an older result is not used (zone -> unknown)
+  k: 5                         # distance-weighted kNN (1/d)
+  feature_weights:             # applied to the z-scored groups: head yaw/pitch (2), MobileGaze yaw/pitch (2),
+    head: 1.0                  # eyeLook* blendshapes (8), iris offset x/y (2)
+    gaze: 1.0
+    eye_look: 0.5              # 8 correlated features: half weight so they do not outvote head + gaze
+    iris: 1.0
+  std_floor:                   # z-score std floor per group, in feature units (deg / blendshape / eye widths)
+    head: 1.0
+    gaze: 1.0
+    eye_look: 0.02
+    iris: 0.01
+  reject_factor: 1.5           # tau = p95 of the blocked-LOO kNN distances x this; mean distance > tau -> unknown
+  loo_exclude_s: 0.5           # blocked LOO: same-segment calibration samples closer than this in time are left out
   min_conf: 0.6                # vote share below this -> unknown
-  calibration_s_per_zone: 2.0
-  calibration_modes: [owl, lizard]  # head turned / eyes only
+  zone_min_frames: 3           # a new zone is accepted after this many frames (~100 ms at 30 fps)
+  away_margin_deg: 15          # rejected AND head beyond the calibrated range by this much -> away (off-road)
+  on_road_zones: [road]
+  mirror_zones: [mirror_left, mirror_right, mirror_rear]
+  mirror_glance_max_ms: 2000   # a mirror glance is driving; it counts as off-road only past this (from its start)
   vats_max_glance_s: 2.0       # off-road glances shorter than this count for VATS
   window_s: 60                 # VATS and entropy window
+  default_profile: null        # profiles/<name>/calibration.json loaded at start (null: none until `calibrate`)
+  calibration:
+    s_per_zone: 2.0            # per zone and per mode
+    modes: [owl, lizard]       # head turned / eyes only
+    road_factor: 3             # road gets 3x the data (it is where the driver looks most)
+    discard_s: 0.3             # dropped after every prompt (reaction time)
+    transition_s: 1.5          # "back to the road" between zones, not recorded
+    min_samples_per_zone: 15
+    quick_zones: [road, mirror_left, mirror_right, mirror_rear]  # quick recalibration (~15 s)
+    quick_s_per_zone: 1.2         # (1.2 - discard) x 30 fps = 27 samples per step
+    quick_transition_s: 0.8      # quick total: road 3.6 + mirrors 6 x 1.2 + 6 transitions x 0.8 = ~15.6 s
 
 phone:
   class_id: 67                 # COCO "cell phone"
@@ -184,6 +210,7 @@ phone:
     window_s: 20
     long_glance_s: 2.0
     conf: 0.40                 # reported confidence for lap_pattern (lower than the detector)
+    hands_recent_s: 1.0        # hands seen by the gesture model within this -> no lap pattern
 
 gesture:
   allowed: [Thumb_Up, Thumb_Down, Open_Palm]
@@ -216,6 +243,10 @@ filters:
     yaw:   { min_cutoff: 0.05, beta: 0.01, d_cutoff: 1.0 }
     pitch: { min_cutoff: 0.05, beta: 0.01, d_cutoff: 1.0 }
     roll:  { min_cutoff: 0.5, beta: 0.005, d_cutoff: 1.0 }
+  one_euro_gaze:               # MobileGaze yaw / pitch at rates.gaze_hz (raw yaw std 4.3 deg with the head still,
+    min_cutoff: 0.5            # laptop session 2026-11-21); starting values, see scripts/eval_zones.py --ab-crop
+    beta: 0.02
+    d_cutoff: 1.0
   unknown_below_conf: 0.5      # any output below this confidence is reported as unknown
 
 workers:                       # one OS process per camera (docs/perception.md §2)

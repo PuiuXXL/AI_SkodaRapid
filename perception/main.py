@@ -9,8 +9,9 @@
 * Every ``1 / output.publish_hz`` s the newest result of each camera is merged into one ``PerceptionFrame``
   (perception/contract.py; P2's ``shared/contracts.py`` takes over as soon as it exists).
 * WebSocket client to ``output.ws_url`` with exponential backoff: runs fine without core and logs the outage once.
-  Commands from core: ``dialog_window``, ``debug`` (forwarded to the workers), ``calibrate``, ``enroll`` (answered
-  with an ``ack``; their implementation is P1 steps 3 and 4).
+  Commands from core: ``dialog_window``, ``debug`` (forwarded to the workers), ``calibrate`` (gaze zones, run by the
+  driver worker: ``ack`` "started", then ``calibration_prompt`` messages, then ``ack`` "done" / "error"), ``enroll``
+  (``not_implemented`` until P1 step 4).
 * MJPEG on ``:output.mjpeg_port``: ``/video/driver``, ``/video/passenger``; workers encode JPEGs only while a
   client is connected. ``/`` shows both, ``/health`` is JSON.
 * Degradation rule (perception/degrade.py): passenger rate first, then YOLO; the driver face never.
@@ -55,6 +56,15 @@ def _p50(msg: dict[str, Any] | None, model: str) -> float | None:
     return float(value) if value is not None else None
 
 
+def _phone(cfg: PerceptionConfig, phone: dict[str, Any], gaze: dict[str, Any]) -> dict[str, Any]:
+    """AS7: the detector (YOLO vote) first; the lap pattern (gaze) only when the detector sees no phone."""
+    if phone["in_use"]:
+        return {"in_use": True, "conf": phone["conf"], "source": "detector"}
+    if gaze.get("lap_pattern"):
+        return {"in_use": True, "conf": cfg.phone.lap_pattern.conf, "source": "lap_pattern"}
+    return {"in_use": False, "conf": phone["conf"], "source": None}
+
+
 def build_frame(
     cfg: PerceptionConfig,
     *,
@@ -79,7 +89,7 @@ def build_frame(
     d = driver if driver and driver.get("kind") == "frame" else None
     if d is not None:
         st = d["state"]
-        e, h = st["eyes"], st["head"]
+        e, h, g = st["eyes"], st["head"], st["gaze"]
         mon = d["monitoring"]
         frame["driver"] = {
             "eyes": {
@@ -91,14 +101,17 @@ def build_frame(
                 "reliable": e["reliable"],
             },
             "head": {"yaw": h["yaw"], "pitch": h["pitch"], "roll": h["roll"], "nodding": h["nodding"], "answer": None},
-            "gaze": {"zone": "unknown", "conf": 0.0, "source": None, "off_road_ms": 0.0, "vats_60s": 0},
+            "gaze": {
+                "zone": g["zone"],
+                "conf": g["conf"],
+                "source": g["source"],
+                "off_road_ms": g["off_road_ms"],
+                "vats_60s": g["vats_60s"],
+                "entropy_60s": g["entropy_60s"],
+            },
             "yawn": st["yawn"],
             "speaking": st["speaking"],
-            "phone": {
-                "in_use": d["phone"]["in_use"],
-                "conf": d["phone"]["conf"],
-                "source": "detector" if d["phone"]["in_use"] else None,
-            },
+            "phone": _phone(cfg, d["phone"], g),
             "gesture": d["gesture"],
         }
         if mon["face_missing_s"] < cfg.monitoring.face_lost_s:
@@ -114,6 +127,9 @@ def build_frame(
                 open_baseline=ref,
             )
             frame["driver"]["phone"].update(near_face=d["phone"]["near_face"], side=d["phone"]["side"])
+            frame["driver"]["gaze"].update(
+                calibrated=g["calibrated"], off_road_60s_ms=g["off_road_60s_ms"], lap_pattern=g["lap_pattern"]
+            )
             frame["driver"].update(
                 face_too_small=st["face"]["too_small"], monitoring_ok=mon["ok"], monitoring_reason=mon["reason"]
             )
@@ -311,8 +327,32 @@ class Perception:
         self._pending_capture: float | None = None  # t_capture of a driver frame not yet published
         self._clients: dict[str, int] = dict.fromkeys(self.workers, 0)
         self.acks: list[dict[str, Any]] = []
+        self._calib_seen: tuple[int, str, int | None] = (0, "idle", None)  # (id, state, prompt step)
 
     # commands from core ------------------------------------------------------------------------------------
+
+    def _send_event(self, event: dict[str, Any]) -> None:
+        if event.get("type") == "ack":
+            self.acks.append(event)
+        log.info(event.get("type", "event"), extra={"fields": event})
+        if self.ws is not None:
+            self.ws.send_json(event)
+
+    def _calibration_events(self, msg: dict[str, Any]) -> None:
+        """Turn the driver worker's persistent calibration state into prompt / ack messages for core."""
+        cal = msg.get("calibration")
+        if not cal:
+            return
+        prompt = cal.get("prompt") if cal["state"] == "running" else None
+        key = (int(cal["id"]), str(cal["state"]), prompt["step"] if prompt else None)
+        if key == self._calib_seen:
+            return
+        self._calib_seen = key
+        if prompt is not None:
+            self._send_event({"type": "calibration_prompt", "profile": cal.get("profile"), **prompt})
+        elif cal["state"] in ("done", "error"):
+            detail = {k: v for k, v in cal.items() if k not in ("id", "state", "prompt")}
+            self._send_event({"type": "ack", "cmd": "calibrate", "status": cal["state"], "detail": detail})
 
     def handle_message(self, data: dict[str, Any]) -> None:
         try:
@@ -333,7 +373,15 @@ class Perception:
             else:
                 worker.send({"cmd": "dialog_window", "open": cmd.open, "until_perf": time.perf_counter() + seconds})
         elif cmd.cmd == "calibrate":
-            status, detail = "not_implemented", "gaze zone calibration is P1 step 3 (scripts/calibrate.py)"
+            worker = self.workers.get("driver")
+            profile = cmd.profile or cmd.name
+            if worker is None:
+                status, detail = "error", "camera driver not running"
+            elif not profile:
+                status, detail = "error", "calibrate needs a profile name"
+            else:
+                worker.send({"cmd": "calibrate", "profile": profile, "quick": cmd.quick})
+                status, detail = "started", f"profile {profile}{' (quick)' if cmd.quick else ''}"
         elif cmd.cmd == "enroll":
             status, detail = "not_implemented", "face enrolment is P1 step 4 (scripts/enroll_face.py)"
         ack = {"type": "ack", "cmd": cmd.cmd, "status": status, "detail": detail}
@@ -356,6 +404,7 @@ class Perception:
                 ):
                     self._last_driver_seq = msg["seq"]
                     self._pending_capture = msg["t_capture"]
+                    self._calibration_events(msg)
             await asyncio.sleep(POLL_S)
 
     async def _publish(self) -> None:

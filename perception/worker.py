@@ -6,13 +6,16 @@
   - ``results`` (maxsize 1): the newest result only; an unread older one is thrown away;
   - ``jpegs`` (maxsize 1): the overlay preview (``output.video_width`` px, ``output.jpeg_quality``,
     ``output.video_fps``), encoded **only while** ``want_jpeg`` is set (an MJPEG client is connected);
-  - ``commands``: ``debug``, ``dialog_window``, ``rates`` (degradation rule) from the main process.
+  - ``commands``: ``debug``, ``dialog_window``, ``rates`` (degradation rule), ``calibrate`` (gaze zones, driver only)
+    from the main process.
 * :class:`CameraWorker` is the main-process handle: start / stop / send, newest result and JPEG, and supervision:
   a dead process (or one silent for ``workers.stale_s``) is restarted with exponential backoff, and the camera is
   reported unavailable while it is down.
 
 Messages are plain dicts (picklable, cheap). ``kind="frame"`` carries the detector output; ``kind="status"`` is a
 heartbeat when no frame arrives (camera unplugged, frozen driver), so the main process always knows the state.
+The gaze calibration state rides on every driver frame (``calibration``: id, state, prompt, result): ``results`` keeps
+only the newest message, so a one-off "done" message could be lost; a persistent state cannot.
 """
 
 from __future__ import annotations
@@ -174,6 +177,7 @@ def run_camera(
     """Process body (spawn). Returns when ``stop`` is set; exits with code 2 if the camera never delivers a frame."""
     import cv2
 
+    from perception.calibration import Calibration, CalibrationRun, profile_path
     from perception.capture import LatestFrameCamera, SyntheticSource
     from perception.driver_cam.pipeline import DriverPipeline
     from perception.log import configure_logging
@@ -209,13 +213,25 @@ def run_camera(
         if options.models and face_model.exists():
             from perception.extractor import FeatureExtractor
 
-            # gaze zones need the calibration (step 3): MobileGaze is not run until then
-            extractor = FeatureExtractor(cfg, camera_fps=camera_fps, camera=name, gaze=False, phone=True)
+            # MobileGaze (gaze zones, AS5) on the driver camera only
+            extractor = FeatureExtractor(cfg, camera_fps=camera_fps, camera=name, gaze=is_driver, phone=True)
         else:
             if options.models:
                 log.warning("model files missing: running without models", extra={"fields": {"camera": name}})
             extractor = _NullExtractor()
         pipeline = DriverPipeline(cfg, (info.width, info.height))
+        camera_meta = {"width": info.width, "height": info.height, "fps": camera_fps, "backend": info.backend}
+        profile: Calibration | None = None
+        if is_driver and cfg.gaze.default_profile:
+            path = profile_path(cfg.gaze.default_profile)
+            try:
+                profile = Calibration.load(cfg, path)
+                pipeline.set_calibration(profile.model, profile.ear_baseline)
+                log.info("gaze profile loaded", extra={"fields": {"profile": profile.name, "tau": profile.model.tau}})
+            except (OSError, ValueError) as exc:
+                log.warning("gaze profile not loaded", extra={"fields": {"path": str(path), "error": str(exc)}})
+        calib: CalibrationRun | None = None
+        calib_status: dict[str, Any] = {"id": 0, "state": "idle", "profile": profile.name if profile else None}
         monitor = Monitor(cfg.monitoring)
         voter = PhoneVoter(cfg.phone)
         gestures = GestureHold(list(cfg.gesture.allowed), cfg.gesture.min_score, cfg.gesture.min_duration_s)
@@ -227,6 +243,8 @@ def run_camera(
             perf.attach("gesture", extractor.gesture_latency)
             if extractor.eye_state_latency is not None:
                 perf.attach("eye_state", extractor.eye_state_latency)
+            if extractor.gaze_latency is not None:
+                perf.attach("gaze", extractor.gaze_latency)
 
         face_hz = 0.0 if is_driver else cfg.rates.passenger_face_hz  # 0 = every frame (driver: never degraded)
         debug = False
@@ -238,10 +256,52 @@ def run_camera(
         last_jpeg = 0.0
         seq = 0
 
+        def start_calibration(cmd: dict[str, Any]) -> None:
+            nonlocal calib, calib_status
+            name_ = str(cmd.get("profile") or "")
+            quick = bool(cmd.get("quick"))
+            status_id = int(calib_status["id"]) + 1
+            try:
+                if not is_driver:
+                    raise ValueError("gaze calibration runs on the driver camera")
+                if quick and not profile_path(name_).exists():
+                    raise ValueError(f"quick recalibration needs an existing profile '{name_}'")
+                calib = CalibrationRun(cfg, (info.width, info.height), name_, quick=quick, camera=camera_meta)
+                calib_status = {"id": status_id, "state": "running", "profile": name_, "quick": quick}
+            except ValueError as exc:
+                calib = None
+                calib_status = {"id": status_id, "state": "error", "profile": name_ or None, "detail": str(exc)}
+
+        def finish_calibration(run: CalibrationRun) -> None:
+            nonlocal profile, calib_status
+            try:
+                result = run.result()
+                if run.quick:
+                    result = Calibration.load(cfg, profile_path(run.name)).merged_with(cfg, result)
+                path = result.save()
+                profile = result
+                pipeline.set_calibration(result.model, result.ear_baseline)
+                calib_status = {
+                    "id": calib_status["id"],
+                    "state": "done",
+                    "profile": result.name,
+                    "quick": run.quick,
+                    "loo_accuracy": result.loo_accuracy(),
+                    "warnings": result.warnings(),
+                    "samples": run.summary(),
+                    "path": str(path),
+                }
+                log.info("gaze calibration saved", extra={"fields": calib_status})
+            except (OSError, ValueError) as exc:
+                calib_status = {"id": calib_status["id"], "state": "error", "profile": run.name, "detail": str(exc)}
+                log.warning("gaze calibration failed", extra={"fields": calib_status})
+
         def handle(cmd: dict[str, Any]) -> None:
             nonlocal debug, dialog_until, face_hz
             kind = cmd.get("cmd")
-            if kind == "debug":
+            if kind == "calibrate":
+                start_calibration(cmd)
+            elif kind == "debug":
                 debug = bool(cmd.get("on"))
             elif kind == "dialog_window":
                 if cmd.get("open"):
@@ -282,6 +342,13 @@ def run_camera(
                 ff = extractor.extract(frame, t, name)
             with perf.time("detectors"):
                 state = pipeline.update(ff)
+                if calib is not None:
+                    prompt = calib.update(ff, state)
+                    if prompt is None:
+                        finish_calibration(calib)
+                        calib = None
+                    else:
+                        calib_status = {**calib_status, "prompt": prompt.to_dict()}
                 voter.update(ff.phones)
                 near_face, side = voter.geometry(ff.face, info.width, info.height)
                 gesture = gestures.update(t, ff.hands)
@@ -302,6 +369,7 @@ def run_camera(
                     "state": state.model_dump(mode="json"),
                     "phone": {"in_use": voter.in_use, "conf": voter.conf, "near_face": near_face, "side": side},
                     "gesture": gesture,
+                    "calibration": calib_status,
                     "dialog_open": dialog_until is not None,
                     "monitoring": {"ok": mon.ok, "reason": mon.reason, "face_missing_s": mon.face_missing_s},
                     "luma": round(luma, 1),
@@ -318,7 +386,8 @@ def run_camera(
             if want_jpeg.value and now - last_jpeg >= 1.0 / out.video_fps:
                 last_jpeg = now
                 with perf.time("jpeg"):
-                    if debug:
+                    if debug or calib is not None:
+                        prompt_text = calib_status.get("prompt", {}).get("text") if calib is not None else None
                         img = draw_driver(
                             frame.image,
                             ff,
@@ -326,6 +395,7 @@ def run_camera(
                             fps=perf.rate.rate(),
                             luma=luma,
                             dark_luma=cfg.monitoring.dark_luma,
+                            banner=prompt_text,
                         )
                     else:
                         img = frame.image.copy()

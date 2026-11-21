@@ -142,6 +142,10 @@ class EarReference:
     def calibrated(self) -> bool:
         return self._calibrated is not None
 
+    def set_calibrated(self, calibrated: tuple[float, float] | None) -> None:
+        """Global reference from a gaze calibration loaded while running (``calibrate`` command)."""
+        self._calibrated = calibrated
+
     @property
     def global_ref(self) -> tuple[float, float] | None:
         return self._calibrated or self._provisional

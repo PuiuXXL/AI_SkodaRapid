@@ -2,7 +2,8 @@
 
 Models and cadence (frame-count based, so rates line up with the camera's frame period):
 * Face Landmarker: every frame (R-FL1: one face; R-FL2: thresholds from yaml).
-* MobileGaze: every ``round(camera_fps / rates.gaze_hz)`` frames, on ``models.gaze_providers``.
+* MobileGaze: every ``round(camera_fps / rates.gaze_hz)`` frames, on ``models.gaze_providers``
+  (:class:`~perception.driver_cam.gaze_model.MobileGazeModel`, crop = face box x ``gaze.crop_expand``).
 * YOLO26 phone: every ``round(camera_fps / rates.phone_hz)`` frames; GPU variant on CUDA when available.
 * Gesture Recognizer: every ``round(camera_fps / gesture_hz)`` frames, only if ``gesture_hz`` is given
   (live it runs only inside the dialog window; recording sessions turn it on to capture labelled gestures).
@@ -20,11 +21,12 @@ import cv2
 from perception.capture import Frame
 from perception.config import PerceptionConfig
 from perception.driver_cam.face import FaceLandmarkerModel, VideoClock
+from perception.driver_cam.gaze_model import MobileGazeModel
 from perception.features import FeatureFrame, GazeFeatures, HandFeatures, PhoneBox
 from perception.log import get_logger
 from perception.perf import LatencyWindow
-from perception.postprocess import gaze_from_outputs, yolo26_detections
-from perception.preprocess import crop_box, gaze_input, letterbox
+from perception.postprocess import yolo26_detections
+from perception.preprocess import letterbox
 from perception.runtime import OnnxModel, available_providers
 
 __all__ = ["FeatureExtractor", "every_n_frames"]
@@ -64,12 +66,15 @@ class FeatureExtractor:
         self.face = FaceLandmarkerModel(cfg, camera=camera)
         self.models["face_landmarker"] = {"file": self.face.path.name, "backend": "mediapipe"}
 
-        self._gaze: OnnxModel | None = None
+        self._gaze: MobileGazeModel | None = None
         self._gaze_every = every_n_frames(camera_fps, cfg.rates.gaze_hz)
         if gaze:
-            self._gaze = OnnxModel(cfg.models.path(cfg.models.gaze), providers=cfg.models.gaze_providers, name="gaze")
-            self._gaze_size = next((d for d in self._gaze.inputs[0].shape[2:] if isinstance(d, int)), 448)
-            self.models["gaze"] = {"file": self._gaze.path.name, "backend": self._gaze.provider}
+            self._gaze = MobileGazeModel(cfg)
+            self.models["gaze"] = {
+                "file": self._gaze.path.name,
+                "backend": self._gaze.provider,
+                "crop_expand": str(self._gaze.crop_expand),
+            }
 
         self._phone: OnnxModel | None = None
         self._phone_every = every_n_frames(camera_fps, cfg.rates.phone_hz)
@@ -135,12 +140,8 @@ class FeatureExtractor:
             face = face.model_copy(update={"eye_closed_p": self._eye_cnn.closed_probs(image, face)})
 
         gaze_out: GazeFeatures | None = None
-        if self._gaze is not None and index % self._gaze_every == 0 and face_box is not None:
-            crop = crop_box(image, face_box, expand=1.2)
-            if crop is not None:
-                outputs = self._gaze.run(gaze_input(crop, self._gaze_size))
-                pitch, yaw = gaze_from_outputs([o.name for o in self._gaze.outputs], outputs)
-                gaze_out = GazeFeatures(pitch_deg=round(pitch, 2), yaw_deg=round(yaw, 2))
+        if self._gaze is not None and index % self._gaze_every == 0 and face.present:
+            gaze_out = self._gaze.estimate(image, face_box)
 
         phones: list[PhoneBox] | None = None
         if self._phone is not None and index % self._phone_every == 0:
@@ -195,6 +196,10 @@ class FeatureExtractor:
     @property
     def phone_latency(self) -> LatencyWindow | None:
         return self._phone.latency if self._phone is not None else None
+
+    @property
+    def gaze_latency(self) -> LatencyWindow | None:
+        return self._gaze.latency if self._gaze is not None else None
 
     @property
     def eye_state_latency(self) -> LatencyWindow | None:

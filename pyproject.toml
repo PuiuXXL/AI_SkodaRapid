@@ -14,6 +14,7 @@ include = [
     "scripts/eval_eyes.py",
     "scripts/enroll_face.py",
     "scripts/calibrate.py",
+    "scripts/eval_zones.py",
 ]
 
 [tool.ruff.lint]
@@ -24,9 +25,9 @@ known-first-party = ["perception"]
 
 [tool.mypy]
 python_version = "3.11"
-# Add scripts/enroll_face.py and scripts/calibrate.py here once they exist.
+# Add scripts/enroll_face.py here once it exists.
 files = ["perception", "tests/perception", "scripts/benchmark.py", "scripts/preview.py", "scripts/label_session.py",
-         "scripts/live_driver.py", "scripts/eval_eyes.py"]
+         "scripts/live_driver.py", "scripts/eval_eyes.py", "scripts/calibrate.py", "scripts/eval_zones.py"]
 strict = true
 explicit_package_bases = true  # tests/ has no __init__.py: name modules from the repo root (tests.perception.*)
 plugins = ["pydantic.mypy"]
