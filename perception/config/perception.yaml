@@ -12,10 +12,12 @@ cameras:
     device: "usb:046d:082c"    # Logi C615 (an OpenCV index, path or URL also works)
     device_name: "C615"        # no usb match -> unique friendly-name substring (null = off)
     backend: auto              # auto | dshow | msmf | v4l2 | any   (Windows: dshow opens MJPG reliably)
-    width: 1280
-    height: 720
+    width: 1920                # 1080p30 (P1 requirement 2026-11-21); the C615 delivers 1080p MJPG at 30 fps
+    height: 1080
     fps: 30
-    fourcc: MJPG               # compressed USB stream -> 720p30 without USB bandwidth issues
+    fourcc: MJPG               # compressed USB stream -> 1080p30 without USB bandwidth issues
+    process_width: 1280        # models get ONE 1280x720 copy per frame: at full 1080p the face fell to 22 fps and
+                               # e2e p95 to 199 ms (live 2026-11-21); pixel thresholds stay the 720p-tuned ones
     buffer_size: 1             # keep only the latest frame
     reconnect_s: 1.0           # wait between reconnect attempts
     max_read_failures: 15      # consecutive failed reads (~0.5 s at 30 fps) -> reopen the camera
@@ -36,6 +38,7 @@ cameras:
     enabled: true
     device: "usb:045e:076f"    # LifeCam HD-6000
     device_name: "LifeCam"
+    process_width: null        # LifeCam HD-6000: 720p is its hardware maximum, processed as captured
     backend: auto
     width: 1280
     height: 720
@@ -67,7 +70,8 @@ models:
   yunet: face_detection_yunet_2023mar.onnx
   sface: face_recognition_sface_2021dec.onnx
   phone_device: auto           # auto | cpu | gpu   (auto = gpu if CUDA is available)
-  phone_cpu: { weights: yolo26n.pt, imgsz: 416 }
+  phone_cpu: { weights: yolo26s.pt, imgsz: 640 }  # live comparison 2026-11-21 (docs/eval/phone-compare-*.md):
+                               # detection ear/chest/lap/side 58/100/54/100 % vs 3/99/0/76 % for yolo26n@416
   phone_gpu: { weights: yolo26s.pt, imgsz: 640 }
   pose: yolo26n-pose.pt        # only for rear_seat (S feature)
   onnx_providers:              # tried in order, the first available wins (YOLO26s on the GPU)
@@ -79,6 +83,8 @@ models:
     - OpenVINOExecutionProvider
     - CPUExecutionProvider
   onnx_threads: 4              # ORT intra-op threads per session (0 = all cores); two camera processes share the CPU
+                               # (also applied to native OpenVINO now: it used every core)
+  phone_threads: 2             # yolo26s@640 in its own thread with 2 cores: the face keeps the rest (live 2026-11-21)
 
 face:                          # MediaPipe Face Landmarker, rules R-FL1..R-FL5 in docs/perception.md
   num_faces: 1                 # R-FL1: one face per camera (internal tracking/smoothing needs it)
@@ -121,10 +127,10 @@ eyes:                          # docs/perception.md §3.2; values from docs/eval
   slow_close_ratio: 0.47       # a SLOW fall counts only below this (2 s closures: 0.42-0.47; a hard squint
                                # hovered at 0.48-0.51). Tuned on ONE session: re-check on every new one
   min_state_frames: 2          # frames below drop_ratio before CLOSED is reported (closed_ms starts at the drop)
-  reopen_min_frames: 2         # a confirmed closure ends only after this many frames in a row above the reopen level:
-                               # one bright frame (landmark jitter) no longer resets closed_ms (diag 2026-11-21)
-  closure_gap_max_ms: 200      # face lost / eyes unreliable this long inside a closure: the closure goes on
-  blink_max_ms: 500            # longer than this = closure (separate state), shorter = blink
+  reopen_min_frames: 2         # two tiers: a closure LONGER than blink_max_ms ends only after this many open frames in a
+                               # row (one bright frame no longer resets closed_ms); a blink ends at the first open frame
+  closure_gap_max_ms: 200      # face lost / eyes unreliable this long inside a LONG closure: the closure goes on
+  blink_max_ms: 400            # longer than this = closure (separate state, reopen hysteresis), shorter = blink
   plateau_check_ms: 300        # from here on, CLOSED needs ratio < squint band low AND eyeBlink >= blendshape_closed
   blendshape_closed: 0.45      # eyeBlink needed to accept a SLOW fall (drowsy lids); 2 s closures reach ~0.5,
                                # smiles 0.31-0.46, speech 0.26-0.36 in the diag session
@@ -230,7 +236,7 @@ gaze:                          # docs/perception.md §3.4. Starting values: tune
 
 phone:
   class_id: 67                 # COCO "cell phone"
-  conf_min: 0.40
+  conf_min: 0.48               # yolo26s@640: lowest threshold with zero false frames (no phone 0, wallet max 0.46)
   vote_window: 5               # last N YOLO runs
   vote_min: 3                  # seen in at least this many -> in use
   near_face_ratio: 1.2         # phone centre within ratio * face width of the face centre -> near_face / call
@@ -239,6 +245,8 @@ phone:
                                # the driver's phone: it does not vote (scene 4) (start)
   passenger_side: right        # the passenger's side in the DRIVER's terms (left-hand-drive car)
   mirrored: false              # the camera image is not mirrored: image right = the driver's left
+  async_inference: true        # YOLO in its own thread (ORT releases the GIL): inline, yolo26s@640 dropped the driver
+                               # face to 20 fps (min 11.6); the boxes are 1-2 frames older, the 3-of-5 vote absorbs it
   lap_pattern:
     min_glances: 3
     window_s: 20
@@ -296,6 +304,18 @@ passenger:
   asleep_closed_head_s: 5      # ... or this long with the head dropped (plan AP2: "ochi închiși + capul lăsat")
   head_drop_deg: 15            # pitch this far below the passenger's upright pitch = head dropped
   upright_window_s: 30         # upright pitch = median pitch with the eyes open over the last 30 s
+
+posture:                       # perception/posture.py, both seats; vs. the calibration reference (driver) or the median
+                               # of the first auto_ref_s with the face seen. Distances in reference face widths (start)
+  auto_ref_s: 10
+  forward_width_ratio: 1.20    # face 20 % wider than the reference = head closer to the camera -> leaning_forward
+  side_shift_ratio: 0.60       # face centre moved sideways this much ...
+  side_roll_deg: 15            # ... or the head rolled this much -> leaning_side
+  slumped_drop_ratio: 0.40     # face centre this much lower AND ...
+  slumped_pitch_deg: 10        # ... the head pitched down this much -> slumped
+  out_shift_ratio: 1.20        # face centre this far away, or ...
+  out_width_ratio: [0.60, 1.60] # ... width outside this range (far back / at the camera) -> out_of_position
+  min_duration_s: 1.0          # held this long (a mirror check or a quick reach is not a posture)
 
 filters:
   one_euro:                    # default for continuous signals without their own tuning

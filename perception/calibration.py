@@ -34,6 +34,7 @@ from perception.config import REPO_ROOT, PerceptionConfig
 from perception.driver_cam.gaze_zones import FEATURES, GazeFeatureBuilder, ZoneModel, zone_head_angles
 from perception.driver_cam.pipeline import DriverState
 from perception.features import FeatureFrame
+from perception.posture import PostureRef, face_geometry
 
 __all__ = [
     "CALIBRATION_VERSION",
@@ -128,6 +129,7 @@ class Calibration:
     model: ZoneModel
     ear_baseline: tuple[float, float] | None = None
     ear_ref_by_zone: dict[str, tuple[float, float]] = field(default_factory=dict)
+    posture_ref: dict[str, float] | None = None  # median face centre / width / angles on the road (posture.py)
     camera: dict[str, Any] = field(default_factory=dict)
     created: str = ""
     missing: list[str] = field(default_factory=list)
@@ -174,6 +176,7 @@ class Calibration:
             "model": self.model.to_dict(),
             "ear_baseline": list(self.ear_baseline) if self.ear_baseline else None,
             "ear_ref_by_zone": {z: list(v) for z, v in self.ear_ref_by_zone.items()},
+            "posture_ref": self.posture_ref,
             "loo_accuracy": self.loo_accuracy(),
             "loo_confusion": self.loo_confusion(),
             "missing": self.missing,
@@ -220,6 +223,7 @@ class Calibration:
             [data["times"][i] for i in keep],
             ear_baseline=(float(base[0]), float(base[1])) if base else None,
             ear_ref_by_zone={z: (float(v[0]), float(v[1])) for z, v in data.get("ear_ref_by_zone", {}).items()},
+            posture_ref=data.get("posture_ref"),
             camera=data.get("camera", {}),
             created=data.get("created", ""),
             missing=list(data.get("missing", [])),
@@ -241,6 +245,7 @@ class Calibration:
             [self.times[i] for i in keep] + quick.times,
             ear_baseline=quick.ear_baseline or self.ear_baseline,
             ear_ref_by_zone={**self.ear_ref_by_zone, **quick.ear_ref_by_zone},
+            posture_ref=quick.posture_ref or self.posture_ref,
             camera=quick.camera or self.camera,
             created=quick.created,
             missing=[z for z in self.missing if z not in replaced] + quick.missing,
@@ -267,6 +272,8 @@ class CalibrationRun:
         self.camera = camera or {}
         self.steps = list(steps) if steps is not None else build_steps(cfg, quick)
         self.builder = GazeFeatureBuilder(cfg, frame_size)
+        self.frame_size = frame_size
+        self.posture: list[tuple[float, float, float, float, float, float]] = []  # road frames: posture reference
         self.index = 0
         self.t_step: float | None = None
         self.samples: list[np.ndarray] = []
@@ -335,6 +342,9 @@ class CalibrationRun:
         self._counts[step.segment] = self._counts.get(step.segment, 0) + 1
         if state.eyes.ear_left is not None and state.eyes.ear_right is not None:
             self.ears.setdefault(step.zone, []).append((state.eyes.ear_left, state.eyes.ear_right))
+        geom = face_geometry(ff.face, self.frame_size)
+        if step.zone == "road" and geom is not None and None not in (hd.raw_yaw, hd.raw_pitch, hd.raw_roll):
+            self.posture.append((*geom, float(hd.raw_yaw), float(hd.raw_pitch), float(hd.raw_roll)))  # type: ignore[arg-type]
 
     def _finish_step(self, step: CalibStep) -> None:
         if step.zone is None:
@@ -371,6 +381,7 @@ class CalibrationRun:
             self.times,
             ear_baseline=p90.get("road"),
             ear_ref_by_zone=p90,
+            posture_ref=ref.to_dict() if (ref := PostureRef.median(self.posture)) else None,
             camera=self.camera,
             created=dt.datetime.now().astimezone().isoformat(timespec="seconds"),
             missing=list(self.missing),

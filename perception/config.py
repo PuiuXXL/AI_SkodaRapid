@@ -87,6 +87,8 @@ class CameraConfig(_Section):
     # second way to find the camera when the usb: selector matches nothing: a unique, case-insensitive substring of
     # the device's friendly name ("C615"); null = no name fallback
     device_name: Annotated[str, StringConstraints(min_length=1)] | None
+    # models work on one copy resized to this width (null = capture size): 1080p capture, 720p processing
+    process_width: Annotated[int, Field(ge=160, le=3840)] | None
     controls: CameraControls
 
 
@@ -131,6 +133,7 @@ class ModelsConfig(_Section):
     # ONNX Runtime intra-op threads per session (0 = ORT default = all physical cores). One process per camera, each
     # with several sessions: the default oversubscribes the CPU when both cameras run (docs/benchmark/*-dual.md).
     onnx_threads: Annotated[int, Field(ge=0, le=64)] = 0
+    phone_threads: Annotated[int, Field(ge=0, le=64)] = 0  # CPU threads of the phone detector (0 = onnx_threads)
 
     @model_validator(mode="after")
     def _cpu_fallback(self) -> Self:
@@ -375,6 +378,7 @@ class PhoneConfig(_Section):
     foreign_dx_ratio: PositiveFloat  # passenger side, farther than this x face width, not near the face -> foreign
     passenger_side: Literal["left", "right"]  # the passenger's side in the DRIVER's terms (left-hand-drive car)
     mirrored: bool  # the camera image is mirrored (False: image right = the driver's left)
+    async_inference: bool  # YOLO in its own thread: the face never waits for it (the result is 1-2 frames older)
     lap_pattern: LapPatternConfig
 
     @model_validator(mode="after")
@@ -447,6 +451,27 @@ class PassengerConfig(_Section):
     upright_window_s: PositiveFloat  # upright pitch = median pitch with the eyes open over this window
 
 
+class PostureConfig(_Section):
+    """Posture vs. a reference (perception/posture.py); distances in reference face widths."""
+
+    auto_ref_s: PositiveFloat  # no calibration reference: median of the first seconds with the face seen
+    forward_width_ratio: Annotated[float, Field(gt=1)]
+    side_shift_ratio: PositiveFloat
+    side_roll_deg: PositiveFloat
+    slumped_drop_ratio: PositiveFloat
+    slumped_pitch_deg: PositiveFloat
+    out_shift_ratio: PositiveFloat
+    out_width_ratio: Annotated[list[PositiveFloat], Field(min_length=2, max_length=2)]
+    min_duration_s: Annotated[float, Field(ge=0)]
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        low, high = self.out_width_ratio
+        if not low < 1 < high:
+            raise ValueError("posture.out_width_ratio must be [low < 1, high > 1]")
+        return self
+
+
 class HandsConfig(_Section):
     """MediaPipe Gesture Recognizer as a hand tracker (perception/hands.py): AS9 / AP6 + hand positions (AS7)."""
 
@@ -506,6 +531,7 @@ class PerceptionConfig(_Section):
     identity: IdentityConfig
     monitoring: MonitoringConfig
     passenger: PassengerConfig
+    posture: PostureConfig
     filters: FiltersConfig
     workers: WorkersConfig
     output: OutputConfig

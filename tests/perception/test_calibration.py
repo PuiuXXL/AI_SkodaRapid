@@ -98,6 +98,8 @@ def test_save_load_round_trip(cfg: PerceptionConfig, tmp_path: Path) -> None:
     path = cal.save(tmp_path / "calibration.json")
     loaded = Calibration.load(cfg, path)
     assert loaded.zones == cal.zones and loaded.ear_baseline == pytest.approx(cal.ear_baseline)
+    assert cal.posture_ref is not None and loaded.posture_ref == cal.posture_ref  # posture reference from the road
+    assert set(cal.posture_ref) == {"cx", "cy", "width", "yaw", "pitch", "roll"}
     probe = zone_frame(5, "mirror_rear", "lizard")
     pipe_a = DriverPipeline(cfg, (W, H), None, cal.model)
     pipe_b = DriverPipeline(cfg, (W, H), None, loaded.model)

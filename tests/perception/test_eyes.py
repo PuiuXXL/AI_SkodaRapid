@@ -40,6 +40,7 @@ def test_blink_150ms_measured() -> None:
     assert len(blinks) == 1
     assert blinks[0].duration_ms == pytest.approx(150, abs=40)  # 50 % width, interpolated between frames
     assert outs[-1].blink_ms == pytest.approx(150, abs=40)
+    assert tracker.blink_count == 1  # monotonic counter published as driver.eyes.blink_count
     assert max(o.closed_ms for o in outs) < 200
 
 
@@ -302,3 +303,29 @@ def test_confirmed_reopen_ends_the_closure() -> None:
     tracker, outs = _closure_with([(2 / FPS, {"ear_left": OPEN})])
     assert [e.kind for e in tracker.events] == ["closure", "closure"]
     assert max(o.closed_ms for o in outs) < 1200
+
+
+# --- two tiers: a blink ends at the first open frame, a long closure needs a confirmed reopen ----------------------
+
+
+def test_blink_150ms_ends_at_the_first_open_frame() -> None:
+    tracker = _tracker()
+    closed = {"ear_left": CLOSED, "blink": 0.8}
+    outs = _run(tracker, [(1.0, {"ear_left": OPEN}), (0.15, closed), (1 / FPS, {"ear_left": OPEN}), (0.15, closed),
+                          (1.0, {"ear_left": OPEN})])  # fmt: skip
+    assert [e.kind for e in tracker.events] == ["blink", "blink"]  # one open frame between them is enough
+    assert max(o.closed_ms for o in outs) < 250
+
+
+def test_2s_closure_with_one_isolated_open_frame_is_one_closure() -> None:
+    tracker, _ = _closure_with([(1 / FPS, {"ear_left": OPEN})])
+    assert [e.kind for e in tracker.events] == ["closure"]
+    assert tracker.events[0].duration_ms == pytest.approx(2000, abs=100)
+
+
+def test_two_blinks_250ms_apart_are_two_blinks() -> None:
+    tracker = _tracker()
+    closed = {"ear_left": CLOSED, "blink": 0.8}
+    _run(tracker, [(1.0, {"ear_left": OPEN}), (0.12, closed), (0.13, {"ear_left": OPEN}), (0.12, closed),
+                   (1.0, {"ear_left": OPEN})])  # fmt: skip
+    assert [e.kind for e in tracker.events] == ["blink", "blink"]

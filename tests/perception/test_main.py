@@ -28,6 +28,7 @@ SYNTH = WorkerOptions(synthetic=True, models=False)
 ECHO = "tests.perception.test_worker:EchoPipeline"
 
 
+@pytest.mark.slow
 def test_main_print_no_ws_synthetic_source_without_camera() -> None:
     proc = subprocess.run(
         [
@@ -108,6 +109,7 @@ def test_commands_without_a_module_are_only_logged(caplog: pytest.LogCaptureFixt
         app.system.close()
 
 
+@pytest.mark.slow
 def test_commands_reach_the_worker_through_main() -> None:
     async def scenario() -> Perception:
         app = _app(factory=ECHO)
@@ -141,6 +143,7 @@ def test_commands_reach_the_worker_through_main() -> None:
     assert app.last_frame is not None and validate_frame(app.last_frame)
 
 
+@pytest.mark.slow
 def test_frames_reach_core_over_ws_and_commands_are_acked() -> None:
     import websockets
 
