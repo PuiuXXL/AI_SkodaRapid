@@ -23,7 +23,7 @@ from typing import Any, Iterable, Optional
 
 from pydantic import ValidationError
 
-from assistant import cabin, music
+from assistant import cabin, media_search, music
 from assistant.contract import Action, Event, State
 from assistant.settings import cfg, poi_categories
 from assistant.textutil import word_count
@@ -46,6 +46,8 @@ ALLOWED_LEVELS: dict[str, frozenset[str]] = {
     "show_on_screen": frozenset({"any"}),
     "set_preference": frozenset({"P4"}),
     "stay_silent": frozenset({"any"}),
+    # P3 addition (YouTube, internal: resolved by the client into an ``ask`` with options).
+    "search_media": frozenset({"P4"}),
 }
 
 #: "Cere confirmare" column of the plan table. ``read_message`` needs a confirmation
@@ -103,6 +105,9 @@ def needs_confirmation(action: Action, state: State) -> bool:
     """Whether core must wait for a "yes" before executing (plan table + F2)."""
     if action.type == "read_message":
         return cabin.others_present(state)
+    if action.type == "set_preference" and action.key == "volume" and cfg("music", "volume_without_confirmation",
+                                                                         default=True):
+        return False  # "mai încet" is done at once (assistant.yaml -> music.volume_without_confirmation)
     return action.type in CONFIRMATION_REQUIRED
 
 
@@ -155,16 +160,34 @@ def check_action(action: Action, state: State, event: Optional[Event] = None) ->
             return "missing_question_or_expects"
         if word_count(action.question) > _word_limit(action.to):
             return "too_many_words"
+        if action.expects == "choice" and not action.options:
+            return "choice_without_options"
     elif t == "suggest_media":
         allowed = {track.id for track in music.candidates(state)}
         if action.track_id not in allowed:
             return "track_not_a_candidate"
     elif t == "play_media":
+        if media_search.is_youtube_track(action.track_id):
+            found = media_search.known(action.track_id)
+            if found is None:
+                return "youtube_track_not_found_by_search"
+            if cabin.has_child(state) and not found.kid_safe:
+                return "track_not_kid_safe"
+            return None
         track = music.get_track(action.track_id)
         if track is None:
             return "unknown_track"
         if cabin.has_child(state) and not track.kid_safe:
             return "track_not_kid_safe"
+    elif t == "search_media":
+        if not cfg("youtube", "enabled", default=True):
+            return "youtube_disabled"
+        if not (action.query or "").strip():
+            return "missing_query"
+        if len(action.query) > 100:
+            return "query_too_long"
+        if action.kind is None:
+            return "missing_kind"
     elif t in ("read_message", "reply_message"):
         message = next((m for m in state.messages if m.id == action.msg_id), None)
         if message is None:

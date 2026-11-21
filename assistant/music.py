@@ -99,8 +99,15 @@ def track_file(track: Track) -> Path:
 
 
 def track_url(track_id: str) -> str:
-    """URL served by ``assistant/router.py`` for this track (``/media/<id>.mp3``)."""
+    """URL served by ``assistant/router.py``: ``/media/<id>.mp3`` (catalog) or ``/media/yt/<id>.m4a`` (YouTube)."""
+    if track_id.startswith("yt:"):
+        return f"/media/yt/{track_id[3:]}.m4a"
     return f"/media/{track_id}.mp3"
+
+
+def loops(track_id: str) -> bool:
+    """Whether the browser should loop the track: catalog music yes, YouTube (songs, podcasts) no."""
+    return not track_id.startswith("yt:")
 
 
 def profile_genres(state: State) -> list[str]:

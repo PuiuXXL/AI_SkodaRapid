@@ -118,11 +118,63 @@ music:
   # Playback volume (0-1): normal, and when the front passenger is asleep (plan G3).
   volume_normal: 0.6
   volume_passenger_asleep: 0.25
+  # Spoken volume commands ("mai încet", "mai tare", "la jumătate", "volumul la 30"), handled without the
+  # LLM as set_preference {key: volume}: step per "mai încet / mai tare", "foarte" doubles it, and the
+  # quietest level a command may set (0 would look like a broken player; "oprește" stops the music).
+  volume_step: 0.2
+  volume_min: 0.05
+  # Volume changes are executed at once, without "Bine?": the driver asked explicitly and it is undone
+  # just as easily (plan section 6 asks a confirmation for set_preference in general).
+  volume_without_confirmation: true
   # How many candidate tracks are shown to the LLM to choose from.
   candidates_for_llm: 5
   # Catalog genre that marks spoken podcasts (offered with the quiz when music is
   # refused, plan D8). With no such track in the catalog only the quiz is offered.
   podcast_genre: podcast
+
+# -----------------------------------------------------------------------------
+# YouTube music / podcasts on request (assistant/media_search.py; S feature, docs/assistant.md 6.1)
+# "dă-mi ceva metal energic" -> search -> "Am găsit: A, B sau C. Care?" -> audio stream via core.
+# Search: YouTube Data API v3 when YOUTUBE_API_KEY is in .env, else yt-dlp (no key, slower).
+# Playback: yt-dlp extracts the audio stream; assistant/router.py proxies it at /media/yt/<id>.m4a
+# (same player as the mp3 catalog: no ads, ducking and alarm stop unchanged).
+# -----------------------------------------------------------------------------
+youtube:
+  enabled: true
+  # How many results are fetched, and offered in one question (1 when driving fast, see below).
+  results_fetched: 6
+  results_offered: 3
+  # Offer ONE option ("Pun X?") instead of three when speed >= this or risk >= single_option_risk:
+  # a list of three titles is too much to keep in mind at highway speed.
+  single_option_speed_kmh: 90
+  single_option_risk: 1
+  # Words per spoken option: start here, shrink until the question fits speech.max_words_to_driver.
+  option_max_words: 4
+  option_min_words: 2
+  # Seconds allowed for the search itself (the LLM deadline is separate).
+  search_timeout_s: 8
+  # Duration filters in minutes (live streams are always skipped).
+  music_max_min: 75
+  podcast_min_min: 5
+  # YouTube Data API parameters.
+  region: RO
+  relevance_language: ro
+  # With a child on board: SafeSearch strict, which only the Data API offers. Without a key the
+  # assistant then plays only kid_safe tracks from the local catalog.
+  require_api_with_child: true
+  # Audio proxy: upstream requests in chunks of this size (large single ranges get throttled / 403).
+  proxy_chunk_mb: 4
+  # Resolved stream URLs are reused for this long (YouTube URLs expire after a few hours).
+  stream_cache_min: 120
+  # Optional JavaScript runtime for yt-dlp ("node" / "deno"), only if extraction starts failing.
+  js_runtime: null
+  # Words removed from titles before they are spoken (whole words / phrases, case-insensitive).
+  title_noise: [official music video, official video, official audio, official lyric video, music video,
+                lyric video, lyrics, lyric, videoclip oficial, audio oficial, visualizer, remastered,
+                remaster, full hd, hd, hq, 4k, 8k, explicit]
+  # Words that do not count as a specific wish in "da, te rog" (vs. "da, ceva metal").
+  yes_fillers: [da, ok, okay, bine, sigur, te, rog, frumos, pune, puneti, dami, da-mi, mi, ceva, acum, hai,
+                vreau, desigur, normal, chiar, poftim, foarte, multumesc, merci, "yes", please]
 
 # -----------------------------------------------------------------------------
 # Quiz (assistant/quiz.py; plan D8 "Refuz -> quiz sau podcast")

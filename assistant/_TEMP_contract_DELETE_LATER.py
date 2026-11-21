@@ -298,6 +298,8 @@ class Media(_Model):
     volume: Optional[float] = None
     reason: Optional[str] = None
     kid_safe: bool = False
+    # P3 addition (YouTube, docs/assistant.md section 6.1): "catalog" or "youtube".
+    source: Optional[str] = None
 
 
 class State(_Model):
@@ -381,6 +383,8 @@ ActionType = Literal[
     "speak", "ask", "suggest_media", "play_media", "stop_media", "read_message",
     "reply_message", "create_reminder", "complete_reminder", "suggest_stop",
     "delegate", "show_on_screen", "set_preference", "stay_silent",
+    # P3 addition: internal to the assistant, resolved before handle_event returns (never reaches core).
+    "search_media",
 ]
 
 #: Who an utterance is addressed to.
@@ -411,7 +415,15 @@ class Action(_Model):
     show_on_screen text (target = passenger)
     set_preference key, value (within limits)            (needs confirmation)
     stay_silent    reason
+    search_media   query, kind (music | podcast)          (P3 internal, see below)
     ============== ===========================================================
+
+    YouTube media (P3 addition, docs/assistant.md section 6.1):
+        ``search_media`` is produced by the LLM (or the fallback) and resolved INSIDE
+        ``handle_event``: the assistant searches YouTube and replaces it with an ``ask``
+        with ``expects="choice"`` and ``options`` (the results). Core never receives it.
+        After the driver chooses, ``play_media`` carries ``track_id="yt:<video id>"`` and
+        ``title``; core plays ``music.track_url(track_id)`` (``/media/yt/<id>.m4a``).
 
     Extra P3 fields (not in the plan table, all optional):
         source: ``"LLM"`` or ``"RULE"`` (plan principle 5: every decision shows its source;
@@ -428,7 +440,7 @@ class Action(_Model):
     to: Optional[Addressee] = None
     text: Optional[str] = None
     question: Optional[str] = None
-    expects: Optional[Literal["yes_no", "kss", "free"]] = None
+    expects: Optional[Literal["yes_no", "kss", "free", "choice"]] = None
     track_id: Optional[str] = None
     volume: Optional[float] = None
     reason: Optional[str] = None
@@ -446,3 +458,8 @@ class Action(_Model):
     clip_id: Optional[str] = None
     needs_confirmation: bool = False
     streamed: bool = False
+    # --- P3 extras for YouTube media (section 6.1 of docs/assistant.md) ---
+    query: Optional[str] = None
+    kind: Optional[Literal["music", "podcast"]] = None
+    options: Optional[list[dict[str, Any]]] = None
+    title: Optional[str] = None

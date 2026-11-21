@@ -18,6 +18,11 @@ edge-tts>=6.1
 fastapi>=0.110
 uvicorn[standard]>=0.29
 
+# YouTube music / podcasts on request (assistant/media_search.py, S feature): search without a key
+# and audio-stream extraction; aiohttp proxies the stream at /media/yt/<id>.m4a (assistant/router.py).
+yt-dlp>=2025.1
+aiohttp>=3.9
+
 # Phone bridge: WebSocket client towards core (/ws/phone)
 websockets>=12.0
 

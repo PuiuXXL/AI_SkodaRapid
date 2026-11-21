@@ -51,7 +51,8 @@ Privacy note for the slide (plan section 3): the LLM receives only the ~10-line 
 |---|---|
 | `assistant/client.py` | **Entry point for core.** `handle_event(event, state) -> list[Action]`: policies → LLM (streamed, 2.5 s deadline) → validation → fixed fallback. |
 | `assistant/refusal.py` | **Entry point for core.** `is_refusal(text) -> bool`: deterministic, < 1 ms (plan D10). |
-| `assistant/router.py` | **Mounted by core.** `GET /tts/{id}.mp3`, `GET /media/{track_id}.mp3`, `GET /assistant/health`. |
+| `assistant/router.py` | **Mounted by core.** `GET /tts/{id}.mp3`, `GET /media/{track_id}.mp3`, `GET /media/yt/{video_id}.m4a` (YouTube audio proxy), `GET /assistant/health`. |
+| `assistant/media_search.py` | YouTube music / podcasts on request (section 6.1): search (Data API or yt-dlp), spoken titles, choice question, answer parsing, audio stream resolution. |
 | `assistant/tts.py` | edge-tts synthesis, sentence cache, and `speak_message(action)`, which builds the `speak` message for the browser. |
 | `assistant/actions.py` | Validation of actions against plan section 6: types, levels, parameters, 15 words, max 3, confirmation. |
 | `assistant/policies.py` | When the assistant may answer: P0–P2 veto, muted after refusal, conversation, 1 proactive answer / 30 s. |
@@ -133,6 +134,11 @@ A single flat model (`Action` in the contract). The `type` values and their para
 | `needs_confirmation` | from the "Cere confirmare" column (and F2 for `read_message`) |
 | `streamed` | already spoken during streaming |
 | `volume` | for `play_media` (cabin-aware, see `music.volume_for`) |
+| `title` | for `play_media` of a YouTube result: the short spoken title (show it on the dashboard) |
+| `options` | for `ask` with `expects: "choice"`: the YouTube results (section 6.1) |
+| `query`, `kind` | for `search_media` (internal to the assistant, never returned to core) |
+
+`search_media` is an action the LLM may produce, but `handle_event` resolves it before returning: core receives an `ask` with `expects: "choice"` instead (section 6.1).
 
 ### 3.4 Answers, confirmations, KSS and quiz: `DialogManager`
 
@@ -165,6 +171,7 @@ else:
 |---|---|---|
 | confirmation ("Bine?", "Trimit?", "Oprim?", "Îl citesc?") | yes (voice / nod / 👍) | `execute` the held actions, plus a clip: `confirm_noted` (reminder), `confirm_sent` (reply), `confirm_ok` (stop, preference), `confirm_done` (reminder done) |
 | | no | `cancelled`, plus the `confirm_cancelled` clip. For refused music: event `media_declined` instead (→ quiz offer) |
+| | music offer answered with a wish: "da, ceva metal energic" | offer `cancelled`, event `driver_speech {text}` (→ YouTube search, section 6.1) |
 | | ✋ silence | cancelled quietly |
 | KSS ("Cât de obosit ești, 1–9?") | "șapte", "7", "cam opt" | event `kss_answer {value}` |
 | | "lasă-mă în pace", ✋, 👎 | event `driver_refused` (→ P2's rule C10) |
@@ -172,6 +179,10 @@ else:
 | | "podcast" (if the catalog has a track with genre `podcast`) | `play_media` of the podcast |
 | quiz question | any answer | "Corect!" or "Nu chiar, era X." + the next question; after `quiz.length` questions: "Gata quizul: 2 din 3. Bravo!" |
 | | "gata" / "stop" / ✋ | "Bine, oprim quizul." |
+| YouTube choice ("Am găsit: A, B sau C. Care?" / "Pun A?") | "a doua", "prima", "ultima", "trei", "cel cu Metallica"; "da" / nod / 👍 when one option | `execute` = `play_media {track_id: "yt:<id>", title}` + "Pornesc A." |
+| | "altceva", "nu", "niciuna", 👎, nod no | the next results as a new question; when none are left: "Altceva n-am găsit. Spune-mi ce să caut." |
+| | "lasă", "stop", ✋ | cancelled quietly |
+| | anything else ("pune ceva jazz") | not an answer (`handled=False`): treat it as a new `driver_speech` |
 
 An unanswered question expires after `speech.pending_timeout_s` (20 s). Its held actions are cancelled and never executed. A new utterance of the assistant (e.g. a cause or message interrupting a quiz) replaces the pending question.
 
@@ -214,7 +225,8 @@ async function onStartClick() {
  "sentences": [{"id": "3f2a…", "text": "Pare monoton.", "url": "/tts/3f2a….mp3"}, …]}
 {"type": "speak_control", "action": "pause" | "resume" | "stop"}    // D4: yield the floor, "...cum ziceam"
 {"type": "alarm", "id": "a7", "clip_url": "/sounds/clips/alarm_andrei.mp3"}   // stops speech AND music
-{"type": "media", "action": "play" | "stop" | "volume", "url": "/media/t14.mp3", "volume": 0.6}
+{"type": "media", "action": "play" | "stop" | "volume", "url": "/media/t14.mp3", "volume": 0.6,
+ "loop": true}                                                      // loop: music.loops(track_id), false for YouTube
 {"type": "state", "state": {…}}                                     // voice reads interaction.dialog_window_open
 ```
 
@@ -288,13 +300,39 @@ A separate process. It can run on a Linux laptop other than the demo laptop: set
 - Candidates: energy ≥ 4 against disengagement, liked genres first (from `profiles/<driver>/profile.json` → `music_genres` or `preferences.music_genres`, otherwise `music.default_genres`), `kid_safe` only with a child on board, lower volume when the passenger sleeps.
 - The LLM chooses one of the candidates listed in the summary. Any other `track_id` is rejected.
 
+### 6.1 YouTube music and podcasts on request (S feature)
+
+The driver asks for something specific ("dă-mi ceva muzică metal energică", "caută un podcast despre istoria Romei"), or answers the music offer with a wish ("da, ceva metal"). The assistant searches YouTube, says the top results and plays the one the driver picks. The local catalog stays: it is used for the proactive offer against disengagement (D8) and whenever YouTube is not reachable.
+
+```
+Șofer:    „Dă-mi ceva metal energic.”
+LLM:      search_media {query: "energetic metal", kind: "music"}      (fallback without LLM: media_search.media_request)
+Asistent: „Caut.”                                                      (early speech while searching)
+          search (Data API ~0.5 s / yt-dlp ~1.3-2.5 s) -> ask expects="choice", options = the results
+Asistent: „Am găsit: Metallica, Hardwired, Slipknot, Duality sau Nu Metal Mix. Care?”     (<= 15 words)
+Șofer:    „A doua.” / „Cel cu Slipknot.” / „Altceva.” / 👍 (one option)
+          DialogManager -> play_media {track_id: "yt:6fVE8kSM43I", title: "Slipknot, Duality"} + „Pornesc Slipknot, Duality.”
+Core:     media play, url = music.track_url(track_id) = /media/yt/6fVE8kSM43I.m4a, loop = false
+```
+
+- **One option at speed.** At `speed_kmh >= youtube.single_option_speed_kmh` (90) or `risk >= youtube.single_option_risk` (1) only one option is offered ("Pun Metallica, Hardwired?"); "altceva" gives the next one. Three titles are too much to keep in mind at highway speed.
+- **Spoken titles** are cleaned deterministically (`clean_title`): brackets, hashtags, emoji, `| extra parts` and noise words (`youtube.title_noise`) are removed, "Artist - Title" becomes "Artist, Title", and words are cut (4 down to 2) until the question fits 15 words. No second LLM call.
+- **Search:** YouTube Data API v3 when `YOUTUBE_API_KEY` is set in `.env` (free quota: 10,000 units/day, one search costs ~101, so ~100 searches/day; SafeSearch). Otherwise yt-dlp, no key. Measured on this laptop with yt-dlp: 2.2–2.4 s for the first search, 1.25 s after that.
+- **Playback (variant B):** yt-dlp resolves the audio-only stream (m4a), prefetched while the question is spoken. `GET /media/yt/<id>.m4a` proxies it: same origin, `Range` supported (seeking), fetched upstream in 4 MB chunks, URL refreshed once on 403. Measured: audio starts **0.16 s** after the choice when the prefetch is done. Same `<audio>` element as the catalog, so alarms stop it, speech ducks it, and there are no ads.
+- **Safety:** `search_media` and `play_media` are P4 (comfort), so they are rejected at P0–P3. Only video ids found by a search in this process can be played or proxied (`media_search.known`). A child on board means SafeSearch strict, which needs the Data API key. Without it, the assistant offers a kid_safe catalog track instead.
+- **Stopping:** "oprește muzica", "oprește ce dă play acum", "pune pauză", or just "stop" while something plays, is recognised by keywords (`fallback.stop_media_request`) and answered at once without the LLM: `stop_media` + the "Ok." clip. "Oprește aici / la OMV" is about the car and is not matched. If the LLM returns an action with no sentence (e.g. only `stop_media`), "Ok." is added instead of falling back to "n-am înțeles".
+- **Volume:** "mai încet", "dă-l mai tare", "e prea tare" (= quieter), "foarte încet" (double step), "la jumătate", "la maxim", "volumul la 30" -> `set_preference {key: "volume", value}` + "Ok.", also without the LLM (`fallback.volume_request`). Steps and limits: `music.volume_step` (0.2), `music.volume_min` (0.05). It only applies while something plays or when the volume / music is named, and never to "vorbește mai încet" (speech), "mergi mai încet" (speed) or "pune ceva mai tare" (another track). A volume change needs **no confirmation** (`music.volume_without_confirmation`); every other `set_preference` still asks. Core executes it as `{"type": "media", "action": "volume", "volume": value}` and sets `state.media.volume`.
+- **Failures:** search impossible -> "Nu pot căuta acum. Pun ceva din ce am?" + a catalog `suggest_media`; no results -> "N-am găsit nimic potrivit. Spune-mi altfel ce să caut."
+- **Privacy (slide):** the search text goes to YouTube (or Google, with the API). No audio or image does.
+- **Terms of use:** yt-dlp extraction is against YouTube's terms. It is fine for the hackathon demo, but say "in a product: YouTube Music / Spotify API" if the jury asks.
+
 ---
 
 ## 7. Configuration (`assistant/config/assistant.yaml`)
 
-Main keys: `language`, `llm.*` (timeout 2.5 s, max 3 actions, temperature, thinking), `speech.*` (15 words, 6 s window), `policies.*`, `memory.turns`, `tts.*` (voices, rates), `clips.*`, `music.*`, `reminders.poi_categories` (**temporary**: replaced by the categories in `simulator/stops.json` once P4 creates it), `preferences.*`, `phone.*`.
+Main keys: `language`, `llm.*` (timeout 2.5 s, max 3 actions, temperature, thinking), `speech.*` (15 words, 6 s window), `policies.*`, `memory.turns`, `tts.*` (voices, rates), `clips.*`, `music.*`, `youtube.*` (section 6.1), `reminders.poi_categories` (**temporary**: replaced by the categories in `simulator/stops.json` once P4 creates it), `preferences.*`, `phone.*`.
 
-Secrets are only in `.env`: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `SAFE_CONTACT_NUMBER`, `EMERGENCY_NUMBER`, `KDECONNECT_DEVICE_ID`, `CORE_URL`.
+Secrets are only in `.env`: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `YOUTUBE_API_KEY` (optional, section 6.1), `SAFE_CONTACT_NUMBER`, `EMERGENCY_NUMBER`, `KDECONNECT_DEVICE_ID`, `CORE_URL`.
 
 `llm.thinking_budget` and `llm.thinking_level` are both `null` by default: Gemini 3.x models reject `thinking_budget` (HTTP 400), and some also reject level `minimal`. A rejected value makes every call fail with `llm_error`.
 
@@ -307,6 +345,7 @@ The Gemini answer schema has one branch per action type, with all of its fields 
 - **P2:** read the header of `assistant/_TEMP_contract_DELETE_LATER.py`. Once `shared/contracts.py` exists, `assistant/contract.py` switches automatically. Run `pytest tests/assistant` and delete the temporary file. The event types (3.2) and the `/ws/ui` and `/ws/phone` messages (4.2, 4.3, 5) are P3 proposals: change them in the contract if needed and tell P3.
 - **P4:** see 4.1 for the voice. `profiles/<name>/profile.json` may contain `name`, `music_genres`, `safe_contact: {name}` and `emergency_contact: {name}`; P3 reads these fields. `simulator/stops.json` categories are used for reminders.
 - **P1:** the voice uses `driver.head.answer` and `driver.gesture` (MediaPipe names `Thumb_Up`, `Thumb_Down`, `Open_Palm`) through `assistant/answers.py`.
+- **YouTube (section 6.1), what the others need to do:** listed in `DriveMate-PLAN-FINAL.md` (section 4.D, D11) and in `roluri/P2…` / `roluri/P4…` ("Adăugat de P3: YouTube").
 
 ## 9. Status
 
@@ -318,4 +357,5 @@ The Gemini answer schema has one branch per action type, with all of its fields 
 | TTS router, clips (27 generated), browser voice modules, voice test page | done; Chrome microphone test pending (a manual step) |
 | Phone bridge | written and dry-run tested; real KDE Connect test pending (needs the Linux laptop + Android) |
 | Music catalog | 6 real tracks served from `assistant/data/media/`; titles, sources and a kid_safe track still missing |
+| YouTube music / podcasts (6.1) | done on branch `p3-youtube-media`, tested (40 tests, no network) and end to end with real YouTube (search -> choice -> proxied audio); Chrome playback through the voice page and the Data API key path not tried yet |
 | Integration with core `/ws/ui`, `/ws/phone` | waits for P2 |

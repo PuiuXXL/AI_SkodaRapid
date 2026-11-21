@@ -17,10 +17,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from assistant import cabin, music
+from assistant import cabin, media_search, music
 from assistant.contract import Action, Event, State
 from assistant.settings import cfg, get_texts
-from assistant.textutil import fill, word_count
+from assistant.textutil import fill, normalize, word_count
 
 _DEFAULT_NAME = ""  # placeholder used when a name is unknown ("Salut ." is avoided by fill())
 
@@ -180,6 +180,93 @@ def _not_understood(event: Event, state: State) -> list[dict]:
     return [_speak(_t("not_understood"))]
 
 
+#: Words that ask to stop / pause (normalised) and words that name what is playing.
+_STOP_VERBS = frozenset({"opreste", "opresti", "oprim", "stop", "stopeaza", "inchide", "taie", "pauza", "ajunge"})
+_MEDIA_WORDS = frozenset({"muzica", "muzicii", "melodia", "melodie", "piesa", "cantecul", "podcastul", "podcast",
+                          "play", "radio", "redarea", "sunetul"})
+#: "Oprește aici / la OMV / mașina" is about stopping the car, never the music.
+_PLACE_WORDS = frozenset({"aici", "acolo", "la", "masina", "benzinarie", "dreapta"})
+
+
+def stop_media_request(text: str, state: State) -> bool:
+    """ "Oprește muzica" / "oprește ce dă play acum" / just "stop" while something plays.
+
+    A stop word plus a media word, or a stop word alone (at most two words) while media is
+    playing. "Oprește la OMV" (stop the car) is not a media request.
+    """
+    tokens = normalize(text).split()
+    if not _STOP_VERBS & set(tokens) or _PLACE_WORDS & set(tokens):
+        return False
+    return bool(_MEDIA_WORDS & set(tokens)) or (state.media.playing and len(tokens) <= 2)
+
+
+_VOLUME_WORDS = frozenset({"volumul", "volum", "sonorul", "sunetul", "muzica", "muzicii", "melodia", "piesa",
+                           "podcastul"})
+_QUIETER = frozenset({"incet", "incetisor", "jos", "scade", "scazi", "redu", "reduce", "micsoreaza", "coboara"})
+_LOUDER = frozenset({"tare", "sus", "creste", "cresti", "mareste", "maresti", "urca"})
+#: "Vorbește mai încet" / "mergi mai încet" are about speech or speed, not the volume.
+_NOT_VOLUME = frozenset({"vorbeste", "vorbesti", "vorbiti", "vorbesc", "mergi", "merg", "conduci", "conduc", "viteza",
+                         "ruleaza", "citeste", "spune",
+                         "ceva"})  # "pune ceva mai tare" asks for another track (a search), not the volume
+_VOLUME_MAX_WORDS = 7
+
+
+def volume_request(text: str, state: State) -> float | None:
+    """The new volume (0-1) asked by "mai încet", "dă mai tare", "e prea tare", "la jumătate", "volumul la 30".
+
+    Only while media plays or when the volume / music is named, in a short sentence, and not about
+    speech or speed. Relative steps use ``music.volume_step`` ("foarte" doubles it, "prea" inverts the
+    direction: "prea tare" = quieter); the result stays within ``[music.volume_min, 1]``.
+    """
+    tokens = normalize(text).split()
+    words = set(tokens)
+    if not tokens or len(tokens) > _VOLUME_MAX_WORDS or words & _NOT_VOLUME:
+        return None
+    if not (state.media.playing or words & _VOLUME_WORDS):
+        return None
+    low = float(cfg("music", "volume_min", default=0.05))
+    numbers = [int(t) for t in tokens if t.isdigit()]
+    if numbers and words & (_VOLUME_WORDS | {"la", "suta", "procent", "procente"}):
+        value = numbers[0] / (10 if numbers[0] <= 10 else 100)
+    elif "jumatate" in words:
+        value = 0.5
+    elif words & {"maxim", "maximum", "maximul"}:
+        value = 1.0
+    elif words & {"minim", "minimum", "minimul"}:
+        value = low
+    else:
+        down, up = bool(words & _QUIETER), bool(words & _LOUDER)
+        if down == up:
+            return None
+        if "prea" in words:  # "e prea tare" = make it quieter
+            down, up = up, down
+        step = float(cfg("music", "volume_step", default=0.2)) * (2 if "foarte" in words else 1)
+        current = state.media.volume if state.media.volume is not None else music.volume_for(state)
+        value = current - step if down else current + step
+    return round(min(1.0, max(low, value)), 2)
+
+
+def media_command(text: str, state: State) -> bool:
+    """True for a stop / volume command, answered at once without the LLM (``assistant/client.py``)."""
+    return stop_media_request(text, state) or volume_request(text, state) is not None
+
+
+def _speech(event: Event, state: State) -> list[dict]:
+    """Free request without the LLM: stop / volume, a music / podcast request (YouTube search), else 'n-am înțeles'."""
+    ok = _speak(get_texts().get("clips", {}).get("confirm_ok", "Ok."), clip_id="confirm_ok")
+    text = str(event.data.get("text", ""))
+    if stop_media_request(text, state):
+        return [{"type": "stop_media"}, ok]
+    volume = volume_request(text, state)
+    if volume is not None:
+        return [{"type": "set_preference", "key": "volume", "value": volume}, ok]
+    found = media_search.media_request(str(event.data.get("text", "")))
+    if found is not None and cfg("youtube", "enabled", default=True):
+        query, kind = found
+        return [{"type": "search_media", "query": query, "kind": kind}]
+    return _not_understood(event, state)
+
+
 #: Event type -> builder. Unknown events get :func:`_not_understood` for speech
 #: events and an empty answer otherwise.
 BUILDERS: dict[str, Callable[[Event, State], list[dict]]] = {
@@ -195,8 +282,8 @@ BUILDERS: dict[str, Callable[[Event, State], list[dict]]] = {
     "stop_suggested": _stop_suggested,
     "alert_explain": _alert_explain,
     "driver_refused": _driver_refused,
-    "driver_speech": _not_understood,
-    "passenger_speech": _not_understood,
+    "driver_speech": _speech,
+    "passenger_speech": _speech,
 }
 
 

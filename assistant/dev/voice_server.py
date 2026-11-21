@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
+from collections.abc import AsyncIterator
 import json
 import logging
 import sys
@@ -39,7 +41,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from assistant import music
+from assistant import media_search, music
 from assistant.client import AssistantClient
 from assistant.answers import InputEvent
 from assistant.contract import Action, Event, Reminder, State
@@ -80,7 +82,14 @@ def create_app(scene: str | None = None) -> FastAPI:
     Args:
         scene: Fixture name used as the state for every event.
     """
-    app = FastAPI(title="DriveMate P3 voice test")
+    @contextlib.asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        """Load yt-dlp in the background so the first YouTube search is faster."""
+        warm = asyncio.create_task(media_search.warm_up())
+        yield
+        warm.cancel()
+
+    app = FastAPI(title="DriveMate P3 voice test", lifespan=lifespan)
     app.include_router(assistant_router)
     app.mount("/voice", StaticFiles(directory=VOICE_DIR), name="voice")
     SOUNDS_DIR.mkdir(parents=True, exist_ok=True)
@@ -123,11 +132,19 @@ def create_app(scene: str | None = None) -> FastAPI:
                     await send(speak_message(action))
             elif action.type == "play_media" and action.track_id:
                 await send({"type": "media", "action": "play", "url": music.track_url(action.track_id),
-                            "volume": action.volume or music.volume_for(state)})
+                            "volume": action.volume or music.volume_for(state), "loop": music.loops(action.track_id)})
                 state.media.playing, state.media.track_id = True, action.track_id
+                state.media.title = action.title
+                state.media.source = "catalog" if music.loops(action.track_id) else "youtube"
+                if not music.loops(action.track_id):
+                    await log_line(f"  [YouTube] {action.title} -> {music.track_url(action.track_id)}")
             elif action.type == "stop_media":
                 await send({"type": "media", "action": "stop"})
                 state.media.playing = False
+            elif action.type == "set_preference" and action.key == "volume":
+                state.media.volume = float(action.value)
+                await send({"type": "media", "action": "volume", "volume": state.media.volume})
+                await log_line(f"  volum muzică: {state.media.volume:.2f}")
             elif action.type == "read_message":
                 message = next((m for m in state.messages if m.id == action.msg_id), None)
                 if message is not None and message.text:

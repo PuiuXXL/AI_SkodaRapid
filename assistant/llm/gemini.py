@@ -31,7 +31,7 @@ log = logging.getLogger("drivemate.assistant.llm.gemini")
 _ACTION_TYPES = [
     "speak", "ask", "suggest_media", "play_media", "stop_media", "read_message",
     "reply_message", "create_reminder", "complete_reminder", "suggest_stop",
-    "delegate", "show_on_screen", "set_preference", "stay_silent",
+    "delegate", "show_on_screen", "set_preference", "stay_silent", "search_media",
 ]
 
 _STR = {"type": "string"}
@@ -62,6 +62,8 @@ ACTION_FIELDS: dict[str, dict[str, Any]] = {
     "show_on_screen": {"text": _STR, "target": {"type": "string", "enum": ["passenger"]}},
     "set_preference": {"key": _STR, "value": _STR},
     "stay_silent": {"reason": _STR},
+    # P3 addition (YouTube, docs/assistant.md 6.1): resolved by the assistant, never sent to core.
+    "search_media": {"query": _STR, "kind": {"type": "string", "enum": ["music", "podcast"]}},
 }
 assert list(ACTION_FIELDS) == _ACTION_TYPES  # keep both lists in sync with plan section 6
 
