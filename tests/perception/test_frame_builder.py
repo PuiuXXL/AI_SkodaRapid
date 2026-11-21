@@ -141,7 +141,7 @@ def test_stale_results_count_as_no_data(cfg: PerceptionConfig, state: dict[str, 
         publish_ts=1763672400.5,
     )
     assert frame["ts"] == 1763672400.5  # stale driver data: publication time
-    assert frame["driver"]["monitoring_reason"] == "camera_unavailable"
+    assert frame["driver"]["monitoring_reason"] == "no_frames"  # worker up, no fresh frame
     assert frame["passenger"]["present"] is False
     assert frame["occupants"] == []
     for cam in ("driver", "passenger"):

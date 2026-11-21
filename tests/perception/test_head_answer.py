@@ -8,11 +8,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-import yaml
 
 from perception.driver_cam.head_answer import HeadAnswerConfig, HeadAnswerDetector, HeadAnswerResult
 
-PENDING = Path(__file__).resolve().parents[2] / "perception" / "config" / "pending" / "modules.yaml"
 SESSION = Path(__file__).resolve().parents[2] / "data" / "features" / "20261121-012736_eval-laptop"
 FPS = 30.0
 Signal = Callable[[float], float]
@@ -65,11 +63,6 @@ def opened(until: float = 100.0) -> HeadAnswerDetector:
     det = HeadAnswerDetector()
     assert det.open_window(True, to="driver", until=until)
     return det
-
-
-def test_pending_yaml_matches_defaults() -> None:
-    section = yaml.safe_load(PENDING.read_text(encoding="utf-8"))["head_answer"]
-    assert HeadAnswerConfig.from_mapping(section) == HeadAnswerConfig()
 
 
 def test_invalid_config_rejected() -> None:

@@ -53,7 +53,7 @@ def run_filter(t: np.ndarray, x: np.ndarray, valid: np.ndarray, mc: float, beta:
 
 
 def lag_ms(t: np.ndarray, raw: np.ndarray, filt: np.ndarray, mask: np.ndarray, max_ms: float = 400.0) -> float:
-    """Shift (ms) of ``filt`` behind ``raw`` that minimises their squared difference inside ``mask`` (resampled 1 kHz)."""
+    """Shift (ms) of ``filt`` behind ``raw`` minimising their squared difference inside ``mask`` (1 kHz resample)."""
     tt, r, f = t[mask], raw[mask], filt[mask]
     ok = np.isfinite(r) & np.isfinite(f)
     tt, r, f = tt[ok], r[ok], f[ok]
@@ -96,9 +96,7 @@ def main(argv: list[str] | None = None) -> int:
             still |= (t >= w.start + STILL_SKIP_S) & (t < w.end)
         elif w.label == "head_fast":
             fast |= (t >= w.start) & (t < w.end)
-    neutral = still & np.asarray(
-        [s.eyes.state == "OPEN" and not s.speaking and not s.yawn for s in states], dtype=bool
-    )
+    neutral = still & np.asarray([s.eyes.state == "OPEN" and not s.speaking and not s.yawn for s in states], dtype=bool)
     if neutral.sum() < 30 or fast.sum() < 30:
         print("session needs a 'still' and a 'head_fast' window", file=sys.stderr)
         return 1
@@ -145,8 +143,15 @@ def main(argv: list[str] | None = None) -> int:
         y = run_filter(t, x, valid, mc_best, beta_best, dc)
         j, lg = neutral_jitter(t.tolist(), y.tolist(), neutral.tolist()), lag_ms(t, x, y, fast)
         proposal[axis] = (mc_best, beta_best)
-        lines += ["", f"**Proposed {axis}:** min_cutoff {mc_best}, beta {beta_best} -> jitter {j:.3f} deg, lag {lg:.0f} ms", ""]
-        print(f"{axis}: raw jitter {raw_jitter:.3f}; proposed mc={mc_best} beta={beta_best}: jitter {j:.3f}, lag {lg:.0f} ms")
+        lines += [
+            "",
+            f"**Proposed {axis}:** min_cutoff {mc_best}, beta {beta_best} -> jitter {j:.3f} deg, lag {lg:.0f} ms",
+            "",
+        ]
+        print(
+            f"{axis}: raw jitter {raw_jitter:.3f}; proposed mc={mc_best} beta={beta_best}: "
+            f"jitter {j:.3f}, lag {lg:.0f} ms"
+        )
     lines += ["## Proposed yaml", "", "```yaml", "  one_euro_head:"]
     lines += [f"    {a}: {{ min_cutoff: {mc}, beta: {b}, d_cutoff: {dc} }}" for a, (mc, b) in proposal.items()]
     lines += ["```", ""]

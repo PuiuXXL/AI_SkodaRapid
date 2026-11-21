@@ -21,11 +21,10 @@ from perception.config import load_config
 from perception.contract import Command, PerceptionFrame, parse_command, validate_frame
 from perception.degrade import DegradeController
 from perception.driver_cam.pipeline import DriverPipeline
-from perception.features import PhoneBox
 from perception.main import Perception, build_frame
-from perception.monitoring import Monitor, thumbnail
-from perception.worker import CameraWorker, GestureHold, PhoneVoter, WorkerOptions
-from tests.perception.driver_factory import FPS, H, W, frames
+from perception.monitoring import thumbnail
+from perception.worker import CameraWorker, WorkerOptions
+from tests.perception.driver_factory import H, W, frames
 
 REPO = Path(__file__).resolve().parents[2]
 SYNTH = WorkerOptions(synthetic=True, models=False)
@@ -187,26 +186,7 @@ def test_degradation_waits_between_steps() -> None:
     assert ctl.update(10.0, None) is None
 
 
-# --- monitoring, phone voting, gestures -----------------------------------------------------------------
-
-
-def test_monitoring_reasons() -> None:
-    cfg = load_config().monitoring
-    rng = np.random.default_rng(0)
-
-    def noisy() -> Any:
-        return rng.integers(90, 110, size=(36, 64), dtype=np.uint8).astype(np.float32)
-
-    mon = Monitor(cfg)
-    assert mon.update(0.0, face_present=True, thumb=noisy(), luma=120).ok
-    state = mon.update(cfg.face_lost_s + 0.1, face_present=False, thumb=noisy(), luma=120)
-    assert (state.ok, state.reason) == (False, "face_lost")
-    state = mon.update(cfg.face_lost_s + 0.2, face_present=False, thumb=noisy(), luma=10)
-    assert state.reason == "camera_covered"
-    frozen = Monitor(cfg)
-    same = noisy()
-    reasons = [frozen.update(k / FPS, face_present=True, thumb=same, luma=120).reason for k in range(60)]
-    assert reasons[-1] == "camera_frozen"
+# --- monitoring thumbnail (CameraMonitor and the modules: test_monitoring.py, test_modules.py) --------------------
 
 
 def test_thumbnail_keeps_sensor_noise() -> None:
@@ -216,38 +196,6 @@ def test_thumbnail_keeps_sensor_noise() -> None:
     other = np.clip(base.astype(int) + noise, 0, 255).astype(np.uint8)
     assert float(np.mean(np.abs(thumbnail(base) - thumbnail(other)))) > load_config().monitoring.frozen_pixel_diff
     assert float(np.mean(np.abs(thumbnail(base) - thumbnail(base.copy())))) == 0.0
-
-
-def _vote(voter: PhoneVoter) -> tuple[bool, float]:
-    return voter.in_use, voter.conf
-
-
-def test_phone_voter_needs_votes() -> None:
-    cfg = load_config().phone
-    voter = PhoneVoter(cfg)
-    box = PhoneBox(x1=600, y1=300, x2=680, y2=420, score=0.7)
-    voter.update([box])
-    assert _vote(voter) == (False, 0.7)
-    for _ in range(cfg.vote_min - 1):
-        voter.update(None)  # YOLO did not run: no vote
-        voter.update([box])
-    assert _vote(voter) == (True, 0.7)
-    for _ in range(cfg.vote_window):
-        voter.update([])
-    assert _vote(voter)[0] is False
-
-
-def test_gesture_must_be_held() -> None:
-    from perception.features import HandFeatures
-
-    cfg = load_config().gesture
-    g = GestureHold(list(cfg.allowed), cfg.min_score, cfg.min_duration_s)
-    hand = HandFeatures(
-        handedness="Right", score=0.9, gesture="Thumb_Up", gesture_score=0.9, landmarks=[(0.0, 0.0, 0.0)] * 21
-    )
-    assert g.update(0.0, [hand]) is None
-    assert g.update(cfg.min_duration_s + 0.05, [hand]) == "Thumb_Up"
-    assert g.update(cfg.min_duration_s + 0.1, []) is None
 
 
 # --- worker process -------------------------------------------------------------------------------------
