@@ -59,7 +59,9 @@ export function RouteMap({simulation,disabled,pointsOpen,onOpenLayers}: {simulat
       terrain:{url:"https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",attribution:'Tiles &copy; Esri · <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer">Surse și atribuiri</a>'}
     };
     const source=sources[tileKind];
-    const tiles=L.tileLayer(source.url,{attribution:source.attribution,maxZoom:19});
+    // OSM requires Referer; override the page's no-referrer policy only for its tiles.
+    const tiles=L.tileLayer(source.url,{attribution:source.attribution,maxZoom:19,
+      referrerPolicy:tileKind==="streets"?"strict-origin-when-cross-origin":false});
     tiles.on("tileerror",()=>setMapError("Unele imagini ale hărții nu s-au încărcat. Verifică conexiunea sau alege alt strat."));
     tiles.addTo(view);
     return ()=>{tiles.off();tiles.remove()};

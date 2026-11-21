@@ -1,0 +1,17 @@
+.vision-columns.data-comparison { margin:0; padding:14px; background:var(--ui-inset); border:1px solid var(--line); border-radius:12px; min-width:0 }
+.data-comparison figcaption { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px; font-size:12px; font-weight:600; color:var(--text) }
+.data-comparison figcaption small { font-size:10px; font-weight:400; color:var(--muted) }
+.comparison-bars { display:grid; gap:14px; margin:16px 0 8px }
+.comparison-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; font-size:12px; color:var(--muted) }
+.comparison-row output { color:var(--text); font-variant-numeric:tabular-nums; font-weight:550 }
+.comparison-track { grid-column:1/-1; height:8px; background:repeating-linear-gradient(to right,var(--line) 0,var(--line) 1px,transparent 1px,transparent 25%),var(--ui-surface-soft); border-radius:3px; overflow:hidden }
+.comparison-track i { display:block; height:100%; min-width:2px; background:var(--accent); border-radius:3px }
+.comparison-row:nth-child(even) .comparison-track i { background:var(--ui-series-secondary) }
+.comparison-axis { display:flex; justify-content:space-between; color:var(--muted); font-size:10px; font-variant-numeric:tabular-nums }
+.timeline-time-axis { display:flex; justify-content:space-between; gap:10px; font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums }
+.timeline-empty { fill:var(--muted); font-size:11px; }
+.response-comparison { min-width:0 }
+.score-reading-track { height:5px; width:100%; overflow:hidden; border-radius:4px; background:var(--line) }
+.score-reading-track i { display:block; height:100%; background:var(--accent); border-radius:4px }
+.mini-scores > div:first-child .score-reading-track i { background:var(--series-fatigue) }
+.mini-scores > div:last-child .score-reading-track i { background:var(--series-disengagement) }

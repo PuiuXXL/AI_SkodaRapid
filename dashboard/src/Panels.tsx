@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { StateProps, RowsData, Reading } from "./types";
-import React,{useId,useState} from "react";
+import React,{createContext,useContext,useId,useState} from "react";
 import {motion,useReducedMotion} from "motion/react";
 import {DataBars} from "./DataBars";
 export function fmt(value: Reading | undefined, unit="", factor=1, digits=1){
@@ -11,8 +11,11 @@ export const time=(value: Reading | undefined)=>Number.isFinite(value)?new Date(
 export const words=(v: unknown)=> typeof v==="string"?v.replaceAll("_"," "):typeof v==="number"?String(v):"—";
 export function Metrics({items}: {items: RowsData}){return <div className="scores">{items.map(([k,v])=><span key={k}>{k}<b>{v??"—"}</b></span>)}</div>}
 export function Rows({items}: {items: RowsData}){return <dl>{items.map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v??"—"}</dd></div>)}</dl>}
+export const InlineDetails=createContext(false);
 export function Detail({title,children}: {title: string; children: ReactNode}){
  const [open,setOpen]=useState(false), id=useId(), reduced=useReducedMotion();
+ const inline=useContext(InlineDetails);
+ if(inline)return <div className="inline-detail"><h3>{title}</h3>{children}</div>;
  return <div className="disclosure">
    <button className="disclosure-trigger" aria-expanded={open} aria-controls={id} onClick={()=>setOpen(!open)}>
      {title}<span aria-hidden="true">+</span>
@@ -72,7 +75,7 @@ export function Cabin({s}: StateProps){
  <DataBars title="Telefon și audio" maximum={100} items={[{label:"Baterie",value:s.phone?.battery,unit:"%"},{label:"Volum",value:typeof s.media?.volume==="number"?s.media.volume*100:s.media?.volume,unit:"%"}]}/>
  <Detail title="Ocupanți și conversație">{people?.map((p,i)=><p key={p.id??i}><strong>{p.profile??"Profil necunoscut"}</strong> · {words(p.seat)} · {words(p.source)} · {words(p.role)}</p>)}
  <Rows items={[["Pasager prezent",yes(s.passenger?.present)],["Treaz",yes(s.passenger?.awake)],["Vorbește",yes(s.passenger?.speaking)],["Telefon în mână",yes(s.passenger?.holding_phone)],["Conversație",yes(s.conversation)],["Gest pasager",words(s.passenger?.gesture)]]}/></Detail>
- <Detail title="Mesaje, muzică și mementouri"><Rows items={[["Baterie telefon",fmt(s.phone?.battery,"%")],["Contact de încredere",s.safe_contact?.name],["Acord notificare",yes(s.safe_contact?.consent)],["Ultima notificare",time(s.safe_contact?.notified_ts)],["Redare activă",yes(s.media?.playing)],["Piesă",s.media?.title],["Volum",fmt(s.media?.volume,"%",100)]]}/>
+ <Detail title="Mesaje, muzică și mementouri"><Rows items={[["Contact de încredere",s.safe_contact?.name],["Acord notificare",yes(s.safe_contact?.consent)],["Ultima notificare",time(s.safe_contact?.notified_ts)],["Redare activă",yes(s.media?.playing)],["Piesă",s.media?.title]]}/>
  <h3>Mesaje</h3>{msg?.length?msg.map((m,i)=><p key={m.id??i}>{m.from} · {m.app} · {words(m.state)} {m.deferred_reason&&"· "+words(m.deferred_reason)}</p>):<p>{msg?"Niciun mesaj":"—"}</p>}
  <h3>Mementouri</h3>{rem?.length?rem.map((r,i)=><p key={r.id??i}>{r.task} · {words(r.state)} · {words(r.trigger?.category)}</p>):<p>{rem?"Niciun memento":"—"}</p>}</Detail></Panel>
 }

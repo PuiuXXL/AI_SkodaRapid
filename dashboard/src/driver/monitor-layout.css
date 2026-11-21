@@ -16,36 +16,122 @@
 .monitor-cameras,.monitor-overview { margin-bottom:18px }
 .monitor-page.has-camera-dock { padding-bottom:140px }
 .monitor-page .perf { position:static; margin-block:18px }
-.instrument-nav { display:flex; overflow-x:auto; gap:6px; padding:4px 0 12px }
-.instrument-nav button { display:inline-flex; align-items:center; justify-content:center; gap:8px; flex:none; min-height:44px; padding:0 14px; background:var(--ui-surface-1); border:1px solid var(--line); border-radius:12px; color:var(--text) }
-.instrument-scene { --stage-height:100svh; position:relative }
-.instrument-stage { position:sticky; top:0; height:var(--stage-height); box-sizing:border-box; padding:14px 0 140px; display:grid; grid-template-rows:auto minmax(0,1fr); }
-.instrument-nav button[aria-current=step] { border-color:var(--accent); background:var(--ui-accent-dim) }
-.instrument-rail { display:grid; grid-auto-flow:column; grid-auto-columns:100%; grid-template-rows:minmax(0,1fr); overflow:hidden; min-height:0; }
-.instrument-card { box-sizing:border-box; height:100%; min-width:0; display:grid; grid-template-rows:auto minmax(0,1fr); border-radius:var(--radius); background:var(--ui-surface-1); border:1px solid var(--line); }
-.instrument-card:focus-visible,.instrument-nav button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px }
-.instrument-label { color:var(--text); border-bottom:1px solid var(--line); font-size:14px }
-.instrument-label svg { box-sizing:content-box; padding:8px; border-radius:9px; background:var(--ui-accent-dim) }
-.instrument-open { margin-left:auto; min-height:40px; padding:0 14px; border:1px solid var(--line); border-radius:10px; color:var(--text); background:var(--ui-surface-1) }
-.instrument-card .instrument-summary { display:grid; align-content:center; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(12px,3vw,44px); margin:0; padding:clamp(16px,4vw,60px) }
-.instrument-card .instrument-summary div { display:grid; align-content:start; justify-content:stretch; gap:8px; padding:14px 0 0; border:0; border-top:1px solid var(--line); min-width:0 }
-.instrument-summary dt { color:var(--muted); font-size:clamp(13px,1.3vw,18px) }
-.instrument-card .instrument-summary dd { margin:0; text-align:left; font-size:clamp(18px,3vw,42px); font-variant-numeric:tabular-nums; line-height:1.15; color:var(--text); overflow-wrap:anywhere }
-.instrument-dialog { width:min(760px,92vw); max-height:85svh; box-sizing:border-box; padding:0; overflow:auto; overscroll-behavior:contain; border:1px solid var(--line); border-radius:var(--radius); background:var(--ui-surface-1); color:var(--text) }
-.instrument-dialog::backdrop { background:var(--ui-shadow-color); backdrop-filter:blur(5px) }
-.instrument-dialog > header { display:flex; align-items:center; justify-content:space-between; position:sticky; z-index:2; top:0; padding:10px 18px; background:var(--ui-surface-1); border-bottom:1px solid var(--line) }
-.instrument-dialog > header button { min-height:40px }
-@media(max-width:700px) and (min-height:500px) {
-  .instrument-card .instrument-summary { grid-template-columns:1fr; gap:clamp(8px,2svh,20px) }
-  .instrument-card .instrument-summary div { grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:baseline }
-  .instrument-card .instrument-summary dd { text-align:right; font-size:clamp(18px,5vw,28px) }
+
+/* Sequential cover: the incoming card covers the stationary previous card. */
+.instrument-scene { position:relative; margin-top:24px }
+.instrument-stage { box-sizing:border-box; padding:6px 0 }
+.is-stacked .instrument-stage { position:sticky; top:0; display:grid; grid-template-rows:minmax(0,1fr) 52px; gap:12px; overflow:hidden }
+.instrument-rail { position:relative; min-width:0; display:grid; gap:20px }
+.is-stacked .instrument-rail { display:block; min-height:0 }
+.instrument-card { box-sizing:border-box; min-width:0; background:var(--ui-surface-1); border:1px solid var(--ui-stroke-strong); border-radius:var(--ui-radius-lg); box-shadow:var(--ui-shadow); overflow:visible }
+.is-stacked .instrument-card { position:absolute; inset:0; overflow:hidden; will-change:transform }
+.instrument-label { padding:10px 22px; border-bottom:1px solid var(--line); gap:14px; background:var(--ui-surface-soft); border-radius:var(--ui-radius-lg) var(--ui-radius-lg) 0 0 }
+.instrument-icon { display:grid; place-items:center; width:48px; height:48px; flex:none; border:1px solid var(--ui-accent-stroke); background:var(--ui-accent-dim); border-radius:14px; color:var(--accent) }
+.instrument-icon svg { width:27px; height:27px; padding:0; background:none; border-radius:0; stroke-width:1.4 }
+.instrument-label small { font-size:10px; letter-spacing:.12em; color:var(--muted) }
+.driver-main .instrument-label h2 { margin:2px 0; font-size:24px; letter-spacing:-.04em }
+.driver-main .instrument-label p { margin:0; font-size:12px; font-weight:400; line-height:1.4 }
+.instrument-body { padding:20px 22px; min-width:0 }
+.driver-main .instrument-body > section { margin:0; padding:0; border:0; background:none; box-shadow:none }
+.instrument-body > section > :is(h2,small) { display:none }
+.instrument-body :is(p,dl) { margin:8px 0; font-size:12px; line-height:1.5 }
+.instrument-body dl > div { display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:6px 0; border-bottom:1px solid var(--line) }
+.instrument-body dt { font-size:12px; color:var(--muted) }
+.instrument-body dd { margin:0; text-align:right; font-size:12px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; max-width:65% }
+.instrument-body :is(h3,.inline-detail h3),.driver-main .score-context h3 { margin:0 0 10px; font-size:13px; color:var(--text); font-weight:600 }
+.instrument-body .inline-detail { padding:14px; border:1px solid var(--line); border-radius:12px; background:var(--ui-surface-soft); min-width:0 }
+.instrument-body .inline-detail h3:not(:first-child) { margin-top:14px }
+.instrument-body .scores { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0 0 14px }
+.instrument-body .scores > span { padding:10px 12px; font-size:11px; min-width:0 }
+.instrument-body .scores b { font-size:20px; margin-top:5px; font-variant-numeric:tabular-nums }
+.instrument-body > section:not(.score-history):not(.event-journal) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start }
+.instrument-body > section > .scores { grid-column:1/-1; margin:0 }
+.instrument-body > section > p { grid-column:1/-1; margin:0 }
+.instrument-body #performance { grid-template-columns:repeat(2,minmax(0,1fr)) }
+.instrument-body #performance .inline-detail dl { columns:2; column-gap:20px }
+.instrument-body #performance .inline-detail dl > div { break-inside:avoid }
+.instrument-body #performance .inline-detail dl > div { padding-block:4px }
+.instrument-body #performance .inline-detail { grid-column:1/-1 }
+.instrument-body #scorecard > dl { grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:24px }
+.instrument-body #cabin .inline-detail:last-child { grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:24px }
+.instrument-body #cabin .inline-detail:last-child > h3:first-child { grid-column:1/-1 }
+.instrument-body #cabin .inline-detail:last-child > dl { grid-row:span 8 }
+.instrument-body #eyes > .ocular { grid-row:span 2; padding:14px; margin:0 }
+.instrument-body #eyes > .scores { grid-column:auto; grid-template-columns:1fr }
+.instrument-body #eyes > .inline-detail { grid-column:1/-1 }
+.instrument-body #eyes .inline-detail dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); column-gap:20px }
+.instrument-body .ocular .optic-art { max-width:240px; margin:auto }
+.instrument-body #reaction { grid-template-columns:repeat(3,minmax(0,1fr)) }
+.instrument-body #reaction > .inline-detail { grid-column:1/-1 }
+.instrument-body #reaction .inline-detail dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); column-gap:20px }
+.instrument-body .response { grid-template-columns:1fr auto; gap:6px; margin:0; padding:14px; border:1px solid var(--line); border-radius:12px; background:var(--ui-inset) }
+.instrument-body .response output { grid-column:1/-1; color:var(--muted) }
+.response-comparison { grid-column:1/-1; display:grid; gap:8px; margin-top:12px }
+.response-comparison > span { display:grid; gap:4px; font-size:10px; color:var(--muted) }
+.response-comparison i { height:5px; border-radius:3px; background:var(--line); overflow:hidden }
+.response-comparison b { display:block; height:100%; background:var(--accent); border-radius:3px }
+.response-comparison > span:last-child b { background:var(--ui-series-secondary) }
+.instrument-controls { display:flex; align-items:center; gap:10px; padding:0 4px; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums }
+.instrument-controls strong { color:var(--text); font-weight:500; margin-left:10px }
+.instrument-progress { display:flex; gap:5px; margin:auto; width:min(28%,180px) }
+.instrument-progress i { height:3px; flex:1; background:var(--line); border-radius:4px }
+.instrument-progress i[data-active=true] { background:var(--accent) }
+.instrument-controls button,.journal-pagination button { width:44px; height:44px; background:var(--ui-surface-1); border:1px solid var(--ui-stroke-strong); border-radius:12px; color:var(--text); font-size:20px }
+.instrument-controls button:disabled,.journal-pagination button:disabled { opacity:.4 }
+.instrument-controls button:focus-visible,.instrument-body :is(button,input):focus-visible { outline:2px solid var(--accent); outline-offset:3px }
+.instrument-body:has(> .score-history) { display:grid; grid-template-columns:minmax(0,2fr) minmax(180px,1fr); gap:24px }
+.instrument-body .score-history .history-values { margin:10px 0; justify-content:space-between; gap:10px }
+.instrument-body .history-values strong { font-size:26px }
+.instrument-body .vision-timelines svg { height:54px }
+.instrument-body .vision-timelines figure { grid-template-columns:65px minmax(0,1fr); margin:6px 0 }
+.instrument-body .history-selector { grid-template-columns:minmax(0,1fr) auto; margin:10px 0 0; font-size:11px }
+.instrument-body .history-selector input { grid-row:2; grid-column:1; width:100%; margin:0 }
+.instrument-body .history-selector { gap:4px }
+.instrument-body .history-selector output { grid-column:2; grid-row:1 }
+.instrument-body .history-selector button { grid-column:2; grid-row:2; min-height:44px; font-size:11px }
+.score-context { padding:14px; background:var(--ui-inset); border:1px solid var(--line); border-radius:12px }
+.instrument-body .event-journal { display:grid; grid-template-columns:1fr 1fr; gap:24px }
+.instrument-body .journal-entries { max-height:none; overflow:visible; display:grid; gap:6px }
+.instrument-body .journal-entries button { display:grid; grid-template-columns:65px 1fr; gap:10px; text-align:left; padding:12px; min-height:56px; border:1px solid var(--line); border-radius:10px; background:var(--ui-inset); font-size:12px }
+.instrument-body .journal-detail { margin:0; padding:16px; border:1px solid var(--line); border-top:2px solid var(--accent); border-radius:12px; background:var(--ui-surface-soft) }
+.journal-pagination { display:flex; align-items:center; justify-content:space-between; margin-top:10px; font-size:12px; color:var(--muted) }
+.monitor-overview .inline-detail { border-top:1px solid var(--line); margin-top:16px; padding-top:16px }
+.monitor-overview .inline-detail dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0 24px }
+.monitor-overview .inline-detail dl > div { display:block; padding:8px 0 }
+.monitor-overview .inline-detail dd { text-align:left; margin:4px 0 0; font-size:13px; overflow-wrap:anywhere }
+@media(min-width:1100px) {
+  .instrument-body { padding:16px 18px }
+  .instrument-body .data-comparison { padding:10px }
+  .instrument-body .comparison-bars { gap:8px; margin:10px 0 6px }
+  .instrument-body .comparison-row { gap:4px }
+  .instrument-body .comparison-track { height:6px }
+  .instrument-body .vision-timelines svg { height:48px }
+  .instrument-body .vision-timelines figure { margin:4px 0 }
+  .instrument-body #performance,.instrument-body #cabin,.instrument-body #scorecard { grid-template-columns:repeat(3,minmax(0,1fr)) }
+  .instrument-body #performance > .scores { grid-column:1; grid-row:1 }
+  .instrument-body #performance > .data-comparison { grid-column:1 }
+  .instrument-body #performance > .inline-detail { grid-column:2; grid-row:1/4 }
+  .instrument-body #performance > .inline-detail:last-child { grid-column:3 }
+  .instrument-body #performance .inline-detail dl { columns:1 }
+  .instrument-body #cabin > .scores { grid-column:1; grid-row:1 }
+  .instrument-body #cabin > .data-comparison { grid-column:1; grid-row:2 }
+  .instrument-body #cabin > .inline-detail { grid-column:2; grid-row:1/3 }
+  .instrument-body #cabin > .inline-detail:last-child { grid-column:3; display:block }
+  .instrument-body #cabin > .inline-detail:last-child h3:not(:first-child) { margin-top:12px }
+  .instrument-body #scorecard > .scores { grid-column:1/3 }
+  .instrument-body #scorecard > dl { grid-column:3; grid-row:1/3; display:block; margin:0; padding:14px; border:1px solid var(--line); border-radius:12px }
+  .instrument-body #scorecard > .data-comparison { grid-row:2 }
+  .instrument-body #eyes { grid-template-columns:1fr 2fr }
+  .instrument-body #eyes > .ocular { grid-column:1; grid-row:1 }
+  .instrument-body #eyes > .scores { grid-column:1; grid-row:2; grid-template-columns:repeat(3,minmax(0,1fr)) }
+  .instrument-body #eyes > .data-comparison { grid-column:1; grid-row:3 }
+  .instrument-body #eyes > .inline-detail { grid-column:2; grid-row:1/4 }
+  .instrument-body #eyes .inline-detail dl { grid-template-columns:repeat(2,minmax(0,1fr)) }
+  .monitor-page:has(.is-stacked) .camera-pair.is-docked { top:14px; bottom:auto; width:220px; height:66px }
+  .instrument-label { padding-right:250px }
 }
-@media(max-height:499px) {
-  .instrument-stage { padding-block:2px 80px }
-  .monitor-page .camera-pair.is-docked { height:68px }
-  .instrument-label { padding-block:3px }
-  .instrument-card .instrument-summary { padding:8px 12px; gap:8px }
-  .instrument-card .instrument-summary div { padding:4px 0 0 }
+@media(max-width:1100px) {
+  .instrument-body #eyes .inline-detail dl,.instrument-body #reaction .inline-detail dl,.monitor-overview .inline-detail dl { grid-template-columns:repeat(2,minmax(0,1fr)) }
 }
 @media(max-width:767px) {
   .monitor-page .camera-anchor { height:clamp(155px,38vw,225px) }
@@ -53,7 +139,22 @@
   .seat-feed figcaption { padding:6px 8px; font-size:13px }
   .seat-feed .standby-info { display:flex; flex-direction:column; gap:4px }
   .seat-feed .standby-info strong,.seat-feed .optical-field { display:none }
-  .driver-main .camera-pair.is-docked { width:100%; right:0; bottom:0; height:calc(100px + env(safe-area-inset-bottom)); padding-bottom:calc(4px + env(safe-area-inset-bottom)) }
+  .driver-main .camera-pair.is-docked { width:min(280px,70%); height:80px; bottom:8px; right:8px }
   .camera-pair.is-docked .standby-info { display:none }
-  .instrument-nav button { padding-inline:12px }
+  .instrument-label { padding:14px; gap:10px }
+  .instrument-icon { width:40px; height:40px; border-radius:11px }
+  .instrument-icon svg { width:23px; height:23px }
+  .driver-main .instrument-label h2 { font-size:21px }
+  .instrument-body { padding:16px 14px }
+  .instrument-body:has(> .score-history),.instrument-body .event-journal { grid-template-columns:1fr }
+  .instrument-body #performance .inline-detail dl { columns:1 }
+  .instrument-body > section:not(.score-history):not(.event-journal),.instrument-body #performance,.instrument-body #reaction { grid-template-columns:1fr }
+  .instrument-body #eyes > .scores { grid-template-columns:repeat(3,minmax(0,1fr)) }
+  .instrument-body #eyes .inline-detail dl,.instrument-body #reaction .inline-detail dl,.instrument-body #scorecard > dl { grid-template-columns:1fr }
+  .instrument-body #cabin .inline-detail:last-child { display:block }
+  .instrument-body #cabin .inline-detail:last-child > h3 { margin-top:16px }
+  .instrument-body .vision-timelines figure { grid-template-columns:1fr; gap:2px }
+  .instrument-body .scores b { font-size:17px }
+  .instrument-body .scores > span { padding:8px }
+  .monitor-overview .inline-detail dl { grid-template-columns:1fr }
 }

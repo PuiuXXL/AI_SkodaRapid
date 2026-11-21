@@ -92,7 +92,12 @@ export function Reaction({s}: StateProps){
  const r=s.driver?.reaction??{},input=s.interaction?.last_input;
  return <Panel id="reaction" label="INPUT ȘOFER" title="Reacție"><p>Ultima reacție / referința personală</p>{Object.entries({visual:"Vizual",verbal:"Verbal",gesture:"Gest"}).map(([key,label])=>{
  const ms=r[`${key}_ms` as "visual_ms" | "verbal_ms" | "gesture_ms"],base=r.baseline_ms?.[key as "visual" | "verbal" | "gesture"],ratio=Number.isFinite(ms)&&typeof base === "number"&&base>0?ms!/base:null;
- return <div className="response" key={key}><span>{label}</span><strong className="ratio-reading">{ratio===null?"—":fmt(ratio,"×",1,2)}</strong><output>{fmt(ms," ms")} / {fmt(base," ms")}</output></div>;
+ const scale=Math.max(1,typeof ms==="number"&&Number.isFinite(ms)?ms:0,typeof base==="number"&&Number.isFinite(base)?base:0);
+ return <div className="response" key={key}><span>{label}</span><strong className="ratio-reading">{ratio===null?"—":fmt(ratio,"×",1,2)}</strong><output>{fmt(ms," ms")} / {fmt(base," ms")}</output>
+ <div className="response-comparison" aria-label={label+" · răspuns / referință"}>
+   <span>Răspuns<i>{Number.isFinite(ms)&&<b style={{width:Math.max(0,ms!)/scale*100+"%"}}/>}</i></span>
+   <span>Referință<i>{Number.isFinite(base)&&<b style={{width:Math.max(0,base!)/scale*100+"%"}}/>}</i></span>
+ </div></div>;
  })}<Detail title="Răspunsuri și canale"><Rows items={[["Ultimul canal",words(input?.channel)],["Răspuns",words(input?.value)],["Ora",time(input?.ts)],["Gest",words(s.driver?.gesture)],["Răspuns din cap",words(s.driver?.head?.answer)],["Răspunsuri ratate",fmt(r.missed)],["Rată răspuns · 10 min",fmt(r.response_rate_10min,"%",100)]]}/></Detail></Panel>
 }
 type View = "overview" | "history" | "signals" | "reaction" | "cabin" | "report" | "system" | "assistant" | "events";

@@ -8,8 +8,36 @@ import {Assistant} from "../src/Assistant";
 import {withState, appendEvent} from "../src/session-state";
 import type {DashboardState, SessionData} from "../src/types";
 import {validCoordinate,distanceKm,locateOnRoute} from "../src/route-simulation";
+import {MonitorPage} from "../src/driver/MonitorPage";
+import {DriverContext} from "../src/driver/context";
+import type {DriverContextValue} from "../src/driver/context";
+import {EventJournal} from "../src/driver/EventJournal";
+import {ScoreHistory} from "../src/ScoreHistory";
 
 const empty: SessionData = {state:{},history:[],log:[],socket:null,cue:0,speech:"",connection:"Test"};
+
+test("dashboard exposes every instrument and its details without tabs or a details dialog",()=>{
+ const session={data:empty,live:false,fresh:true,setLive:()=>{}} as DriverContextValue;
+ const html=renderToStaticMarkup(<DriverContext.Provider value={session}><MonitorPage/></DriverContext.Provider>);
+ for(const label of ["Scoruri","Privire","Reacție","Cabină","Fișă","Sistem","Jurnal","Calitatea semnalului ocular","Modele · p50 / p95","Mesaje, muzică și mementouri","Răspunsuri și canale"])assert(html.includes(label),label);
+ assert.doesNotMatch(html,/<dialog|Alege instrumentul|Detalii ↗|NaN|Infinity|undefined/);
+ assert.equal((html.match(/class="instrument-card"/g)??[]).length,7);
+});
+
+test("dashboard journal paginates long sessions and keeps event explanations visible",()=>{
+ const events=Array.from({length:20},(_,i)=>({type:"event",ts:1000-i,text:`Eveniment ${i}`,explanation:`Explicație ${i}`}));
+ const html=renderToStaticMarkup(<EventJournal events={events} pageSize={4}/>);
+ assert.equal((html.match(/aria-pressed=/g)??[]).length,4);
+ assert(html.includes("Explicație 0"));assert(html.includes("1 / 5"));
+ assert.doesNotMatch(html,/Eveniment 4</);
+});
+
+test("score charts retain separate traces across missing telemetry and label empty series",()=>{
+ const html=renderToStaticMarkup(<ScoreHistory points={[{attention:.5,ts:1},null,{attention:.8,ts:3}]}/>);
+ assert.equal((html.match(/vector-effect="non-scaling-stroke"/g)??[]).length,2);
+ assert(html.includes("În așteptarea datelor"));
+ assert.doesNotMatch(html,/NaN|Infinity/);
+});
 
 test("route points accept worldwide coordinates while rejecting invalid geographic values",()=>{
  assert(validCoordinate({lat:46.77,lon:23.59}));
