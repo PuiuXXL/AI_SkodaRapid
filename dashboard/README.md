@@ -41,6 +41,13 @@ npm run build
 
 Tests cover rendering with partial data, zero values, invalid reaction baselines, unreliable eyes, sequence gaps, and bounded session buffers. They do not replace browser layout checks or live P1–P3 integration.
 
+## Visual layer and backend actions (2026-11-21)
+
+- `src/fluid.css` is loaded last (`src/main.tsx`): neutral graphite / silver gradients, tonal surfaces without outlines, light theme by default (AGENTS.md) and dark selectable. Older stylesheets stay underneath; new components use the `fx-` classes.
+- `src/charts.tsx`: SVG chart primitives (area sparkline, mini columns, half gauge, ring, ranked bars, share bar, p50-p95 ranges, heat strip, head-pose dial). A missing reading is a gap or a dash, never a drawn value. `src/telemetry.ts` keeps about one minute of the state stream (2 Hz) for them.
+- **Live commands.** In Live the buttons send the contract's messages on `/ws/ui` (`liveMessage` in `src/driver/session.ts`): `UiCommand` for the 14 `UI_COMMANDS` and `UiSpeech` for typed requests and answers. The Control card of the Dashboard exposes all of them. `tests/contract/fixtures/dashboard_ui_messages.json` is checked on both sides (`npm test` here, `tests/contract/test_dashboard_commands.py` against core).
+- The instrument cards are a scroll-driven stack (`InstrumentStack.tsx`): the stage is one viewport tall, the page settles on the nearest card (`scrollend`), and the docked camera preview sits in reserved slots (`data-camera-slot`) instead of floating over content.
+
 ## Structure
 
 `src/main.tsx` mounts the app; `App.tsx` owns the monitor and section navigation. `Panels.tsx`, `Overview.tsx`, and `Assistant.tsx` render the modules. `session.ts` owns transport and simulation; `session-state.ts` owns buffer updates. `types.ts` describes optional consumer fields without changing the shared backend contract. `design.css` is the active stylesheet; `monitor.css` retains the earlier design.

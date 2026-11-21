@@ -1,6 +1,7 @@
 import React, {useId, useState} from "react";
 import type {SessionData} from "./types";
 import {fmt,time} from "./Panels";
+import {smoothPath} from "./charts";
 
 const series = [
   {key:"attention",label:"Atenție"},
@@ -37,7 +38,7 @@ export function ScoreHistory({points,sectionId,eventTime}: {points: SessionData[
           {[8,32,56].map((y,i)=><g key={y}><text x="2" y={y+3} fill="var(--muted)" fontSize="9">{100-i*50}</text><line x1="36" x2="892" y1={y} y2={y} stroke="var(--line)" strokeDasharray="4 5"/></g>)}
           {!traces.length&&<text x="450" y="30" textAnchor="middle" className="timeline-empty">În așteptarea datelor</text>}
           {traces.map((segment,i)=>{
-            const line=segment.map((p,j)=>(j?"L":"M")+p.x+" "+p.y).join(" ");
+            const line=smoothPath(segment.map(p=>[p.x,p.y]));
             return <g key={i}><path d={line+" L"+segment.at(-1)!.x+" 56 L"+segment[0].x+" 56 Z"} fill={"url(#"+id+key+")"}/>
               <path d={line} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray={key==="fatigue"?"6 3":key==="disengagement"?"2 3":undefined} vectorEffect="non-scaling-stroke"/>
               {segment.length===1&&<circle cx={segment[0].x} cy={segment[0].y} r="3" fill="currentColor"/>}</g>;

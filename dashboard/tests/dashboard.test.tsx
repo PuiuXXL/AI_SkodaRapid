@@ -19,9 +19,9 @@ const empty: SessionData = {state:{},history:[],log:[],socket:null,cue:0,speech:
 test("dashboard exposes every instrument and its details without tabs or a details dialog",()=>{
  const session={data:empty,live:false,fresh:true,setLive:()=>{}} as DriverContextValue;
  const html=renderToStaticMarkup(<DriverContext.Provider value={session}><MonitorPage/></DriverContext.Provider>);
- for(const label of ["Scoruri","Privire","Reacție","Cabină","Fișă","Sistem","Jurnal","Calitatea semnalului ocular","Modele · p50 / p95","Mesaje, muzică și mementouri","Răspunsuri și canale"])assert(html.includes(label),label);
+ for(const label of ["Scoruri","Privire","Reacție","Cabină","Fișă","Sistem","Jurnal","Control","Unde privește","PERCLOS · 60 s","Scene demonstrative","Percepție · camere","Calitatea semnalului ocular","Modele · p50 / p95","Mesaje, muzică și mementouri","Răspunsuri și canale"])assert(html.includes(label),label);
  assert.doesNotMatch(html,/<dialog|Alege instrumentul|Detalii ↗|NaN|Infinity|undefined/);
- assert.equal((html.match(/class="instrument-card"/g)??[]).length,7);
+ assert.equal((html.match(/class="instrument-card"/g)??[]).length,8);
 });
 
 test("dashboard journal paginates long sessions and keeps event explanations visible",()=>{
@@ -122,4 +122,68 @@ test("event log stays bounded and only visual cues increment the cue signal", ()
  assert.equal(session.log.length,60);
  assert.equal(session.log[0].ts,79);
  assert.equal(session.cue,1);
+});
+
+// --- Live command bridge: the same fixture is validated against core's contract in tests/contract (Python) ---------
+import uiMessages from "../../tests/contract/fixtures/dashboard_ui_messages.json";
+import {liveMessage,LIVE_COMMANDS} from "../src/driver/session";
+import {sampleOf,zoneShares} from "../src/telemetry";
+import {Gauge,MiniBars,RangeBars,RankBars,Ring,Spark,StackBar,runs,smoothPath} from "../src/charts";
+import {ControlPanel} from "../src/driver/ControlPanel";
+import {KpiStrip,Overview,StatusStrip} from "../src/driver/MonitorParts";
+
+test("every dashboard action maps to the message core expects in Live",()=>{
+ for(const item of uiMessages as {name:string;args:Record<string,unknown>;state?:DashboardState;message:Record<string,unknown>}[]){
+  const sent=liveMessage(item.name,item.args,item.state??{});
+  assert(sent,item.name);
+  const {ts,...rest}=sent as Record<string,unknown>;
+  assert.deepEqual(rest,item.message,item.name);
+  assert(LIVE_COMMANDS.has(item.name),item.name);
+  if(item.message.type==="speech")assert.equal(typeof ts,"number");
+ }
+});
+
+test("actions without a contract command are refused in Live instead of being sent as something else",()=>{
+ for(const name of ["create_reminder","reply_message","play_youtube","apply_route","replay","unknown"])assert.equal(liveMessage(name,{},{}),null,name);
+ assert.equal(liveMessage("calibrate",{profile:"  "},{}),null);
+ assert.equal(liveMessage("enroll",{},{}),null);
+ assert.equal(liveMessage("scene",{scene:"4"},{}),null);
+ assert.equal(liveMessage("set_child",{enabled:false},{occupants:[]}),null);
+ assert.equal(liveMessage("request",{text:"   "},{}),null);
+});
+
+test("telemetry samples hide untracked eye readings and zone shares add up",()=>{
+ assert.equal(sampleOf({}),null);
+ const lost=sampleOf({ts:10,driver:{monitoring_ok:false,eyes:{perclos_60s:0,ear:.3},gaze:{zone:"road"}}})!;
+ assert.equal(lost.perclos,null);assert.equal(lost.zone,undefined);
+ const shares=zoneShares([{ts:1,zone:"road"},{ts:2,zone:"road"},{ts:3,zone:"mirror_left"},{ts:4}]);
+ assert.deepEqual(shares.map(s=>s.zone),["road","mirror_left"]);
+ assert(Math.abs(shares.reduce((sum,s)=>sum+s.share,0)-1)<1e-9);
+ assert.equal(shares[0].seconds,1);
+});
+
+test("charts keep gaps as gaps and never draw a missing value",()=>{
+ assert.equal(runs([1,null,2,3,undefined],i=>i,v=>v).length,2);
+ assert.equal(smoothPath([]),"");
+ assert.match(smoothPath([[0,0],[10,5]]),/^M0 0 C/);
+ const html=renderToStaticMarkup(<><Spark values={[.2,null,.4,.5]} label="s"/><MiniBars values={[null,.5]} label="b"/><Gauge value={null} label="g"/><Ring value={undefined} label="r"/>
+   <RankBars items={[{label:"Drum",value:.7},{label:"Fără",value:null}]}/><StackBar parts={[{label:"A",value:0},{label:"B",value:0}]} label="st"/><RangeBars items={[{label:"x",lo:null,hi:undefined}]}/></>);
+ assert.doesNotMatch(html,/NaN|Infinity|undefined/);
+ assert.match(html,/Fără măsurători încă/);
+ assert.equal((html.match(/stroke-dasharray/g)??[]).length,0);  // an unknown gauge / ring draws only its track
+});
+
+test("status, KPIs, overview and the control panel render an empty state without inventing values",()=>{
+ const session={data:empty,live:true,fresh:false,busy:false} as unknown as DriverContextValue;
+ const html=renderToStaticMarkup(<DriverContext.Provider value={session}><StatusStrip s={{}} connection="Live · conectare"/><KpiStrip s={{}} history={[]} samples={[]}/><Overview s={{}} samples={[]}/><ControlPanel/></DriverContext.Provider>);
+ assert.doesNotMatch(html,/NaN|Infinity|undefined/);
+ assert.match(html,/Direcție nedeterminată/);
+ assert.match(html,/Nicio cauză de distragere raportată/);
+ assert.equal((html.match(/<button[^>]*disabled/g)??[]).length,(html.match(/<button/g)??[]).length);  // no session: nothing is clickable
+});
+
+test("the status strip shows a camera failure, an SOS countdown and a degraded pipeline from the contract fields",()=>{
+ const html=renderToStaticMarkup(<StatusStrip connection="Live · conectat" s={{safety:{level:"P0",alert:"no_response",sos:{state:"countdown",countdown_s:7.2}},
+   driver:{monitoring_ok:false,monitoring_reason:"occluded"},perf:{degrade_level:2,cameras:{passenger:{available:false}}},integrations:{twilio:"down",phone_bridge:"ok"}}}/>);
+ for(const text of ["P0 · Urgență","Numărătoare SOS · 8 s","Obiectiv acoperit","Indisponibilă","Treapta 2","căzut"])assert(html.includes(text),text);
 });

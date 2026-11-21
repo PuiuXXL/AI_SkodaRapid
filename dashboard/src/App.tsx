@@ -11,7 +11,9 @@ import {Optic} from "./Optic";
 import {DataBars} from "./DataBars";
 
 import {AttentionGauge,CameraStandby,ScoreReading,TripStrip} from "./Overview";
-const zones: Record<string,string>={road:"Drum",passenger:"Pasager",lap:"Poală",mirror_left:"Oglinda stângă",mirror_right:"Oglinda dreaptă",mirror_rear:"Oglinda centrală",cluster:"Bord",infotainment:"Ecran",away:"În altă direcție",rear_seat:"Bancheta din spate"};
+import {zones} from "./labels";
+import {Spark} from "./charts";
+import type {Sample} from "./telemetry";
 function Feed({src,label}: {src: string; label: string}){
  const [attempt,retry]=useState(0),[error,setError]=useState(false);
  useEffect(()=>setError(false),[src]);
@@ -34,6 +36,45 @@ export function Cameras({live,socket,cue,trip,onLive,onDock}: {live: boolean; so
    observer.observe(el);
    return ()=>observer.disconnect();
  },[onDock]);
+ // Docked: the preview sits exactly over a reserved slot ([data-camera-slot]: beside the overview, then in the
+ // band under the instrument stack), so it is larger than a floating thumbnail and never covers content. Without a
+ // visible slot (narrow screens) it falls back to the corner, and the page keeps a bottom margin for it.
+ useEffect(()=>{
+   const el=camera.current,page=el?.closest<HTMLElement>(".dashboard");
+   if(!el)return;
+   const clear=()=>{el.removeAttribute("style");delete el.dataset.dock;delete el.dataset.dockLayout;el.classList.remove("dock-moving");};
+   if(!compact||!page){clear();return;}
+   let frame=0,current="",moving:ReturnType<typeof setTimeout>|undefined;
+   function place(){
+     frame=0;
+     if(!el)return;
+     const view=window.innerHeight;
+     const slots=Array.from(document.querySelectorAll<HTMLElement>("[data-camera-slot]"),node=>({name:node.dataset.cameraSlot??"",rect:node.getBoundingClientRect()}))
+       .filter(({rect})=>rect.width>80&&rect.height>60&&rect.top>=-2&&rect.bottom<=view+2);
+     const slot=slots.find(({name})=>name==="stack")??slots.find(({name})=>name==="overview");
+     const name=slot?.name??"float";
+     if(name!==current){
+       if(current){el.classList.add("dock-moving");clearTimeout(moving);moving=setTimeout(()=>el.classList.remove("dock-moving"),340);}
+       current=name;
+     }
+     el.dataset.dock=name;
+     if(slot){
+       const {left,top,width,height}=slot.rect;
+       Object.assign(el.style,{left:left+"px",top:top+"px",width:width+"px",height:height+"px",right:"auto",bottom:"auto"});
+       el.dataset.dockLayout=width/height>1.9?"row":"column";
+     }else{el.removeAttribute("style");el.dataset.dockLayout="row";}
+   }
+   const schedule=()=>{if(!frame)frame=requestAnimationFrame(place);};
+   place();
+   // the slots open (CSS) only after the page has rendered the docked state: place again once that has happened
+   const settle=[setTimeout(schedule,80),setTimeout(schedule,320)];
+   page.addEventListener("scroll",schedule,{passive:true});
+   window.addEventListener("resize",schedule);
+   const observer=new ResizeObserver(schedule);
+   observer.observe(page);
+   document.querySelectorAll("[data-camera-slot]").forEach(slot=>observer.observe(slot));
+   return ()=>{page.removeEventListener("scroll",schedule);window.removeEventListener("resize",schedule);observer.disconnect();cancelAnimationFrame(frame);clearTimeout(moving);settle.forEach(clearTimeout);clear();};
+ },[compact]);
  function returnToCamera(){
 
    boundary.current?.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth",block:"start"});
@@ -76,7 +117,7 @@ export function General({s}: StateProps & {points: SessionData["history"]}){
 </div>
  <Detail title="Șofer și context"><Rows items={[["Timp pe traseu",fmt(s.trip?.elapsed_min," min")],["Până la destinație",fmt(s.trip?.eta_min," min")],["Tip drum",words(s.trip?.road)],["Următoarea oprire",s.trip?.next_poi?.name],["Distanță până la oprire",fmt(s.trip?.next_poi?.dist_km," km")],["Ultima stare",time(s.ts)],["Cauză",words(c.label)],["Țintă / priviri în 30 s",words(c.target)+" / "+fmt(c.glances_30s)],["Surse",c.sources?.join?.(", ")||"—"],["Încredere cauză",fmt(c.conf,"%",100)],["Poziție cap · yaw / pitch / roll",[h.yaw,h.pitch,h.roll].map(v=>fmt(v,"°")).join(" / ")],["Cădere de cap",yes(h.nodding)],["Căscat",yes(s.driver?.yawn)],["Vorbește",yes(s.driver?.speaking)],["Telefon folosit",yes(s.driver?.phone?.in_use)],["Sursă telefon",words(s.driver?.phone?.source)],["Încredere telefon",fmt(s.driver?.phone?.conf,"%",100)]]}/></Detail></section>;
 }
-export function Eyes({s,live}: StateProps & {live: boolean}){
+export function Eyes({s,live,samples=[]}: StateProps & {live: boolean; samples?: Sample[]}){
  const rawEyes=s.driver?.eyes??{},g=s.driver?.gaze??{},crop=import.meta.env.VITE_EYE_STREAM_URL;
  const monitored=s.driver?.monitoring_ok!==false && s.perf?.cameras?.driver?.available!==false;
  const known=monitored && g.calibrated!==false && Boolean(zones[g.zone??""]);
@@ -85,8 +126,11 @@ export function Eyes({s,live}: StateProps & {live: boolean}){
  <div className="ocular">{live&&crop&&monitored&&e.reliable===true?<Feed src={crop} label="Decupaj ocular"/>:!live&&e.reliable&&<Optic sideways={g.zone?.startsWith("mirror")}/>}
  <div><strong>{known?zones[g.zone!]:"Direcție nedeterminată"}</strong><p>{live?(e.reliable===false?"Semnal ocular nesigur":crop&&monitored&&e.reliable?"Decupaj ocular live":"Decupaj ocular indisponibil"):"Schemă ilustrativă · simulare"}</p></div></div>
  <Metrics items={[["PERCLOS · 60 s",fmt(e.perclos_60s,"%",100)],["Ultima clipire",fmt(e.blink_ms," ms")],["În afara drumului",known?fmt(g.off_road_ms," s",.001,2):"—"]]}/>
- <DataBars title="Închidere oculară · ultimele 60 s" maximum={100} items={[{label:"PERCLOS",value:typeof e.perclos_60s==="number"?e.perclos_60s*100:e.perclos_60s,unit:"%"}]}/>
- <Detail title="Calitatea semnalului ocular"><Rows items={[["Deschidere relativă (EAR)",fmt(e.ear,"",1,2)],["Ochi folosit",({left:"Stâng",right:"Drept"} as Record<string,string>)[e.eye_used??""]],["Semnal fiabil",yes(e.reliable)],["Sursa privirii",words(g.source)],["Încredere zonă",known?fmt(g.conf,"%",100):"—"],["Priviri scurte · 60 s",known?fmt(g.vats_60s):"—"],["Entropie · 60 s",known?fmt(g.entropy_60s," bit"):"—"],["Microsomn",yes(e.microsleep)],["Închidere curentă",fmt(e.closed_ms," ms")],["Referință ochi deschis",fmt(e.open_baseline,"",1,2)],["Frecvență clipire",fmt(e.blink_rate," /min")],["Ochi mijiți",yes(e.squint)],["Starea pleoapei",words(e.state)],["Închidere prelungită",yes(e.long_closure)]]}/></Detail></section>;
+ <div className="fx-trends">
+   <figure><figcaption>Deschidere oculară (EAR)<b>{fmt(e.ear,"",1,2)}</b></figcaption><Spark values={samples.map(sample=>sample.ear)} label="Deschiderea oculară în ultimul minut"/></figure>
+   <figure><figcaption>În afara drumului<b>{known?fmt(g.off_road_ms," s",.001,1):"—"}</b></figcaption><Spark values={samples.map(sample=>sample.offRoad)} tone="warn" label="Timpul cu privirea în afara drumului, ultimul minut"/></figure>
+ </div>
+ <Detail title="Calitatea semnalului ocular"><Rows items={[["Deschidere relativă (EAR)",fmt(e.ear,"",1,2)],["Ochi folosit",({left:"Stâng",right:"Drept"} as Record<string,string>)[e.eye_used??""]],["Semnal fiabil",yes(e.reliable)],["Sursa privirii",words(g.source)],["Încredere zonă",known?fmt(g.conf,"%",100):"—"],["Priviri scurte · 60 s",known?fmt(g.vats_60s):"—"],["Entropie · 60 s",known?fmt(g.entropy_60s," bit"):"—"],["Microsomn",yes(e.microsleep)],["Tipar poală (telefon)",known?yes(g.lap_pattern):"—"],["Clipiri numărate",fmt(e.blink_count,"",1,0)],["Închidere curentă",fmt(e.closed_ms," ms")],["Referință ochi deschis",fmt(e.open_baseline,"",1,2)],["Frecvență clipire",fmt(e.blink_rate," /min")],["Ochi mijiți",yes(e.squint)],["Starea pleoapei",words(e.state)],["Închidere prelungită",yes(e.long_closure)]]}/></Detail></section>;
 }
 export function Reaction({s}: StateProps){
  const r=s.driver?.reaction??{},input=s.interaction?.last_input;
@@ -126,7 +170,8 @@ export function Icon({name}: {name: string}) {
   route:"M5 5h10a4 4 0 0 1 0 8H9a4 4 0 0 0 0 8h10 M5 2v6 M19 18v6",
   pulse:"M2 12h5l3-8 4 16 3-8h5",
   music:"M9 18V5l12-2v13 M9 8l12-2 M9 18a3 3 0 1 1-3-3c1.7 0 3 1.3 3 3Z M21 16a3 3 0 1 1-3-3c1.7 0 3 1.3 3 3Z",
-  message:"M4 4h16v12H9l-5 4V4Z M8 8h8 M8 12h5"
+  message:"M4 4h16v12H9l-5 4V4Z M8 8h8 M8 12h5",
+  sliders:"M4 6h9 M17 6h3 M4 12h3 M11 12h9 M4 18h11 M19 18h1 M15 4v4 M9 10v4 M17 16v4"
  };
  return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]??paths.grid}/></svg>;
 }

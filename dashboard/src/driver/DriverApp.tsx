@@ -8,6 +8,7 @@ import {usePage,navigate,pageTitles} from "./routes";
 import type {Page} from "./routes";
 import {NavigationShell,useMobileNavigation} from "../NavigationShell";
 import {BrandLogo} from "../BrandLogo";
+import {alerts,label,sosStates} from "../labels";
 import {Icon} from "../App";
 import {Cockpit,Greeting} from "./Cockpit";
 import {LandingPage} from "./LandingPage";
@@ -61,7 +62,7 @@ function DriverWorkspace(){
   function setLive(value:boolean){audio.silence();setLiveState(value);}
   const provider={...session,live,setLive,profile,profileError,draft,setDraft,saveProfile,reloadProfile,saving,audio,locked};
   function link(destination:Page,icon:string){return <a key={destination} className="page-link" href={"#/"+destination} aria-label={pageTitles[destination]} title={pageTitles[destination]} aria-current={page===destination?"page":undefined}><Icon name={icon}/><span>{pageTitles[destination]}</span></a>;}
-  const alert=session.data.state.safety?.alert;
+  const alert=session.data.state.safety?.alert,sos=session.data.state.safety?.sos;
   if(page==="salut")return <Greeting ready={!!profile&&session.fresh} error={profileError} retry={reloadProfile} dark={dark}/>;
   return <DriverContext.Provider value={provider}><div data-workspace-theme={dark?"dark":"light"} ref={shell} className={"dashboard driver-app"+(collapsed&&!mobile?" sidebar-collapsed":"")+(tools?" tools-page":"")}>
     <a className="skip-link" href="#driver-main" onClick={e=>{e.preventDefault();document.getElementById("driver-main")?.focus();}}>Sari la conținut</a>
@@ -74,7 +75,8 @@ function DriverWorkspace(){
     </NavigationShell>
     <main className="driver-main" id="driver-main" tabIndex={-1}><div className="workspace-topline"><span>{tools?"INSTRUMENTE":"COPILOT PERSONAL"}</span><span className={"connection-badge"+(!session.fresh?" stale":"")}>{session.data.connection}</span></div>
       {!session.fresh&&<div className="connection-warning" role="status">Se așteaptă date actualizate. Comenzile sunt indisponibile până la reconectare.</div>}
-      {(alert||session.data.state.safety?.monitoring_ok===false)&&<div className="safety-banner" role="alert"><Icon name="pulse"/><strong>{session.data.state.safety?.monitoring_ok===false?"Monitorizare întreruptă":typeof alert==="object"?alert?.text:alert}</strong>{session.data.state.driver_ui?.sos_at&&<span>Numărătoare SOS: {Math.max(0,Math.ceil(session.data.state.driver_ui.sos_at-Date.now()/1000))} s</span>}</div>}
+      {(alert||session.data.state.safety?.monitoring_ok===false)&&<div className="safety-banner" role="alert"><Icon name="pulse"/><strong>{session.data.state.safety?.monitoring_ok===false?"Monitorizare întreruptă":label(alerts,typeof alert==="object"?alert?.text:alert)}</strong>{session.data.state.driver_ui?.sos_at?<span>Numărătoare SOS: {Math.max(0,Math.ceil(session.data.state.driver_ui.sos_at-Date.now()/1000))} s</span>
+        :sos?.state&&sos.state!=="normal"&&<span>{label(sosStates,sos.state)}{typeof sos.countdown_s==="number"&&" · "+Math.max(0,Math.ceil(sos.countdown_s))+" s"}</span>}</div>}
       {session.error&&<div className="form-feedback" role="alert">{session.error}<button onClick={session.clearError}>Închide mesajul</button></div>}
       {page==="volan"&&<Cockpit/>}
       {page==="dashboard"&&<MonitorPage/>}
