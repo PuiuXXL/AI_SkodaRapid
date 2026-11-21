@@ -1,0 +1,56 @@
+name: perception-models
+
+# The perception tests that need the real model files (MediaPipe, MobileGaze, YOLO26, YuNet / SFace, eye CNN):
+# skipped in the fast perception job. Nightly and on demand; models are downloaded once (SHA / size checked by
+# scripts/download_models.sh) and cached until that script changes. Model files are never committed.
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perception-models-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements/p1-perception.txt
+            requirements/p1-dev.txt
+
+      - name: Install MediaPipe system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libgl1
+
+      - name: Install dependencies (CPU-only torch for the YOLO export)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+            -r requirements/p1-perception.txt -r requirements/p1-dev.txt
+
+      - uses: actions/cache@v4
+        id: models
+        with:
+          path: perception/models
+          key: perception-models-${{ hashFiles('scripts/download_models.sh') }}
+
+      - name: Download and verify models
+        if: steps.models.outputs.cache-hit != 'true'
+        run: PYTHON=python bash scripts/download_models.sh
+
+      - name: Pytest (tests marked models, no camera)
+        run: python -m pytest tests/perception -m "models and not camera" -q --durations=10

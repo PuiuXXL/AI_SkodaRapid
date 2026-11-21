@@ -1,0 +1,73 @@
+name: integration
+
+# The perception (P1) <-> core (P2) boundary:
+# * tests/contract: golden messages both ways (P1 frames / acks parsed by P2's contract and core's engine; every
+#   command core sends handled by P1; fields missing from the contract must be announced in docs/perception.md §9);
+# * tests/integration: the real core server and the real `perception.main` process over WebSocket (synthetic frames,
+#   no models, no camera): frame rate at core, command acks, core surviving a perception restart.
+
+on:
+  push:
+    paths:
+      - "perception/**"
+      - "core/**"
+      - "shared/**"
+      - "tests/contract/**"
+      - "tests/integration/**"
+      - "docs/perception.md"
+      - "requirements/p1-perception.txt"
+      - "requirements/p2-core.txt"
+      - "pyproject.toml"
+      - ".github/workflows/integration.yml"
+  pull_request:
+    paths:
+      - "perception/**"
+      - "core/**"
+      - "shared/**"
+      - "tests/contract/**"
+      - "tests/integration/**"
+      - "docs/perception.md"
+      - "requirements/p1-perception.txt"
+      - "requirements/p2-core.txt"
+      - ".github/workflows/integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perception-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements/p1-perception.txt
+            requirements/p2-core.txt
+
+      - name: Install MediaPipe system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libgl1
+
+      # Without ultralytics (YOLO export only; it pulls torch): perception runs here with --no-models.
+      - name: Install dependencies (perception runtime without YOLO + core)
+        run: |
+          python -m pip install --upgrade pip
+          grep -v ultralytics requirements/p1-perception.txt > /tmp/p1-runtime.txt
+          pip install -r /tmp/p1-runtime.txt -r requirements/p2-core.txt
+
+      - name: Contract tests (golden messages both ways)
+        run: python -m pytest tests/contract -q
+
+      - name: End to end (core server + perception.main over WebSocket)
+        run: python -m pytest tests/integration -m slow -q --durations=5

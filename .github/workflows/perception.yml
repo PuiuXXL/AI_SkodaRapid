@@ -4,23 +4,18 @@ on:
   push:
     paths:
       - "perception/**"
+      - "shared/**"                     # P2's contract: perception validates every frame against it
       - "tests/perception/**"
-      - "scripts/benchmark.py"
-      - "scripts/preview.py"
-      - "scripts/label_session.py"
-      - "scripts/live_driver.py"
-      - "scripts/eval_eyes.py"
-      - "scripts/enroll_face.py"
-      - "scripts/calibrate.py"
-      - "scripts/eval_zones.py"
-      - "scripts/*.sh"
+      - "scripts/**"                    # ruff / mypy check the P1 scripts (pyproject include / files)
       - "requirements/p1-*.txt"
       - "pyproject.toml"
       - ".github/workflows/perception.yml"
   pull_request:
     paths:
       - "perception/**"
+      - "shared/**"
       - "tests/perception/**"
+      - "scripts/**"
       - "requirements/p1-*.txt"
       - "pyproject.toml"
       - ".github/workflows/perception.yml"
@@ -42,7 +37,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"   # the version pyproject (ruff target, mypy) and the requirements target
           cache: pip
           cache-dependency-path: |
             requirements/p1-perception.txt
@@ -57,7 +52,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install --extra-index-url https://download.pytorch.org/whl/cpu \
-            -r requirements/p1-perception.txt -r requirements/p1-dev.txt
+            -r requirements/p1-perception.txt -r requirements/p1-dev.txt pytest-cov
 
       - name: Shell scripts syntax
         run: for f in scripts/camera_setup.sh scripts/download_models.sh; do bash -n "$f"; done
@@ -68,5 +63,19 @@ jobs:
       - name: Mypy
         run: mypy
 
-      - name: Pytest (tests needing models or a camera are skipped)
-        run: python -m pytest tests/perception -m "not models and not camera" -q
+      - name: Pytest + coverage (tests needing models or a camera are skipped)
+        run: >
+          python -m pytest tests/perception -m "not models and not camera" -q
+          --cov=perception --cov-report=term-missing:skip-covered --cov-report=xml:coverage-perception.xml
+          --cov-fail-under=83
+
+      - name: Coverage summary
+        if: always()
+        run: python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-perception
+          path: coverage-perception.xml
+          if-no-files-found: ignore

@@ -44,3 +44,9 @@ dashboard/dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Test coverage output (CI uploads it as an artifact; never committed)
+.coverage
+.coverage.*
+coverage-*.xml
+htmlcov/

@@ -236,6 +236,9 @@ class PhoneTracker:
 
     def geometry(self, box: BoxLike, face_box: Box | None, hands: Sequence[Hand]) -> PhoneBoxGeometry:
         cfg = self.cfg
+        if face_box is not None and (face_box[2] <= 1.0 or face_box[3] <= 1.0):
+            # degenerate landmark box: near_face (<= ratio x 0) could never hold and every phone would be "foreign"
+            face_box = None
         xyxy = (float(box.x1), float(box.y1), float(box.x2), float(box.y2))
         px, py = (xyxy[0] + xyxy[2]) / 2.0, (xyxy[1] + xyxy[3]) / 2.0
         scale = face_box[2] if face_box is not None else max(xyxy[2] - xyxy[0], xyxy[3] - xyxy[1])

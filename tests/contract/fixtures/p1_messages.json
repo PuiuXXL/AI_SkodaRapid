@@ -1,0 +1,111 @@
+[
+  {
+    "type": "ack",
+    "cmd": "dialog_window",
+    "status": "ok",
+    "detail": null
+  },
+  {
+    "type": "ack",
+    "cmd": "dialog_window",
+    "status": "ok",
+    "detail": null
+  },
+  {
+    "type": "ack",
+    "cmd": "dialog_window",
+    "status": "ok",
+    "detail": null
+  },
+  {
+    "type": "ack",
+    "cmd": "dialog_window",
+    "status": "ok",
+    "detail": null
+  },
+  {
+    "type": "ack",
+    "cmd": "calibrate",
+    "status": "started",
+    "detail": "profile andrei"
+  },
+  {
+    "type": "ack",
+    "cmd": "calibrate",
+    "status": "started",
+    "detail": "profile andrei (quick)"
+  },
+  {
+    "type": "ack",
+    "cmd": "debug",
+    "status": "ok",
+    "detail": null
+  },
+  {
+    "type": "ack",
+    "cmd": "debug",
+    "status": "ok",
+    "detail": null
+  },
+  {
+    "type": "ack",
+    "cmd": "enroll",
+    "status": "started",
+    "detail": "camera driver"
+  },
+  {
+    "type": "ack",
+    "cmd": "enroll",
+    "status": "started",
+    "detail": "camera passenger"
+  },
+  {
+    "type": "ack",
+    "cmd": "enroll",
+    "status": "started",
+    "detail": "camera passenger"
+  },
+  {
+    "type": "ack",
+    "cmd": "enroll",
+    "status": "progress",
+    "detail": {
+      "camera": "passenger",
+      "name": "maria",
+      "count": 3,
+      "needed": 20,
+      "reason": null
+    }
+  },
+  {
+    "type": "ack",
+    "cmd": "enroll",
+    "status": "done",
+    "detail": {
+      "camera": "passenger",
+      "name": "maria",
+      "count": 20,
+      "needed": 20,
+      "reason": null
+    }
+  },
+  {
+    "type": "calibration_prompt",
+    "profile": "andrei",
+    "step": 1,
+    "steps": 9,
+    "zone": "mirror_left",
+    "mode": "owl",
+    "text": "Priveste oglinda stanga",
+    "remaining_s": 4.0
+  },
+  {
+    "type": "ack",
+    "cmd": "calibrate",
+    "status": "done",
+    "detail": {
+      "profile": "andrei",
+      "accuracy": 0.97
+    }
+  }
+]
