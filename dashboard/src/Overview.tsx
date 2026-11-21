@@ -1,5 +1,7 @@
 import type { Reading, Trip, DashboardEvent } from "./types";
 import React from "react";
+import {Optic} from "./Optic";
+import {MeasureIcon} from "./MeasureIcon";
 import {fmt,time,words} from "./Panels";
 
 export function AttentionGauge({value}: {value: Reading | undefined}){
@@ -25,16 +27,34 @@ export function CameraStandby({onLive}: {onLive: () => void}){
   return <div className="camera-standby">
     <div className="viewfinder" aria-hidden="true"><i/><i/><i/><i/></div>
     <div className="standby-info">
-      <svg width="34" height="30" viewBox="0 0 34 30" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-        <rect x="2" y="6" width="21" height="18" rx="4"/><path d="m23 12 8-4v14l-8-4z"/>
-      </svg>
+      <div className="optical-field" aria-hidden="true"><Optic/></div>
       <strong>Camera în așteptare</strong><button onClick={onLive}>Treci în Live</button>
     </div>
   </div>;
 }
 
+export function ScoreReading({label, icon, value}: {
+  label: string;
+  icon: "fatigue" | "focus";
+  value: Reading | undefined;
+}) {
+  const measured = typeof value === "number" && Number.isFinite(value);
+  return <div>
+    <span><MeasureIcon name={icon}/>{label}</span>
+    <b>{fmt(value, "", 100, 0)}{measured && <em>/100</em>}</b>
+    {measured && <div className="score-meter" aria-hidden="true"><i style={{width: Math.min(100, Math.max(0, value * 100)) + "%"}}/></div>}
+  </div>;
+}
+
 export function TripStrip({trip}: {trip: Trip | undefined}){
-  return <dl className="trip-strip">{[["Viteză",fmt(trip?.speed_kmh," km/h")],["Durată",fmt(trip?.elapsed_min," min")],["Până la destinație",fmt(trip?.eta_min," min")]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>;
+  const readings = [
+    ["Viteză", "speed", fmt(trip?.speed_kmh, " km/h")],
+    ["Durată", "clock", fmt(trip?.elapsed_min, " min")],
+    ["Până la destinație", "arrival", fmt(trip?.eta_min, " min")]
+  ] as const;
+  return <dl className="trip-strip">{readings.map(([label,icon,value]) =>
+    <div key={label}><dt><MeasureIcon name={icon}/>{label}</dt><dd>{value}</dd></div>
+  )}</dl>;
 }
 
 export function RecentEvents({events}: {events: DashboardEvent[]}){

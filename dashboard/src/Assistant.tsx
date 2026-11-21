@@ -24,6 +24,11 @@ function Voice({socket}: {socket: WebSocket | null}){
 export function Assistant({s,data,live}: StateProps & {data: SessionData; live: boolean}){
  return <Panel id="assistant" label="INTERACȚIUNE" title="Asistent și jurnal">
  <p className="utterance">{data.speech||"În așteptarea unei sugestii"}</p>
+ <div className="assistant-flow" aria-label="Starea asistentului">
+   <span data-active={Boolean(data.socket)}>Conexiune<strong>{live?(data.socket?"Conectat":"În așteptare"):"Simulat"}</strong></span>
+   <span data-active={s.safety?.llm_allowed===true}>Asistent<strong>{yes(s.safety?.llm_allowed)}</strong></span>
+   <span data-active={s.interaction?.dialog_window_open===true}>Dialog<strong>{s.interaction?.dialog_window_open===undefined?"—":s.interaction.dialog_window_open?"Deschis":"Închis"}</strong></span>
+ </div>
  {(s.assistant?.muted_until??0)> Date.now()/1000&&<p>Asistentul tace până la {time(s.assistant?.muted_until)}</p>}
  {live&&<Voice key={data.socket?"connected":"offline"} socket={data.socket}/>}
  <Detail title="Stare și dialog"><Rows items={[["Stare",words(s.interaction?.state)],["Destinatar",words(s.interaction?.addressed_to)],["Fereastră de răspuns",yes(s.interaction?.dialog_window_open)],["LLM activat",yes(s.safety?.llm_enabled)],["Intervenție LLM permisă",yes(s.safety?.llm_allowed)],["Motiv liniște",words(s.assistant?.mute_reason)]]}/></Detail>

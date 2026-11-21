@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import type {DashboardState, DashboardEvent, SessionData} from "./types";
 import {withState, appendEvent} from "./session-state";
 import example from "../../tests/assistant/fixtures/state_example.json";
@@ -6,9 +6,9 @@ import example from "../../tests/assistant/fixtures/state_example.json";
 export const videoOrigin = import.meta.env.VITE_VIDEO_ORIGIN || "http://localhost:8001";
 const wsUrl = import.meta.env.VITE_UI_WS || "ws://localhost:8000/ws/ui";
 
-function sample(t: number): DashboardState {
+function sample(t: number, speed?: number): DashboardState {
   const mirror = t%120 >= 95, wave = Math.sin(t/15);
-  return {...example,ts:Date.now()/1000,seq:t,
+  return {...example,ts:Date.now()/1000,seq:t,trip:{...example.trip,speed_kmh:speed??example.trip.speed_kmh},
     driver:{...example.driver,eyes:{...example.driver.eyes,ear:.27+.02*wave},
       gaze:{...example.driver.gaze,zone:mirror?"mirror_left":"road",off_road_ms:mirror?(t%120-95)*100:0},
       reaction:{...example.driver.reaction,visual_ms:Math.floor(t/50)%2?560:650}},
@@ -17,16 +17,23 @@ function sample(t: number): DashboardState {
       face_driver_ms_p50:9,face_passenger_ms_p50:8,e2e_ms_p95:95,cpu:61,ram_mb:2100,gpu:35}};
 }
 const empty: SessionData = {state:{},history:[],log:[],socket:null,cue:0,speech:"",connection:"Se conectează"};
-export function useSession(live: boolean) {
+export interface SimulationSettings { running: boolean; speed: number; rate: number; reset: number }
+export function useSession(live: boolean, simulation?: SimulationSettings) {
+  const settings=useRef(simulation);
+  useEffect(()=>{settings.current=simulation},[simulation]);
   const [data,set]=useState(empty);
   useEffect(()=>{
     if(!live){
       let tick=120;
+      let simulatedTick=120;
       set({...empty,state:sample(119),connection:"Sesiune simulată",
         history:Array.from({length:120},(_,t)=>sample(t).assessment),
         speech:"Îți citesc mesajul când e momentul potrivit."});
       const timer=setInterval(()=>{
-        const t=tick++, state=sample(t);
+        if(settings.current?.running===false)return;
+        const t=simulatedTick;
+        simulatedTick+=settings.current?.rate??1;
+        const state={...sample(t,settings.current?.speed),seq:tick++};
         set(old=>{
           const next=withState(old,state);
           if(t%120!==95)return next;
@@ -57,6 +64,6 @@ export function useSession(live: boolean) {
       last=0;set(old=>({...old,state:{},history:[],connection:"Live · date neactualizate"}));
     }},500);
     return ()=>{disposed=true;clearTimeout(retry);clearInterval(watchdog);ws.close();};
-  },[live]);
+  },[live,simulation?.reset]);
   return data;
 }
