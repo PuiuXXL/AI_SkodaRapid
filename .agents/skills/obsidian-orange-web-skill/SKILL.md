@@ -4,30 +4,34 @@ version: 2.0.0
 description: >-
   Transform the visual design of an existing web application, admin console,
   dashboard, analytics platform, SaaS interface, or marketing site into a
-  premium, dark charcoal-and-orange design inspired by the CY·FOCUS references.
+  premium, dark charcoal-and-silver design inspired by the CY·FOCUS references.
   Uses a floating translucent vertical side menu with TWO user-controlled modes
   (Collapsed icon-only and Expanded icon-and-label), glass cards, strong data
   hierarchy, contextual visualization patterns, responsive layouts, and
   functional preservation, Anthropic-inspired design critique, and purposeful animation recommendations sourced from Motion and GSAP official docs. Apply when asked to redesign, restyle, improve,
   modernize, or visually align an existing web UI without changing its purpose.
 metadata:
-  short-description: Context-aware dark-orange glassmorphic web design system
+  short-description: Context-aware graphite glassmorphic web design system
 ---
 
-# Obsidian Orange — Anthropic Fusion + Motion/GSAP (v2.0)
+# DriveMate Graphite — Anthropic Fusion + Motion/GSAP (v2.0)
+
+## DriveMate palette authority
+
+The current DriveMate landing page defines the brand colors for every new screen and redesign. Reuse the shared tokens in `dashboard/src/voice/obsidian-tokens.css`. Use graphite #151515, silver #cecece and near-white #f5f5f5. Reserve semantic colors for actual status, warning and danger, with a label or icon. CY·FOCUS images guide composition and materials only. Preserve the full-screen cinematic composition of the landing page.
 
 ## Mission
 
-Create a **cohesive visual redesign of the user's actual web product**, not a generic screenshot clone. The dominant aesthetic is defined by the **first uploaded CY·FOCUS image**, reinforced by the **eighth CY·FOCUS dashboard image**: near-black / graphite surfaces, charcoal depth, ember-orange emphasis, fine typography, crisp dense information, soft reflections, and a glass-like floating side menu and overlays.
+Create a **cohesive visual redesign of the user's actual web product**, not a generic screenshot clone. The dominant aesthetic is defined by the **first uploaded CY·FOCUS image**, reinforced by the **eighth CY·FOCUS dashboard image**: near-black / graphite surfaces, charcoal depth, silver emphasis, fine typography, crisp dense information, soft reflections, and a glass-like floating side menu and overlays.
 
-Treat the remaining images as **context-sensitive design references**, not independent themes. Borrow appropriate interaction patterns, chart grammar, composition, depth, specialized widgets, and content treatments without replacing the core charcoal/orange identity.
+Treat the remaining images as **context-sensitive design references**, not independent themes. Borrow appropriate interaction patterns, chart grammar, composition, depth, specialized widgets, and content treatments without replacing the core charcoal/silver identity.
 
 **Outcome:** a production-feasible, responsive, accessible interface that looks intentionally designed for its domain, preserves the site's routes and business functionality, and never sacrifices clarity to decoration.
 
 ## Activate this skill when
 
 - The user asks to redesign an existing web app, SaaS interface, dashboard, admin panel, analytics product, portal, or landing page.
-- The user wants the dark CY·FOCUS aesthetic, translucent cards, subtle orange accent, and a dynamic, floating translucent side menu (not a top navbar).
+- The user wants the dark CY·FOCUS aesthetic, translucent cards, subtle silver accent, and a dynamic, floating translucent side menu (not a top navbar).
 - The app needs to inherit a common visual language while adapting to its real content, industry, audience, and information density.
 - The current design has inconsistent styles, basic cards, weak hierarchy, or poor navigation.
 
@@ -35,30 +39,30 @@ Treat the remaining images as **context-sensitive design references**, not indep
 
 ## Reference order and routing
 
-1. **PRIMARY / mandatory:** `references/images/01-cyfocus-primary.png` — image 1; dark graphite, orange highlights, product atmosphere and hierarchy.
-2. **PRIMARY / mandatory:** `references/images/08-cyfocus-dashboard.png` — image 8; operational sidebar, activity panels, dense data UI, restrained orange signals.
+1. **PRIMARY / mandatory:** `references/images/01-cyfocus-primary.png` — image 1; dark graphite, silver highlights, product atmosphere and hierarchy.
+2. **PRIMARY / mandatory:** `references/images/08-cyfocus-dashboard.png` — image 8; operational sidebar, activity panels, dense data UI, restrained silver signals.
 3. **SECONDARY / conditional:** references 02–07 and 09–12 — consult `references/context-playbook.md` for choosing patterns by app type.
 4. Follow existing product-specific constraints (semantics, accessibility, company identity, real data, framework) over purely stylistic resemblance.
 
-**Style inheritance rule:** Always inherit the **palette, materials, typographic restraint, spacing rhythm, and navigation behavior** from the primary references. Inherit **layout patterns, visualizations, micro-interactions, and widget types** from secondary references only when relevant.
+**Style inheritance rule:** Always inherit the **materials, typographic restraint, spacing rhythm, and navigation behavior** from the primary references. Inherit **layout patterns, visualizations, micro-interactions, and widget types** from secondary references only when relevant.
 
 If image files are absent because only this `SKILL.md` was copied, follow the written specifications; do not assume access to uploads or use fabricated file paths.
 
 ## Core visual DNA — non-negotiable
 
-- **Palette:** background #090A0C or #0D0F12; dark charcoal panels; warm gray text; warm amber / burnt orange (#FF6B3D family) for focus, alerts, selected states, key metrics, primary CTAs. White space is replaced by meaningful dark negative space.
+- **Palette:** background #151515 or #101010; dark charcoal panels; neutral gray text; silver (#cecece family) for focus, selected states, key metrics, primary CTAs. White space is replaced by meaningful dark negative space.
 - **Materials:** subtle translucent cards over tonal gradients and blurred atmospheric glows. Use true glass only when there is something behind it and the contrast remains readable. Solid dark panels are preferred for dense tables and body copy.
-- **Depth:** restrained multi-layer surfaces, delicate 1px borders, soft directional highlights, warm orange bloom used locally (never a large generic neon glow on everything).
+- **Depth:** restrained multi-layer surfaces, delicate 1px borders, soft directional highlights, silver bloom used locally (never a large generic neon glow on everything).
 - **Typography:** modern, readable sans serif (Geist, Inter, or the project's existing equivalent); compact labels, quiet metadata, confident page headings, prominent numbers with tabular figures.
 - **Geometry:** 12–20px cards, 16–24px larger containers; pill-like controls; modest curvature, not inflated toy-like cards. Maintain consistent grid and rhythm.
 - **Navigation:** a **vertical floating, glassmorphic side menu is mandatory**, resembling a distinct translucent card. Place it at the left by default, keep current-route highlighting dynamic, support expanded/icon-only collapsed modes, and use an accessible slide-over drawer on mobile. **Do not substitute a horizontal navbar or top navigation for the primary navigation.** A compact utility-only header may be added to the content area when genuinely needed.
-- **Data visualization:** fine lines, calibrated orange emphasis, readable axes, appropriate color distinctions, faithful values, and efficient layouts.
+- **Data visualization:** fine lines, calibrated silver emphasis, readable axes, appropriate color distinctions, faithful values, and efficient layouts.
 - **Interaction:** 120–240ms motion, subtle easing and hover elevation, informative state transitions, reduced-motion support. Never animate for its own sake.
 - **Voice:** product-specific, concise, precise. Do not blindly rename business features after the cyber dashboard.
 
 ## Anthropic frontend-design principles — adapted, not copied
 
-This skill draws on the official [Anthropic frontend-design skill](https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md): make deliberate decisions based on the actual product, avoid interchangeable AI-generated templates, treat typography/content as part of design, use structure to carry meaning, and critique rendered results. This is an independent, user-specific synthesis; do not present it as an official Anthropic artifact. Read `references/design-critique.md` for the detailed two-pass design review. **The user's CY·FOCUS brief overrides generic aesthetic heuristics**, so dark charcoal/orange is an intentional requirement rather than a generic default.
+This skill draws on the official [Anthropic frontend-design skill](https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md): make deliberate decisions based on the actual product, avoid interchangeable AI-generated templates, treat typography/content as part of design, use structure to carry meaning, and critique rendered results. This is an independent, user-specific synthesis; do not present it as an official Anthropic artifact. Read `references/design-critique.md` for the detailed two-pass design review. **The user's CY·FOCUS brief overrides generic aesthetic heuristics**, so dark charcoal/silver is an intentional requirement rather than a generic default.
 
 **Two-pass gate before code:**
 1. Establish a short visual charter: five or six tokens, typography roles, signature layout, component density, reference rationale, animation budget, responsive constraints. Write a small annotated wireframe.
@@ -83,9 +87,9 @@ See `references/component-inventory.md` for an exhaustive inventory of the visua
 
 ## Pixel-level fidelity and critique gate
 
-Read `references/reference-forensics.md`. Do not reproduce the marketing/gallery frame or tablet chrome around the UI; reproduce **the interface inside** it. The original screenshot has a built-in dark navigation left rail; user modification takes precedence: use the same CY·FOCUS palette and visual hierarchy but elevate the rail to a floating translucent card with mandatory Expanded and Collapsed modes.
+Read `references/reference-forensics.md`. Do not reproduce the marketing/gallery frame or tablet chrome around the UI; reproduce **the interface inside** it. The original screenshot has a built-in dark navigation left rail; user modification takes precedence: use the DriveMate palette and CY·FOCUS visual hierarchy but elevate the rail to a floating translucent card with mandatory Expanded and Collapsed modes.
 
-When browser screenshots are available, compare the rendered result at desktop and mobile against the two primary references: background temperature, orange concentration, information density, surface sizes, sidebar weight, panel borders, spacing, typography and focal region. Review after one full initial layout pass, then refine mismatches. If you cannot render, say so; do not invent a visual QA result.
+When browser screenshots are available, compare the rendered result at desktop and mobile against the two primary references: background temperature, silver concentration, information density, surface sizes, sidebar weight, panel borders, spacing, typography and focal region. Review after one full initial layout pass, then refine mismatches. If you cannot render, say so; do not invent a visual QA result.
 
 ## Mandatory implementation workflow
 
@@ -115,17 +119,17 @@ For mixed applications, define one primary page archetype and borrow only adjace
 
 ### 3. Build tokens first
 
-Read `references/design-tokens.md` and start from `examples/theme.css`. Centralize colors, surfaces, radius, spacing, typography, shadows, glows, motion, and chart palette. **Do not hardcode one-off colors throughout components.** Honor or extend the existing theme engine. Implement color tokens with meaningful names (`--color-accent`, `--surface-glass`, `--border-subtle`) rather than raw `orange-500` assumptions.
+Read `references/design-tokens.md` and start from `examples/theme.css`. Centralize colors, surfaces, radius, spacing, typography, shadows, glows, motion, and chart palette. **Do not hardcode one-off colors throughout components.** Honor or extend the existing theme engine. Implement color tokens with meaningful names (`--color-accent`, `--surface-glass`, `--border-subtle`) rather than raw `silver-500` assumptions.
 
 Use an 8px spacing rhythm with 4px micro adjustments. Aim for clear contrast and content density tuned per application rather than fixed card heights.
 
 ### 4. Construct the signature floating side menu (mandatory)
 
-The primary navigation is **always a vertical side menu**, never a top navbar. It should look like a **separate rounded translucent glass card**, floating above the almost-black canvas with generous margins, thin bright edge, 16–24px blur, subtle reflected highlight, and localized orange active accents.
+The primary navigation is **always a vertical side menu**, never a top navbar. It should look like a **separate rounded translucent glass card**, floating above the almost-black canvas with generous margins, thin bright edge, 16–24px blur, subtle reflected highlight, and localized silver active accents.
 
 - **Desktop layout:** position at the left, inset 16–24px from the page edges, with approximate **256–284px expanded width** and **72–84px collapsed width**. Prefer `position: sticky; top: 16px; height: calc(100dvh - 32px)` within a two-column layout; fixed positioning is acceptable if content offset is handled correctly. Keep the side menu independently scrollable if its links exceed its available height.
 - **Anatomy, top → bottom:** logo + brand (with collapse button), optional workspace/project switcher, optional search/command action, vertically stacked primary destinations grouped by relevant category, contextual sub-navigation when necessary, flexible spacer, and bottom-anchored settings/help/profile/account section. Keep profile and required actions accessible when collapsed.
-- **Selection:** use the application's actual routing state and RBAC/permission model. The current destination has an understated orange pill/edge accent and correct `aria-current="page"`; nested routes expand/highlight their real parent section. Do not invent destinations or hardcode a permanent selected tab.
+- **Selection:** use the application's actual routing state and RBAC/permission model. The current destination has an understated silver pill/edge accent and correct `aria-current="page"`; nested routes expand/highlight their real parent section. Do not invent destinations or hardcode a permanent selected tab.
 - **TWO REQUIRED DESKTOP MODES — never optional:**
   - **EXPANDED** (`is-collapsed = false`): 256–284px wide (268px default), each item displays a 20–24px icon **and a readable text label**; show brand name, group headings, and relevant context. Full navigation remains usable.
   - **COLLAPSED** (`is-collapsed = true`): 72–84px wide (80px default), show **icons only**, plus brand mark, visible active-state indicator, profile/settings icons, and one permanent expand control. Hide labels visually but retain accessible names via `aria-label` or equivalent; show tooltip on hover AND keyboard focus. Maintain 44px targets.
@@ -155,9 +159,9 @@ Content remains primary. No fake KPIs, dummy charts, arbitrary icons, stock dash
 
 Choose visual form to fit meaning:
 
-- Time series -> line/area chart with thin gridlines; orange for selected/main series; secondary neutral lines.
-- Comparative categories -> bars with understated gray baselines and warm highlight.
-- Risk or status -> color plus explicit label/icon; accessible legend; severity colors may depart from orange semantically.
+- Time series -> line/area chart with thin gridlines; silver for selected/main series; secondary neutral lines.
+- Comparative categories -> bars with understated gray baselines and silver highlight.
+- Risk or status -> color plus explicit label/icon; accessible legend; severity colors may depart from silver semantically.
 - System topology / maps -> only if the product actually has geographic or graph data.
 - Device/vehicle -> polished hero visual only if an asset exists; don't fabricate 3D capabilities.
 - Circular progress / emotional radial -> only for meaningful proportion or well-defined category states.
@@ -181,14 +185,14 @@ Ensure WCAG 2.2 AA where applicable: meaningful contrast, 44px preferred touch t
 
 Use `references/qa-checklist.md`. Compare against both primary references and audit page-by-page. Check real data, keyboard, mobile, loading states, high-density views, and error cases. Fix regressions instead of papering over them.
 
-**Definition of done:** dominant dark graphite + orange identity; dynamic floating translucent **side menu with working Expanded ⇄ Collapsed toggle**; contextual information architecture; consistent responsive components; readable visualizations; preserved product workflows; no broken routes or actions.
+**Definition of done:** dominant dark graphite + silver identity; dynamic floating translucent **side menu with working Expanded ⇄ Collapsed toggle**; contextual information architecture; consistent responsive components; readable visualizations; preserved product workflows; no broken routes or actions.
 
 ## Visual quality anti-patterns
 
-- ❌ Generic purple/blue SaaS gradient replacing the charcoal/orange identity.
+- ❌ Generic purple/blue SaaS gradient replacing the charcoal/silver identity.
 - ❌ Every surface blurred or transparent, making dense data unreadable.
 - ❌ Oversized dashboard heading, endless empty space, huge radii on every card.
-- ❌ Neon orange everywhere, constant pulse animations, gratuitous glow, full-screen glass.
+- ❌ Neon silver everywhere, constant pulse animations, gratuitous glow, full-screen glass.
 - ❌ A pasted screenshot behind the UI, or a laptop mockup used as an application interface.
 - ❌ Static side-menu labels with a fake active state; inert buttons and tabs.
 - ❌ Replacing true data with invented numbers, fake alerts or lorem ipsum.

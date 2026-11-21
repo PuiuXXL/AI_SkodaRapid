@@ -1,24 +1,24 @@
 /* Visual recipe. Import once and adapt all tokens to the host theme. */
 .oo-fusion {
-  --oo-bg: #090a0c;
+  --oo-bg: #151515;
   --oo-glass: rgba(27,28,31,.74);
   --oo-panel: #17191d;
   --oo-stroke: rgba(255,255,255,.11);
-  --oo-text: #f4f2ef;
+  --oo-text: #f5f5f5;
   --oo-muted: #a5a3a5;
-  --oo-accent: #ff7144;
+  --oo-accent: #cecece;
   --oo-width: 268px;
   color: var(--oo-text);
   color-scheme: dark;
   min-height: 100dvh;
-  background: radial-gradient(ellipse 50% 32% at 70% 0%,rgba(193,70,34,.11),transparent 73%),var(--oo-bg);
+  background: radial-gradient(ellipse 50% 32% at 70% 0%,rgba(175,175,175,.11),transparent 73%),var(--oo-bg);
   font-family: Inter, Geist, ui-sans-serif,system-ui,sans-serif;
 }
 .oo-fusion.is-collapsed { --oo-width: 80px; }
 .oo-fusion, .oo-fusion * {box-sizing:border-box}
 .oo-fusion button {font:inherit;cursor:pointer}
 .oo-fusion button:focus-visible,.oo-fusion a:focus-visible,
-.oo-fusion-dialog button:focus-visible,.oo-fusion-dialog a:focus-visible {outline:2px solid #ff996d; outline-offset:3px}
+.oo-fusion-dialog button:focus-visible,.oo-fusion-dialog a:focus-visible {outline:2px solid #e4e4e4; outline-offset:3px}
 .oo-fusion-shell {
   display:grid; grid-template-columns:var(--oo-width) minmax(0,1fr);gap:20px;
   padding:16px 20px;align-items:start;
@@ -37,7 +37,7 @@
 .oo-fusion-brand-row {display:flex;align-items:center;gap:10px;min-height:46px;padding:0 3px 14px;border-bottom:1px solid var(--oo-stroke)}
 .oo-fusion-mark {width:30px;flex:0 0 30px;display:grid;place-items:center;color:var(--oo-accent);font-weight:750}
 .oo-fusion-brand {font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
-.oo-fusion-toggle {flex:0 0 30px;min-height:32px;border-radius:9px;background:#24252a;border:1px solid var(--oo-stroke);color:#f4f2ef}
+.oo-fusion-toggle {flex:0 0 30px;min-height:32px;border-radius:9px;background:#24252a;border:1px solid var(--oo-stroke);color:#f5f5f5}
 .oo-fusion.is-collapsed .oo-fusion-brand-row {flex-direction:column;gap:8px; padding-bottom:10px}
 .oo-fusion-navigation {flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;min-height:0}
 .oo-fusion-links {padding-top:16px;display:flex;flex-direction:column;gap:6px}
@@ -46,7 +46,7 @@
   transition:color 140ms,background 140ms}
 .oo-fusion-link:hover {color:var(--oo-text);background:rgba(255,255,255,.055)}
 .oo-fusion-link.is-current {color:var(--oo-text)}
-.oo-fusion-active {position:absolute;inset:0;z-index:-1;background:rgba(255,113,68,.15);border:1px solid rgba(255,113,68,.34);border-radius:12px}
+.oo-fusion-active {position:absolute;inset:0;z-index:-1;background:rgba(206,206,206,.15);border:1px solid rgba(206,206,206,.34);border-radius:12px}
 .oo-fusion-icon {width:20px;flex:0 0 20px;height:22px;display:grid;place-items:center;color:inherit}
 .oo-fusion-link.is-current .oo-fusion-icon {color:var(--oo-accent)}
 .oo-fusion-label {font-size:13px;overflow:hidden;text-overflow:ellipsis}
@@ -64,7 +64,7 @@
 .oo-fusion-dialog::backdrop {background:rgba(0,0,0,.64);backdrop-filter:blur(3px)}
 .oo-fusion-dialog-sheet {height:100%;width:min(88vw,320px);background:#1b1c1f;border-right:1px solid var(--oo-stroke);padding:16px;display:flex;flex-direction:column;box-shadow:20px 0 60px #0008}
 .oo-fusion-dialog .oo-fusion-links {overflow-y:auto}
-.oo-fusion-dialog .oo-fusion-link.is-current {background:rgba(255,113,68,.15);border:1px solid rgba(255,113,68,.34)}
+.oo-fusion-dialog .oo-fusion-link.is-current {background:rgba(206,206,206,.15);border:1px solid rgba(206,206,206,.34)}
 @media(max-width:767px) {
  .oo-fusion-shell {display:block;padding:12px 16px}
  .oo-fusion-sidebar {display:none}

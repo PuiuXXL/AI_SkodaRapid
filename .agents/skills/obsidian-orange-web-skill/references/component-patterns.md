@@ -4,7 +4,7 @@
 
 **Non-negotiable:** primary navigation is a **vertical left-side menu** in its own floating, translucent rounded card. The layout must not silently revert to a horizontal navbar on desktop or mobile.
 
-**Appearance:** smoked charcoal glass (`rgba(30,31,34,.68)` with fallback), 18–24px corner radius, 1px understated border, top-edge reflection, soft shadow, backdrop blur. The menu floats 16–24px away from the top/left/bottom screen boundaries instead of touching the viewport edge. Orange is a precise selection/highlight signal, not a fill color for the whole sidebar.
+**Appearance:** smoked charcoal glass (`rgba(32,32,32,.68)` with fallback), 18–24px corner radius, 1px understated border, top-edge reflection, soft shadow, backdrop blur. The menu floats 16–24px away from the top/left/bottom screen boundaries instead of touching the viewport edge. Silver is a precise selection/highlight signal, not a fill color for the whole sidebar.
 
 **Anatomy (vertical):**
 
@@ -27,7 +27,7 @@ The toggle changes state on click/Enter/Space, updates `aria-label` and `aria-ex
 
 - Expanded: ~268px width. Collapsed: ~80px wide (icons only), and keep `aria-label` / screen-reader name on every icon link, tooltip on hover/focus as useful.
 - Drive selected state from actual router state; use `aria-current="page"` for the active link, highlight true parent on nested routes, show icons and descriptive text, and obey route permissions.
-- Active item: orange left bar or subtle orange-tinted pill, restrained animation, readable foreground. Hover: delicate charcoal lift. Keyboard focus: high-contrast outline. Keep 44px-ish row targets.
+- Active item: silver left bar or subtle silver-tinted pill, restrained animation, readable foreground. Hover: delicate charcoal lift. Keyboard focus: high-contrast outline. Keep 44px-ish row targets.
 - Use app-shell CSS Grid or equivalent to reserve menu width plus 16–24px gap for content. Fixed menus require accurate main-content compensation. Avoid covering scrolling body content.
 - Sidebar can scroll internally when necessary; sticky positioning avoids overscrolling the page. Prevent app-level horizontal overflow.
 - Only the collapsed vs expanded state changes on desktop. On mobile (<768px), use a true modal drawer with backdrop, trigger in a small utility header, Escape/backdrop/close support, focus trap while open, return focus on close, and prevent background scroll.
@@ -46,7 +46,7 @@ Create just three variants:
 - `glass-overview`: translucent chart summary/profile card, modest blur, readable content.
 - `solid-workspace`: opaque for tables, logs, complex graphs, forms, content editing.
 
-All three share consistent radius, border language and typography. Cards should not all have glowing orange outlines; selected/important cards may have one.
+All three share consistent radius, border language and typography. Cards should not all have glowing silver outlines; selected/important cards may have one.
 
 Card anatomy: optional eyebrow -> title + actions -> important data/visual -> concise contextual footer. If a card is clickable, make the entire card or an obvious button accessible; do not create conflicting nested clicks.
 
@@ -67,20 +67,20 @@ Opaque or heavy-glass card. Sticky header where meaningful, row hover, clear sel
 
 ## 5. Data cards and KPIs
 
-Use a hierarchy: muted label, large number, unit, comparison, tiny relevant sparkline if supported, timeframe. Avoid oversized fake percentages. Numeric metrics use tabular figures. Change badges use arrows/text, not solely red/green. Mini-chart fills can use a delicate orange gradient with 5–12% opacity.
+Use a hierarchy: muted label, large number, unit, comparison, tiny relevant sparkline if supported, timeframe. Avoid oversized fake percentages. Numeric metrics use tabular figures. Change badges use arrows/text, not solely red/green. Mini-chart fills can use a delicate silver gradient with 5–12% opacity.
 
 ## 6. Charts
 
-Charts should be content-first. Use reference 04 for elegant time trends; 03/10 for bars and monitoring; 05 for multiple financial chart types. Tooltip has concise label/date and values; selected point may be orange. Favor thin grid lines and accessible series labels. Provide data table alternative for complex charts where appropriate.
+Charts should be content-first. Use reference 04 for elegant time trends; 03/10 for bars and monitoring; 05 for multiple financial chart types. Tooltip has concise label/date and values; selected point may be silver. Favor thin grid lines and accessible series labels. Provide data table alternative for complex charts where appropriate.
 
 Do not recreate an exact trend line from a reference if real data differs.
 
 ## 7. Buttons, filters, inputs
 
-- Primary: warm orange fill, dark readable text; use intentionally for main actions.
+- Primary: silver fill, dark readable text; use intentionally for main actions.
 - Secondary: translucent/charcoal with subtle stroke, bright text.
 - Tertiary/ghost: text + gentle hover backdrop.
-- Destructive: semantic red, not orange.
+- Destructive: semantic red, not silver.
 - Filter chips: rounded, active with warm border/fill, possible count; preserve state/URL if the product relies on it.
 - Input: graphite inset, 1px border, proper focus ring, visible label, error text and validation.
 

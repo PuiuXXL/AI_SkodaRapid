@@ -10,7 +10,7 @@ This is a catalog, not a directive to force every widget into every platform. **
 | `GlassSidebar` | Floating smoked glass, thin rim, inner reflection, rounded 20px | Desktop expanded 268px / collapsed 80px; mobile label drawer | Motion layout or CSS width; 180–240ms |
 | `SidebarBrand` | monochrome logo, concise text, tiny subtitle | Collapse hides full text, not accessible brand | short crossfade only |
 | `SidebarToggle` | always visible compact icon button | click/Enter/Space; aria-label/aria-expanded; persist state; tooltip | 160–220ms rotation or icon swap |
-| `SidebarNavItem` | icon 18–22px, muted label, orange active pill/left mark | real href, router active, nested route, permission gating, tooltip when collapsed | Motion layoutId active indicator or CSS |
+| `SidebarNavItem` | icon 18–22px, muted label, silver active pill/left mark | real href, router active, nested route, permission gating, tooltip when collapsed | Motion layoutId active indicator or CSS |
 | `SidebarSection` | concise group labels, compact separators | nested expand/collapse if genuine hierarchy | Motion AnimatePresence on labels or submenu |
 | `WorkspaceSwitch` | small selector with icon and chevron | actual available workspaces only, keyboard menu | 150ms opacity+translate |
 | `SidebarFooter` | help/settings/avatar mini sheet | remain reachable in both states | no auto entrance |
@@ -23,7 +23,7 @@ This is a catalog, not a directive to force every widget into every platform. **
 | Component | Anatomy / appearance | Functional contract | Animation recommendation |
 |---|---|---|---|
 | `PageHeader` | small path, substantial title, quiet subtitle, right aligned actions | heading semantics, breadcrumb URLs | generally static |
-| `PrimaryCTA` | tight ember-orange fill, near-black label | working action, loading/disabled/focus | CSS hover/press |
+| `PrimaryCTA` | tight silver fill, near-black label | working action, loading/disabled/focus | CSS hover/press |
 | `SecondaryButton` | graphite or translucent, white outline | clear accessible label, proper type | CSS |
 | `IconButton` | bordered circle or rounded-square | accessible name, 44px target | CSS |
 | `SegmentedTabs` | flat dark bar, understated active pill | keyboard arrows/selection semantics | Motion `layoutId` active pill |
@@ -52,7 +52,7 @@ This is a catalog, not a directive to force every widget into every platform. **
 | `ThreatRegionMap` | 08 | real geography + warm amber dots/heat clusters, location legend | Motion dot emphasis; no constant pulse |
 | `RiskRadar` | 01 | radial labeled axes, readable grid, accurate domain | CSS hover / Motion shape transition only |
 | `FindingsDonut` | 01 | categories, count, legend and alternative table | animate initial angle if actual data |
-| `BarRanking` | 08 | horizontal region values, orange selected, precise total | short bar length only on data change |
+| `BarRanking` | 08 | horizontal region values, silver selected, precise total | short bar length only on data change |
 | `TrendChart` | 04 | date axis, hover crosshair, tooltip period/value/delta | Motion tooltip; chart library for curves |
 | `Candlestick` | 05 | correct OHLC units, high-contrast up/down | avoid fanciful easing of values |
 | `OrderTicket` | 05 | quote, buy/sell, quantity, fees, confirm | no theatrical trade confirmation |

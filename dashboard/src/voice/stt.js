@@ -95,14 +95,15 @@ export class SpeechInput {
       this.onStatus(`listening (${lang})`);
     };
     this.recognition.onaudiostart = () => this.onStatus("microphone audio received");
+    this.recognition.onaudioend = () => this.onStatus("microphone audio ended");
     this.recognition.onspeechstart = () => this.onStatus("voice detected");
   }
 
   /** Start listening (call after a user gesture: the browser asks for the microphone). */
-  start() {
+  start(paused = false) {
     this.running = true;
-    this.paused = false;
-    this._safeStart();
+    this.paused = paused;
+    if (!paused) this._safeStart();
   }
 
   /** Stop listening for good. */
@@ -147,6 +148,7 @@ export class SpeechInput {
   }
 
   _safeStart() {
+    if (!this.running || this.paused) return;
     try {
       this.recognition.start();
     } catch (err) {

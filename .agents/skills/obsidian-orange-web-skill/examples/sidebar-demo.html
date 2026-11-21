@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Obsidian Orange — Two-mode Sidebar Demo</title>
+  <title>DriveMate Graphite — Two-mode Sidebar Demo</title>
   <link rel="stylesheet" href="./theme.css" />
   <style>
     body { margin: 0; }
@@ -14,7 +14,7 @@
     .demo-panel-wide { grid-column: span 8; }
     .demo-panel h2 { margin: 0 0 14px; font-size: 15px; font-weight: 550; }
     .demo-panel strong { font-size: 30px; font-variant-numeric: tabular-nums; }
-    .demo-orange { color: var(--ui-accent); }
+    .demo-silver { color: var(--ui-accent); }
     .ui-side-icon svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .ui-side-link[title] { cursor: pointer; }
     .demo-hint { font-size: 13px; margin-top: 24px; color: var(--ui-muted); }
@@ -55,11 +55,11 @@
       <div class="ui-utility-header"><button class="ui-menu-trigger" id="menu-open" aria-controls="primary-side-menu" aria-expanded="false" aria-label="Open menu">☰</button><strong>OBSIDIAN</strong></div>
       <div class="demo-top"><div><div class="ui-eyebrow">EXAMPLE / TWO-MODE SIDEBAR</div><h1 class="demo-heading" id="page-title">Overview</h1><p class="demo-sub">Switch the floating side menu between <strong>Expanded</strong> and <strong>Collapsed</strong>. Desktop layout adjusts with it; mobile uses an accessible full-label drawer.</p></div></div>
       <div class="ui-grid">
-        <article class="ui-glass-card demo-panel"><h2>Sidebar mode</h2><strong class="demo-orange" id="mode-indicator">Expanded</strong><p class="demo-sub">Use the control at the top of the side menu.</p></article>
+        <article class="ui-glass-card demo-panel"><h2>Sidebar mode</h2><strong class="demo-silver" id="mode-indicator">Expanded</strong><p class="demo-sub">Use the control at the top of the side menu.</p></article>
         <article class="ui-glass-card demo-panel"><h2>Expanded width</h2><strong>268px</strong><p class="demo-sub">Icons and labels.</p></article>
         <article class="ui-glass-card demo-panel"><h2>Collapsed width</h2><strong>80px</strong><p class="demo-sub">Icons only + tooltips.</p></article>
         <article class="ui-solid-card demo-panel demo-panel-wide"><h2>Content area</h2><p class="demo-sub">This content automatically reflows. The demo remembers your sidebar preference in localStorage when available.</p></article>
-        <article class="ui-solid-card demo-panel"><h2>Navigation</h2><p class="demo-sub">Select a real demo section on the left. The orange active marker changes accordingly.</p></article>
+        <article class="ui-solid-card demo-panel"><h2>Navigation</h2><p class="demo-sub">Select a real demo section on the left. The silver active marker changes accordingly.</p></article>
       </div>
       <p class="demo-hint">For a production app, connect active navigation to the actual router and permissions. This demo intentionally uses URL hashes.</p>
     </main>

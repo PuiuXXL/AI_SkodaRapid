@@ -1,0 +1,21 @@
+{
+  "name": "DriveMate",
+  "short_name": "DriveMate",
+  "lang": "ro",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#151515",
+  "background_color": "#151515",
+  "icons": [
+    {
+      "src": "/brand/drivemate_app_icon_192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand/drivemate_app_icon_512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

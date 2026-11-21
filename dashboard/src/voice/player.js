@@ -190,13 +190,14 @@ export class VoicePlayer {
       return;
     }
     const nextSentence = utterance.sentences[this.index + 1];
-    if (nextSentence) new Audio(nextSentence.url).preload = "auto"; // warm the HTTP cache
+    if (nextSentence?.url) new Audio(nextSentence.url).preload = "auto"; // warm the HTTP cache
     const advance = () => {
       if (this.current !== utterance || this.paused) return;
       this.index += 1;
       this._playSentence();
     };
-    this._playUrl(sentence.url, advance, () => this._fallbackSpeak(sentence.text, advance));
+    if (!sentence.url) this._fallbackSpeak(sentence.text, advance);
+    else this._playUrl(sentence.url, advance, () => this._fallbackSpeak(sentence.text, advance));
   }
 
   _playUrl(url, onEnded, onError) {

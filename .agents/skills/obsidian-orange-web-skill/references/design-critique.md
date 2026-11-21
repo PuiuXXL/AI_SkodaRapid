@@ -6,7 +6,7 @@ This is an original synthesis tailored to the user’s CY·FOCUS screenshots, **
 
 ## Intent first, interface second
 
-State the platform audience, domain, and three most common actions. Map the existing route tree and actual content before selecting component patterns. The distinct aesthetic has already been chosen by the user: cinematic warm-black and ember-orange, high signal-to-noise, compact software-product density, and translucent card-like vertical navigation. Do not drift to a pale template, generic gradient, equal-card grids, large marketing typography or a random cyber UI.
+State the platform audience, domain, and three most common actions. Map the existing route tree and actual content before selecting component patterns. The distinct aesthetic has already been chosen by the user: cinematic warm-black and silver, high signal-to-noise, compact software-product density, and translucent card-like vertical navigation. Do not drift to a pale template, generic gradient, equal-card grids, large marketing typography or a random cyber UI.
 
 ## Two-pass design plan
 
@@ -28,4 +28,4 @@ Prefer transitions that clarify an explicit change: side menu expanded, filter a
 
 ## Delivery critique
 
-If possible, inspect screenshots instead of trusting code structure. Compare geometry, text and contrast. Ask: what is the strongest focal point? Is it the same object the user needs? Does the first 2 seconds look like screenshot 01/08? Are all important actions retained? Are empty, error and reduced-motion states genuinely implemented? Repeat until the same dark-orange identity is unmistakable without importing unrelated features.
+If possible, inspect screenshots instead of trusting code structure. Compare geometry, text and contrast. Ask: what is the strongest focal point? Is it the same object the user needs? Does the first 2 seconds look like screenshot 01/08? Are all important actions retained? Are empty, error and reduced-motion states genuinely implemented? Repeat until the same graphite identity is unmistakable without importing unrelated features.

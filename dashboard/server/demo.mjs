@@ -12,7 +12,7 @@ const short = (s, max = 300) => {
   return s.trim();
 };
 const categories = {fuel:"benzinărie", cafe:"cafenea", pharmacy:"farmacie", supermarket:"supermarket", auto_parts:"magazin de piese"};
-export const demoCommands = ["start_trip","resume_trip","stop_at_poi","end_trip","scene","set_llm","set_child","inject_message","apply_route","play_youtube","stop_media","create_reminder","complete_reminder","defer_reminder","read_message","reply_message","answer","request","set_rate","set_speed","reset","replay"];
+export const demoCommands = ["start_trip","resume_trip","stop_at_poi","end_trip","scene","set_llm","set_child","inject_message","apply_route","play_youtube","play_catalog","stop_media","create_reminder","complete_reminder","defer_reminder","read_message","reply_message","answer","request","set_rate","set_speed","reset","replay"];
 
 export class DemoDrive {
   constructor({profile = defaultProfile, now = () => Date.now()/1000, emit = () => {}} = {}) {
@@ -99,8 +99,9 @@ export class DemoDrive {
   play(id) {
     if (!/^[\w-]{11}$/.test(id)) throw new InputError("Link YouTube invalid.");
     if(this.alert) throw new InputError("Redarea așteaptă încheierea alertei.",409);
+    if(this.child)throw new InputError("Piesele YouTube nu sunt validate pentru copilul declarat.",409);
     this.requestedVideo=id;
-    this.emit({type:"media",action:"play",provider:"youtube",video_id:id,volume:this.scene===6?Math.min(.25,this.profile.preferences.volume):this.profile.preferences.volume});
+    this.emit({type:"media",action:"play",provider:"youtube",video_id:id,title:this.profile.youtube_tracks.find(t=>t.id===id)?.title??"Piesă YouTube",volume:this.scene===6?Math.min(.25,this.profile.preferences.volume):this.profile.preferences.volume});
   }
   answer(id,value) {
     const p=this.confirmable(id); const v=normalize(value);
@@ -211,6 +212,11 @@ export class DemoDrive {
       case "inject_message":return this.receiveMessage(args.text,"Mihai","whatsapp");
       case "apply_route":if(this.phase!=="ready"&&this.phase!=="finished")throw new InputError("Încheie călătoria înainte de schimbarea traseului.",409);this.route=makeRoute(args.geometry,args.stops);this.distance=0;this.atPoi=null;return;
       case "play_youtube":this.requireStop();return this.play(args.id);
+      case "play_catalog":
+        this.requireStop();
+        if(this.alert||this.child)throw new InputError("Catalogul local nu este disponibil în acest context.",409);
+        if(!/^[a-z0-9_-]{1,40}$/i.test(args.id??""))throw new InputError("Piesă invalidă.");
+        this.requestedVideo=args.id;this.emit({type:"media",action:"play",video_id:args.id,title:args.id,url:"/api/driver/media/"+args.id,volume:this.profile.preferences.volume});return;
       case "stop_media":return this.stopMusic();
       case "create_reminder":this.requireStop();return this.newReminder(args.task,args.category);
       case "complete_reminder":case "defer_reminder":{
@@ -281,7 +287,7 @@ export class DemoDrive {
     const cue=Math.floor((this.elapsedTicks+25)/120);
     if(cue>this.lastCue && this.phase==="moving"&&!this.alert)this.event("visual_cue","Semnal discret de probă.");
     this.lastCue=cue;
-    this.seq++;this.history.push(this.scores());if(this.history.length>120)this.history.shift();
+    this.seq++;this.history.push({...this.scores(),ts:this.now()});if(this.history.length>120)this.history.shift();
   }
   state() {
     const s=structuredClone(seed),scores=this.scores(),next=this.nextPoi();

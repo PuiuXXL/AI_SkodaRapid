@@ -1,0 +1,62 @@
+[data-workspace-theme] {color:var(--text);background:var(--ui-bg)}
+.dashboard.driver-app[data-workspace-theme] {background:var(--ui-bg)}
+.theme-toggle {display:flex;align-items:center;gap:12px;min-height:48px}
+.theme-toggle span {font-size:22px}
+.sidebar-collapsed .theme-toggle b {display:none}
+.drive-welcome {width:100%;margin:0;max-width:none;min-height:100svh;display:grid;place-items:center;text-align:center;padding:24px}
+.loading-wave {display:block;width:clamp(156px,20vw,236px);height:auto;margin:0 auto 24px;fill:var(--ui-accent)}
+.loading-wave ellipse {transform-box:fill-box;transform-origin:center}
+@media(prefers-reduced-motion:no-preference) {
+  .loading-wave ellipse {animation:disc-wave 1.35s ease-in-out infinite}
+}
+@keyframes disc-wave {
+  0%,100% {transform:scale(1)}
+  50% {transform:translateX(8%) scale(.70,.89)}
+}
+.drive-welcome h1 {font-size:clamp(42px,8vw,92px);letter-spacing:-.065em;margin:16px 0}
+.drive-welcome p {color:var(--muted)}
+.drive-welcome a {display:inline-flex;padding:12px;color:inherit}
+.drive-welcome.departing > div {animation:welcome-out .22s ease-in both}
+@keyframes welcome-out {to{opacity:0;transform:translateY(-10px)}}
+@keyframes cockpit-in {from{opacity:0;transform:translateY(8px)}}
+.cockpit {max-width:1120px;margin:clamp(24px,6vh,68px) auto;animation:cockpit-in .22s ease-out}
+.cockpit-title,.cockpit-summary {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.cockpit-title h1 {font-size:clamp(42px,6vw,84px);letter-spacing:-.07em;font-weight:520;margin:4px 0 22px}
+.cockpit small,.cockpit-tile span {color:var(--muted)}
+.cockpit-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(12px,2vw,24px)}
+.cockpit-actions .cockpit-tile {display:grid;justify-items:start;align-content:start;text-align:left;gap:8px;padding:clamp(18px,3vw,36px);min-height:158px;background:var(--ui-surface-1);color:var(--text);border:1px solid var(--line);border-radius:22px}
+.cockpit-tile strong {font-size:clamp(19px,2.3vw,34px);letter-spacing:-.04em;line-height:1.1}
+.cockpit-tile svg {width:34px;height:34px;margin-bottom:18px}
+.cockpit-actions .voice-tile {background:var(--accent);color:var(--ui-on-accent)}
+.voice-tile span {color:inherit}
+.cockpit-title h1 span {display:block;font-size:clamp(19px,2.2vw,31px);letter-spacing:-.035em;line-height:1.2;margin-top:8px;color:var(--muted)}
+.voice-wave {display:flex;align-items:center;gap:3px;width:min(100%,220px);height:50px;margin-bottom:2px}
+.voice-wave i {display:block;flex:1 1 4px;max-width:5px;min-width:0;border-radius:8px;background:currentColor}
+.voice-wave[data-listening=false] i {max-height:3px;opacity:.68}
+@media(prefers-reduced-motion:no-preference){
+  .voice-wave[data-listening=true] i {animation:voice-listening .85s ease-in-out infinite alternate}
+}
+@keyframes voice-listening {from{transform:scaleY(.46)}to{transform:scaleY(1)}}
+.cockpit-summary {padding:20px 0;margin-top:12px;border-bottom:1px solid var(--line)}
+.driver-main .monitor-page .perf {display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;padding:0;border:0;background:transparent}
+.monitor-page .perf>span {display:none}
+.vision-stat {padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--ui-surface-1);display:grid;gap:8px}
+.vision-stat strong {font-size:24px;font-variant-numeric:tabular-nums}
+.vision-stat small,.vision-column small {color:var(--muted)}
+.vision-ring {position:relative;display:grid;place-items:center;max-width:162px;margin:auto;width:100%}
+.vision-ring svg {width:100%;height:auto}
+.vision-ring>div {position:absolute;display:grid;text-align:center}
+.vision-ring strong {font-size:30px}
+.vision-columns {margin:20px 0;padding:16px;background:var(--ui-inset);border-radius:14px}
+.vision-columns figcaption {display:flex;justify-content:space-between;gap:8px}
+.vision-bars {display:flex;justify-content:space-around;align-items:end;gap:10px;margin-top:18px}
+.vision-column {display:grid;justify-items:center;text-align:center;gap:6px;flex:1}
+.vision-bar-track {height:66px;width:14px;display:flex;align-items:end;background:var(--line);border-radius:7px}
+.vision-bar-track i {background:var(--accent);width:100%;border-radius:7px}
+.vision-timelines figure {margin:10px 0;display:grid;grid-template-columns:65px minmax(0,1fr);align-items:center;gap:10px}
+.vision-timelines figcaption {font-size:12px;color:var(--muted)}
+.vision-timelines svg {width:100%;height:54px}
+.monitor-page .response {grid-template-columns:1fr auto 1fr}
+.ratio-reading {padding:4px 10px;background:var(--ui-inset);border-radius:8px}
+@media(max-width:600px){.cockpit-actions .cockpit-tile{min-height:132px}.cockpit-tile svg{margin-bottom:8px}.cockpit-summary{display:grid}}
+@media(prefers-reduced-motion:reduce){.drive-welcome.departing>div,.cockpit{animation:none}}

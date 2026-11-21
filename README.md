@@ -1,4 +1,9 @@
-# AI_SkodaRapid: DriveMate
+# DriveMate
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="dashboard/public/brand/drivemate_full_dark.svg">
+  <img alt="DriveMate" src="dashboard/public/brand/drivemate_full_light.svg" width="220">
+</picture>
 
 AI driver-monitoring copilot, built at CodeLap Hackathon 2026 (AI Drive track).
 
@@ -6,7 +11,7 @@ AI driver-monitoring copilot, built at CodeLap Hackathon 2026 (AI Drive track).
 
 ## Design și contribuții
 
-Interfețele web folosesc [Obsidian Orange](.agents/skills/obsidian-orange-web-skill/SKILL.md). Pachetul complet este inclus în repository. Vezi [regulile pentru agenți](AGENTS.md) și [aplicarea în DriveMate](docs/design/obsidian-orange.md) înainte de modificări UI.
+Interfețele web folosesc [DriveMate Graphite](.agents/skills/obsidian-orange-web-skill/SKILL.md). Pachetul complet este inclus în repository. Vezi [regulile pentru agenți](AGENTS.md) și [aplicarea în DriveMate](docs/design/obsidian-orange.md) înainte de modificări UI.
 
 ## Repository structure
 

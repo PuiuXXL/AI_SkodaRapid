@@ -1,5 +1,5 @@
 /**
- * Original Obsidian Orange recipe: React + Motion for dynamic navigation.
+ * Original DriveMate Graphite recipe: React + Motion for dynamic navigation.
  * Install: npm i motion
  * Import ./GlassSidebarMotion.css and adapt routing, icons and branding to your app.
  * Official docs: https://motion.dev/docs/react-layout-animations

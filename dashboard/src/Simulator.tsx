@@ -1,14 +1,14 @@
 import React,{useRef,useState} from "react";
-import type {SessionData} from "./types";
+
 import type {SimulationSettings} from "./session";
 import type {RouteSimulation} from "./route-simulation";
 import {EXAMPLE_POINTS} from "./route-simulation";
 import {fmt,Metrics} from "./Panels";
-import {ScoreHistory} from "./ScoreHistory";
+
 import {RouteMap} from "./RouteMap";
 
-export function Simulator({data,settings,onChange,routeSimulation:sim}: {
-  data:SessionData;
+export function Simulator({settings,onChange,routeSimulation:sim}: {
+
 
   settings:SimulationSettings;
   onChange:(settings:SimulationSettings)=>void;
@@ -109,6 +109,6 @@ export function Simulator({data,settings,onChange,routeSimulation:sim}: {
       <pre aria-label="Input locație JSON">{payload?JSON.stringify(payload,null,2):"Adaugă un punct pentru a vedea coordonatele."}</pre>
       <div className="simulator-actions"><button disabled={!payload} onClick={copy}>Copiază JSON</button><span role="status">{copied}</span></div>
     </section>
-    <ScoreHistory points={data.history}/>
+
   </div>;
 }

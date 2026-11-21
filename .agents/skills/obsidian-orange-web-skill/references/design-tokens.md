@@ -2,39 +2,39 @@
 
 ## Identity
 
-**Reference priority:** the cyber UI in images 01 and 08. The effect must feel precise, quiet, engineered and premium rather than loudly cyberpunk. Orange should guide attention and communicate product hierarchy.
+**Reference priority:** the DriveMate landing for color, images 01 and 08 for layout and material. The effect must feel precise, quiet, engineered and premium rather than loudly cyberpunk. Silver should guide attention and communicate product hierarchy.
 
 ## Color system
 
 | Token | Suggested value | Usage |
 |---|---|---|
-| `--ui-bg` | `#090A0C` | Primary canvas |
-| `--ui-bg-raised` | `#111317` | Alternate page section |
-| `--ui-surface-1` | `#16181C` | Primary card |
-| `--ui-surface-2` | `#1C1F24` | Elevated, interactive panel |
+| `--ui-bg` | `#151515` | Primary canvas |
+| `--ui-bg-raised` | `#1b1b1b` | Alternate page section |
+| `--ui-surface-1` | `#202020` | Primary card |
+| `--ui-surface-2` | `#292929` | Elevated, interactive panel |
 | `--ui-surface-soft` | `rgba(255,255,255,.035)` | Soft translucent overlay |
-| `--ui-glass` | `rgba(30,31,34,.68)` | Floating side menu and modal surfaces |
-| `--ui-glass-heavy` | `rgba(22,23,27,.86)` | Text-heavy translucent panels |
+| `--ui-glass` | `rgba(32,32,32,.68)` | Floating side menu and modal surfaces |
+| `--ui-glass-heavy` | `rgba(27,27,27,.86)` | Text-heavy translucent panels |
 | `--ui-stroke` | `rgba(255,255,255,.10)` | 1px quiet border |
 | `--ui-stroke-strong` | `rgba(255,255,255,.17)` | Dividers / controls |
-| `--ui-text` | `#F4F2EF` | Headlines and body |
-| `--ui-text-muted` | `#B2B0AF` | Secondary content |
-| `--ui-text-subtle` | `#85868A` | Tertiary metadata; verify contrast |
-| `--ui-accent` | `#FF7144` | Primary orange |
-| `--ui-accent-hover` | `#FF895C` | Hover and focus enhancement |
-| `--ui-accent-dim` | `rgba(255,113,68,.14)` | Selected states |
-| `--ui-accent-stroke` | `rgba(255,113,68,.34)` | Highlight border |
+| `--ui-text` | `#f5f5f5` | Headlines and body |
+| `--ui-text-muted` | `#b5b5b5` | Secondary content |
+| `--ui-text-subtle` | `#a3a3a3` | Tertiary metadata; verify contrast |
+| `--ui-accent` | `#cecece` | Primary silver |
+| `--ui-accent-hover` | `#e4e4e4` | Hover and focus enhancement |
+| `--ui-accent-dim` | `rgba(206,206,206,.14)` | Selected states |
+| `--ui-accent-stroke` | `rgba(206,206,206,.34)` | Highlight border |
 | `--ui-success` | `#49C89E` | Good / available |
 | `--ui-danger` | `#F46D72` | Destructive / critical |
 | `--ui-warning` | `#FFBC65` | Warning |
 | `--ui-info` | `#78B9FF` | Independent information color |
 
-Do not use low-contrast orange body copy on warm, gray surfaces without testing. On bright orange buttons, use a near-black label (`#17110D`) rather than white. Maintain semantic colors where users expect them; orange does not replace green for gains, red for losses, or severity semantics.
+Do not use low-contrast silver body copy on graphite surfaces without testing. On bright silver buttons, use a near-black label (`#151515`) rather than white. Maintain semantic colors where users expect them; silver does not replace green for gains, red for losses, or severity semantics.
 
 ## Backdrop & glow
 
-- Main canvas: charcoal with an extremely subtle directional warm light, not a saturated gradient.
-- Local warmth: one low-opacity orange blur behind a hero/important chart or hovered control.
+- Main canvas: charcoal with an extremely subtle directional neutral light, not a saturated gradient.
+- Local highlight: one low-opacity silver blur behind a hero/important chart or hovered control.
 - Optional secondary cool illumination (very low saturation) in technical or automotive product showcases; it must stay subordinate.
 - No heavy grain/noise texture unless the user requests it. No global backdrop blur on all cards.
 
@@ -44,7 +44,7 @@ Do not use low-contrast orange body copy on warm, gray surfaces without testing.
 - **Glass 2 (floating contextual card):** 78–88% opacity, 12–18px blur; prioritizes readability.
 - **Solid 1 (dashboard/table):** opaque graphite, 1px subtle border, no blur.
 - **Inset:** deeper charcoal for charts, code, logs and plot wells.
-- **Orange-active:** dark orange-tinted surface, thin orange stroke, tiny inner highlight.
+- **Silver-active:** dark silver-tinted surface, thin silver stroke, tiny inner highlight.
 
 If browser support or performance is limited: use solid color fallbacks before `backdrop-filter`; do not make content illegible if transparency is disabled.
 
@@ -74,7 +74,7 @@ If browser support or performance is limited: use solid color fallbacks before `
 - Card border: translucent 1px; show separation through tonality, not deep black borders.
 - Shadow: soft `0 16px 45px rgba(0,0,0,.24)` for elevated elements; cards use much less.
 - Optional top-edge gradient border / reflection on only a few premium surfaces.
-- Orange bloom: `0 0 30px rgba(255,113,68,.10)` behind primary CTAs or selected plot elements. Don't put this everywhere.
+- Silver bloom: `0 0 30px rgba(206,206,206,.10)` behind primary CTAs or selected plot elements. Don't put this everywhere.
 
 ## Motion
 
@@ -86,18 +86,18 @@ If browser support or performance is limited: use solid color fallbacks before `
 
 ## Chart colors
 
-- Primary series: accent orange.
-- Secondary: desaturated slate, warm gray, pale gold.
+- Primary series: accent silver.
+- Secondary: desaturated slate, neutral gray, pale gold.
 - Semantic: green/red/warning based on meaning, not theme.
 - Line grid: white 6–9% opacity; axes and legends must remain readable.
 - Tooltips: heavy glass or opaque dark; strong numbers, subdued labels, thin border.
-- Preserve meaningful comparison and numeric integrity; don't blend multiple series into one orange glow.
+- Preserve meaningful comparison and numeric integrity; don't blend multiple series into one silver glow.
 
 ## Accessibility / perceptual constraints
 
 - Minimum WCAG AA contrast: 4.5:1 for ordinary text and 3:1 for large text/UI boundaries where applicable.
 - The exact token pairing matters; test it in actual rendered contexts, especially muted labels and charts.
 - Active states need shape/label/border as well as hue.
-- Keyboard focus must have a visible outline on dark and orange surfaces.
+- Keyboard focus must have a visible outline on dark and silver surfaces.
 - Preferred interactive target 44×44px where feasible.
 - Avoid unnecessary horizontal layout shifts, overlay obstruction and high-cost full-screen blurs.

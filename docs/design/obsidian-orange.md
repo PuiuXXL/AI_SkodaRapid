@@ -1,4 +1,4 @@
-# Obsidian Orange în DriveMate
+# DriveMate Graphite în DriveMate
 
 Sistem vizual comun adoptat la 21 noiembrie 2026. Sursa completă este în [skill set](../../.agents/skills/obsidian-orange-web-skill/SKILL.md); [AGENTS.md](../../AGENTS.md) îl face regulă pentru modificările viitoare ale interfețelor.
 
@@ -16,7 +16,7 @@ Schiță: `[meniu flotant 268/80] [titlu + stare / telemetrie / cameră | scorur
 
 ## Tokenuri și mișcare
 
-Tokenurile comune sunt în `dashboard/src/voice/obsidian-tokens.css`, servit și de serverul de test vocal existent. Culori centrale: canvas `#090a0c`, panouri `#16181c`, suprafețe ridicate `#1c1f24`, text `#f4f2ef`, text secundar `#b2b0af`, accent `#ff7144`. Fontul existent Segoe UI rămâne; valorile folosesc cifre tabulare. Ritm de 8 px, ajustări de 4 px, carduri de 16 px. Roșul și galbenul păstrează semnificația alertelor.
+Tokenurile comune sunt în `dashboard/src/voice/obsidian-tokens.css`, servit și de serverul de test vocal existent. Culori centrale: canvas `#151515`, panouri `#202020`, suprafețe ridicate `#292929`, text `#f5f5f5`, text secundar `#b5b5b5`, accent `#cecece`. Fontul existent Segoe UI rămâne; valorile folosesc cifre tabulare. Ritm de 8 px, ajustări de 4 px, carduri de 16 px. Roșul și galbenul păstrează semnificația alertelor.
 
 | Declanșator | Scop / componentă | Implementare | Mișcare redusă |
 |---|---|---|---|
@@ -31,8 +31,8 @@ Nu se adaugă biblioteci. Intrarea decorativă GSAP este eliminată din monitori
 
 - Build de producție și verificare TypeScript: reușite.
 - Cele 8 teste existente pentru date, randare, scoruri și geometria traseului: reușite.
-- Simulatorul a fost inspectat în Chrome la lățime desktop: suprafețe grafit, accent portocaliu, hartă, panouri flotante și navigare restrânsă vizibile.
+- Simulatorul a fost inspectat în Chrome la lățime desktop: suprafețe grafit, accentul de la verificarea inițială, hartă, panouri flotante și navigare restrânsă vizibile.
 - Verificarea interactivă desktop/mobil nu a putut fi finalizată: controlul ferestrei Chrome a fost întrerupt de inputul utilizatorului. Sertarul mobil, focusul, Escape și preferința meniului necesită o probă manuală în browser.
 - Validatorul Python al skill-ului nu a rulat, deoarece Python nu este instalat în mediul disponibil. Pachetul sursă este păstrat în proiect și apare în catalogul de skill-uri al sesiunii.
 
-Excepții deliberate: imaginile cartografice își păstrează semantica. Ilustrația oculară folosește iris arămiu cu fibre și reflexii, scleră grafit și tokenuri optice comune; nu reprezintă o măsurătoare live. Documentele istorice, schițele și moodboard-ul rămân referințe, nu ecrane de aplicație. Modulele de percepție, core și asistent nu sunt rescrise pentru o cerință vizuală.
+Excepții deliberate: imaginile cartografice își păstrează semantica. Ilustrația oculară folosește iris argintiu cu fibre și reflexii, scleră grafit și tokenuri optice comune; nu reprezintă o măsurătoare live. Documentele istorice, schițele și moodboard-ul rămân referințe, nu ecrane de aplicație. Modulele de percepție, core și asistent nu sunt rescrise pentru o cerință vizuală.
