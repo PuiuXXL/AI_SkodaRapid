@@ -2,10 +2,12 @@
 
 :class:`Safety` wires the rules into the engine:
 
-* the SOS machine (C3, C4, C5) runs on every PerceptionFrame (fast path) and on every tick (timers);
+* the drowsiness rule (C3, C4: eyes closed longer than a blink, the check-in question) and the SOS machine (C4, C5)
+  run on every PerceptionFrame (fast path) and on every tick (timers);
 * the distraction escalation (C2), the monitoring rule (C7), the A/B counter (B8) and the arbiter (C1, C8 veto) run
   on every tick;
-* the browser's ``alarm_played`` gives the alarm latency, its ``speech`` the spoken answers.
+* the browser's ``alarm_played`` gives the alarm latency and starts "Ești bine?" after the clip, ``speak_done`` the
+  answer window, ``speech`` the spoken answers.
 
 SOS channels: the DriveMate Contact page when P4's ``integrations.contact_app`` exists; ``call`` (Twilio) and
 ``sms`` (the driver's phone, via the bridge) report ``not_connected`` until the phone part is wired.
@@ -22,9 +24,10 @@ from core.dialog_window import DialogWindow
 from core.safety.alarm import Alarms
 from core.safety.arbiter import Arbiter
 from core.safety.distraction import DistractionRule
+from core.safety.drowsiness import DrowsinessRule
 from core.safety.monitoring import MonitoringRule
 from core.safety.sos import SosChannel, SosMachine
-from shared.contracts import SosReport, State, UiAlarmPlayed, UiSpeech
+from shared.contracts import SosReport, State, UiAlarmPlayed, UiSpeakDone, UiSpeech
 
 if TYPE_CHECKING:
     from core.engine import Engine
@@ -63,8 +66,10 @@ class Safety:
         channels = default_sos_channels() if sos_channels is None else sos_channels
         self.sos = SosMachine(engine, self.arbiter, self.alarms, self.dialog, channels)
         self.sos.ab = self.ab
+        self.drowsiness = DrowsinessRule(engine, self.arbiter, self.sos, self.dialog)
         self.distraction = DistractionRule(engine, self.arbiter, self.alarms, self.ab)
         self.monitoring = MonitoringRule(engine, self.arbiter)
+        engine.add_frame_listener(self.drowsiness.on_frame)  # the timer first: it may start the SOS on this frame
         engine.add_frame_listener(self.sos.on_frame)
         engine.add_browser_listener(self.on_browser)
         engine.add_tick_listener(self.on_tick)
@@ -73,17 +78,23 @@ class Safety:
     def on_browser(self, message: Any, now: float) -> None:
         if isinstance(message, UiAlarmPlayed):
             self.alarms.on_played(message.id, now)
+            self.sos.on_alarm_played(message.id, now)
+        elif isinstance(message, UiSpeakDone):
+            self.sos.on_speak_done(message.id, now)
         elif isinstance(message, UiSpeech):
             self.sos.on_speech(message, now)
+            self.drowsiness.on_browser(message, now)
 
     def on_tick(self, state: State, now: float) -> None:
         self.dialog.tick(state, now)
         self.sos.tick(state, now)
+        self.drowsiness.tick(state, now)
         self.distraction.tick(state, now)
         self.monitoring.tick(state, now)
         self.ab.tick(state, now)
         self.arbiter.tick(state, now)
 
     def reset(self, now: float) -> None:
-        for part in (self.dialog, self.arbiter, self.alarms, self.sos, self.distraction, self.monitoring, self.ab):
+        for part in (self.dialog, self.arbiter, self.alarms, self.sos, self.drowsiness, self.distraction,
+                     self.monitoring, self.ab):
             part.reset(now)

@@ -27,6 +27,18 @@ sos:                            # C5, F6: driver not responding
   # Spoken to the passenger when the countdown starts (clip passenger_instructions_<passenger>_<driver> when it
   # exists, TTS otherwise). Never "apucă volanul". Fields: passenger_name, driver_name
   passenger_instructions: "{passenger_name}, {driver_name} nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+  # The second "Ești bine?": the eyes opened but no answer came (TTS). Fields: driver_name
+  reask: "{driver_name}, mă auzi? Spune da sau dă din cap."
+
+drowsiness:                     # C3, C4: a closure that ended before the alarm (core/safety/drowsiness.py), no LLM
+  # One yes / no question: "da" = the break. At most 15 words. Fields: driver_name
+  checkin: "{driver_name}, ai închis ochii câteva clipe. Facem o pauză?"
+  # After "Ești bine?" was answered (the SOS was cancelled). Fields: driver_name
+  checkin_after_sos: "{driver_name}, facem o pauză?"
+  # Yes, with the nearest stop ahead (core.reminders.pick_stop). Fields: poi_name, dist_km
+  break_stop: "Bine. Cea mai apropiată oprire e {poi_name}, la {dist_km} km."
+  break_no_stop: "Bine. Oprește când poți, în siguranță."
+  declined: "Bine. Sunt aici dacă ai nevoie."
 
 safe_contact:                   # C10, F8: tired driver who refused the assistant
   # SMS from the driver's phone (send_sms to=safe_contact) and the yellow notice on DriveMate Contact.
@@ -81,10 +93,11 @@ clips:
   default_passenger: "maria"
 
 # C2: the voice stage of a P2 distraction (fixed texts, no LLM; the alarm comes after if it goes on).
+# Fields: driver_name
 escalation:
-  off_road: "Ochii pe drum."
-  phone: "Lasă telefonul."
-  phone_message: "Lasă telefonul, ți-l citesc eu."   # a message is waiting (scene 3)
+  off_road: "{driver_name}, fii atent la drum, te rog."
+  phone: "{driver_name}, lasă telefonul, te rog."
+  phone_message: "{driver_name}, lasă telefonul, ți-l citesc eu."   # a message is waiting (scene 3)
 
 # B4: the cause of the distraction, for the event log. Fields: glances (in cause.window_s)
 causes:
@@ -112,6 +125,18 @@ naive:
 answers:
   "yes": ["da", "sunt bine", "e bine", "bine", "ok", "okay", "sunt ok", "sunt treaz", "totul e bine", "nicio problema"]
   "no": ["nu", "nu sunt bine", "nu e bine", "nu ma simt bine", "ajutor", "rau"]
+
+# The answer to "Ești bine?" (C4, core/safety/answers.py::parse_sos_voice). Same matching as `answers`, three groups:
+# a reassuring negation is a yes ("nu-i nimic", "nu mi-e rău"); only a clear "no" starts the countdown at once; a bare
+# "nu" is unclear: the question is asked once more. "Nu, sunt bine." (with the comma) is a yes; without punctuation
+# "nu sunt bine" is a no (safety first: the browser's STT rarely writes the comma).
+sos_answers:
+  "yes": ["da", "sunt bine", "e bine", "bine", "ok", "okay", "sunt ok", "sunt treaz", "totul e bine", "nicio problema",
+          "nu i nimic", "nu e nimic", "n am nimic", "nu am nimic", "nu mi e rau", "nu ti face griji",
+          "nu va faceti griji", "nu te ingrijora", "nu i problema", "nu e problema"]
+  "no": ["nu sunt bine", "nu e bine", "nu ma simt bine", "mi e rau", "ma simt rau", "rau", "ajutor", "ajuta ma",
+         "nu pot", "ma doare"]
+  "unclear": ["nu"]
 
 # zone_text for explanations.off_road, by driver.gaze.zone
 zones:

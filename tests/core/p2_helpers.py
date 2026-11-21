@@ -15,12 +15,19 @@ from core.safety import Safety
 from core.safety.sos import SosChannel
 from core.scorecard import TripReport
 from core.scoring import Scores
+from core.settings import th
 from core.simulation import FakeSimulator
 from scripts.fake_perception import FakePerception
 
 T0 = 1_000_000.0
 FRAME_HZ = 15.0
 TICK_HZ = 10.0
+
+# The SOS timeline without browser feedback (no alarm_played / speak_done: the fallbacks apply).
+ALARM_S = th("safety", "drowsiness", "alarm_ms") / 1000.0  # eyes shut this long -> alarm
+ASK_AFTER = th("sos", "alarm_clip_s") + th("sos", "ask_after_alarm_s")  # alarm -> "Ești bine?"
+ASK_WINDOW = th("sos", "ask_clip_s") + th("sos", "answer_window_s")  # "Ești bine?" -> countdown (no answer)
+COUNTDOWN = th("sos", "countdown_s")
 
 
 class RecordingHub(Hub):

@@ -16,10 +16,25 @@ safety:
   alarm_target_ms: 300          # C3: threshold crossed -> alarm_played; the dashboard colors alarm_ms against it
   min_gaze_conf: 0.5            # driver.gaze.conf below this = unknown zone (unknown never alerts)
 
-  microsleep:                   # P1 (C3, C4): eyes closed -> alarm with the driver's name
-    closed_ms: 1000             # driver.eyes.closed_ms at or above = microsleep (P1 always sends microsleep=false)
+  drowsiness:                   # C3, C4: eyes closed longer than a blink (core/safety/drowsiness.py)
+    # P2's own timer (safety.drowsiness.eyes_shut_ms) over driver.eyes.closed_ms; P1 always sends microsleep=false.
+    # A closure that ends before alarm_ms gets the check-in question instead of the alarm.
+    checkin_min_ms: 1000        # a closure at least this long that ends (eyes open again) -> "Facem o pauză?"
+    warn_ms: 2000               # still closed this long -> discrete signal (visual_cue) + P2 alert (voice, music stop)
+    alarm_ms: 3000              # still closed this long -> the alarm with the driver's name, then "Ești bine?" (SOS)
     min_speed_kmh: 0            # 0 = also when stopped (safety first); raise it to silence a parked car
-    nodding_alarm: true         # driver.head.nodding (fatigue head drop) also raises the P1 alarm
+    blink_max_ms: 500           # a closure / dropout up to this long is a blink: "eyes open for N s" goes on over it
+    hold_from_ms: 1000          # a closure at least this long, or one with driver.head.nodding (the head falls) ...
+    face_lost_hold_ms: 2500     # ... keeps counting while the face is lost / the eyes unreliable, up to this long
+                                # (P1 holds a closure over a gap of 200 ms only; a falling head leaves the tracker)
+    episodes_window_min: 10     # safety.drowsiness.episodes_10min: closures >= checkin_min_ms in this window
+
+  checkin:                      # the question after a closure that ended before the alarm (deterministic, no LLM)
+    after_open_s: 1.0           # asked once the eyes have been open this long
+    cooldown_min: 10            # at most one check-in after a closure per window (the one after an SOS: always)
+    window_s: 8                 # answer window from the question (the sentence takes ~3 s)
+    max_wait_s: 30              # dropped when it cannot be asked within this (an alert, the SOS, the eyes shut again)
+    after_sos_s: 2.5            # after "Ești bine?" was answered: asked once the "Ok." clip is over
 
   distraction:                  # P2: critical distraction
     min_speed_kmh: 10           # below this no P2 alert (parking, standing in traffic)
@@ -30,7 +45,7 @@ safety:
     lap_pattern_min_conf: 0.35  # source=lap_pattern counts only at or above this conf (P1 sends 0.40)
 
   escalation:                   # C2: discrete signal (event visual_cue) -> voice -> alarm, for P2 distractions
-    voice_after_ms: 1500        # still distracted this long after the visual cue -> voice
+    voice_after_ms: 1000        # still distracted this long after the visual cue -> voice (off road 3 s in total)
     alarm_after_ms: 3000        # still distracted this long after the visual cue -> alarm
     cooldown_s: 10              # the same spoken warning is not repeated within this (the cue and the alarm always fire)
 
@@ -39,11 +54,18 @@ safety:
     repeat_s: 30                # repeat the announcement while it is still lost
 
 sos:                            # P0 (C4, C5): alarm -> "Ești bine?" -> countdown -> SOS on three channels (F6)
-  ask_after_alarm_s: 1.5        # pause between the alarm clip and "Ești bine?"
-  ask_clip_s: 1.5               # length of the "Ești bine?" clip: the answer window starts after it
-  answer_window_s: 6            # time to answer "Ești bine?" (voice / nod / thumbs up) before the countdown
+  # The timers follow the browser: "Ești bine?" waits for alarm_played + the alarm clip, the answer window starts at
+  # the question's speak_done. The *_clip_s values are the fallbacks when the browser does not report (clips: 1.9 s,
+  # passenger instructions 7.2 s). The dialog window is open from the alarm on: a spoken "sunt bine" counts at once.
+  alarm_clip_s: 2.0             # length of alarm_<driver>.mp3: "Ești bine?" never covers it
+  ask_after_alarm_s: 0.5        # pause between the end of the alarm clip and "Ești bine?"
+  ask_clip_s: 2.0               # length of the "Ești bine?" clip (fallback for its speak_done)
+  answer_window_s: 8            # time to answer after the question ended (voice / nod / thumbs up)
+  reask_open_s: 2.0             # no answer, but the eyes are open this long -> asked once more instead of the countdown
+  reask_clip_s: 3.0             # length of the second question (TTS; fallback for its speak_done)
   countdown_s: 10               # countdown before the call; any "yes" (voice / nod / thumbs up) cancels it
-  instructions_clip_s: 6        # length of the passenger instructions clip (no alarm over it)
+  instructions_clip_s: 8        # length of the passenger instructions (fallback for their speak_done; no alarm over it)
+  instructions_pause_s: 0.5     # pause after the instructions before the first re-alarm
   realarm_s: 3                  # during the countdown, after the instructions, the alarm is replayed this often
 
 dialog:

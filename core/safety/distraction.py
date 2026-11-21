@@ -10,7 +10,8 @@ A distraction is critical when, above ``safety.distraction.min_speed_kmh``:
 
 One episode, while the condition holds: at once the ``visual_cue`` event (the dashboard lights up) and a P2 alert
 (the assistant's voice and the music stop, the LLM is silent); after ``escalation.voice_after_ms`` a fixed sentence
-("Ochii pe drum." / "Lasă telefonul, ți-l citesc eu." when a message is waiting); after ``alarm_after_ms`` the alarm.
+with the driver's name ("Andrei, fii atent la drum, te rog." / "Andrei, lasă telefonul, ți-l citesc eu." when a message
+is waiting); after ``alarm_after_ms`` the alarm. A distraction never starts the SOS: the driver is awake.
 The same sentence is not repeated within ``cooldown_s``. Nothing is said over a more critical alert (the SOS).
 When the episode ends, ``distraction_end`` logs how long the driver needed to come back (the visual reaction, B1).
 """
@@ -20,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from core import clips
 from core.ab_baseline import AbBaseline
 from core.safety.alarm import Alarms
 from core.safety.arbiter import Arbiter
@@ -123,7 +125,8 @@ class DistractionRule:
             return
         self.last_voice[key] = now
         text_key, clip_key = VOICE[key]
-        text = str(template("escalation", text_key))
+        driver, _ = clips.person_names(state)
+        text = render("escalation", text_key, driver_name=clips.display(driver))
         self.engine.say(str(template("clips", clip_key)), text, prefix="dis")
         self.engine.log_event("alert", now, text=text, explanation=explanation, alert=alert, level="P2")
 

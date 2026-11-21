@@ -39,7 +39,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 #: Bumped on every contract change (section 13).
-CONTRACT_VERSION = "2.1"
+CONTRACT_VERSION = "2.2"
 
 
 class ContractModel(BaseModel):
@@ -346,6 +346,29 @@ class SosStatus(ContractModel):
     state: SosState = "normal"
     since_ts: float | None = None  # when the current state started
     countdown_s: float | None = None  # seconds left, only in ``countdown``
+    # v2.2 (P2)
+    trigger: str | None = None  # what started it: "microsleep" (eyes closed) or "nodding" (the head fell)
+    reasked: bool = False  # "Ești bine?" was asked a second time (the eyes opened, no answer yet)
+
+
+#: ``safety.drowsiness.stage``: P2's own timer over ``driver.eyes.closed_ms`` (v2.2).
+#: ``none`` -> ``closed`` (longer than ``checkin_min_ms``) -> ``warning`` (``warn_ms``) -> ``alarm`` (``alarm_ms``).
+DrowsinessStage = Literal["none", "closed", "warning", "alarm"]
+
+
+class Drowsiness(ContractModel):
+    """Eyes closed longer than a blink (C3, C4; v2.2), from P2's timer.
+
+    ``eyes_shut_ms`` keeps counting while the face is briefly lost inside a closure (the falling head leaves the face
+    tracker); P1's ``closed_ms`` restarts then. A closure that ends before the alarm gets the check-in question.
+    """
+
+    stage: DrowsinessStage = "none"
+    eyes_shut_ms: float = 0.0  # the current closure; 0 with the eyes open
+    episodes_10min: int = 0  # closures of at least checkin_min_ms in the last episodes_window_min
+    last_episode_ms: float | None = None  # how long the last such closure lasted
+    last_episode_ts: float | None = None  # when it ended
+    last_checkin_ts: float | None = None  # when "Facem o pauză?" was last asked
 
 
 class Safety(ContractModel):
@@ -361,6 +384,7 @@ class Safety(ContractModel):
     monitoring_ok: bool = True
     alarm_ms_last: float | None = None  # threshold crossed -> alarm_played in the browser
     sos: SosStatus = Field(default_factory=SosStatus)  # P2 addition
+    drowsiness: Drowsiness = Field(default_factory=Drowsiness)  # v2.2 (P2)
 
 
 class LastInput(ContractModel):
@@ -568,11 +592,20 @@ CORE_EVENT_TYPES: tuple[str, ...] = (
     "alarm",                  # C3: the alarm clip was sent                  data: alarm_id, clip
     "alarm_played",           # C3: the browser played it                    latency_ms = alarm_ms, data: on_target
     "are_you_ok",             # C4: "Ești bine?" asked
+    "sos_reask",              # C4: asked again: the eyes opened, no answer  data: open_s, why (v2.2)
     "sos_countdown",          # C5: countdown started                        data: countdown_s
     "sos_cancelled",          # C5: cancelled                                channel: voice / nod / gesture
     "sos_sent",               # F6: call + SMS + Contact page                data: call_ok, sms_ok, page_ok
     "monitoring_lost",        # C7: "Nu te mai văd"                          data: reason
     "monitoring_restored",    # C7
+    # v2.2 (P2): eyes closed longer than a blink, before the alarm (core/safety/drowsiness.py)
+    "drowsy_warning",         # still closed warn_ms: discrete signal + P2   data: closed_ms
+    "eyes_reopened",          # a closure >= checkin_min_ms ended            data: closed_ms, episodes_10min, alarmed
+    "drowsy_check",           # "Facem o pauză?" asked                       data: reason (closure / after_sos)
+    "drowsy_check_skipped",   # not asked                                    data: reason (cooldown / expired)
+    "break_accepted",         # yes to the check-in: the nearest stop        channel, data: poi_id, poi_name
+    "break_declined",         # no to the check-in                           channel
+    "drowsy_check_unanswered",  # no answer within checkin.window_s
     "reminder_due",           # K2: stopped at a POI of the category         data: reminder_id, poi_id
     "reminder_done", "reminder_kept",  # K2: the answer (or none)   data: reminder_ids, channel
     "trip_report",            # J2, J3: end of the trip (end_trip / reset)   data: report
@@ -1274,6 +1307,8 @@ __all__ = [
     "DelegateAction",
     "Driver",
     "DriverPerception",
+    "Drowsiness",
+    "DrowsinessStage",
     "Event",
     "Expects",
     "Eyes",

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from p2_helpers import Rig
+from p2_helpers import ALARM_S, ASK_AFTER, ASK_WINDOW, Rig
 
 from core.settings import th
 
@@ -66,7 +66,7 @@ def test_phone_escalates_cue_voice_alarm() -> None:
     assert cue["data"]["alert"] == "phone" and cue["explanation"].endswith("la 50 km/h.")
     assert rig.state.safety.level == "P2" and rig.state.safety.alert == "phone"
     assert rig.state.safety.llm_allowed is False
-    assert warnings(rig) == ["Lasă telefonul."]
+    assert warnings(rig) == ["Andrei, lasă telefonul, te rog."]
     spoken = next(s for s in rig.speaks() if s["id"].startswith("dis"))
     assert spoken["sentences"] and spoken["clip_url"] is None  # no clip yet: P3's TTS, browser voice as fallback
     voice_at = rig.hub.events("alert")[0]["ts"]
@@ -86,7 +86,7 @@ def test_phone_with_a_waiting_message() -> None:
     rig.command("fake_message", {"from": "Mihai", "app": "whatsapp", "text": "Unde ești?"})
     rig.press("3")
     rig.run(PHONE_MIN + VOICE_AFTER + 0.3)
-    assert warnings(rig) == ["Lasă telefonul, ți-l citesc eu."]
+    assert warnings(rig) == ["Andrei, lasă telefonul, ți-l citesc eu."]
 
 
 def test_no_drivemate_alert_when_parked() -> None:
@@ -144,17 +144,17 @@ def test_same_warning_is_not_repeated_within_the_cooldown() -> None:
         rig.run(PHONE_MIN + VOICE_AFTER + 0.3)
         rig.press("1")
         rig.run(1.0)
-    assert len(cue_times(rig)) == 2 and warnings(rig) == ["Lasă telefonul."]
+    assert len(cue_times(rig)) == 2 and warnings(rig) == ["Andrei, lasă telefonul, te rog."]
     rig.run(th("safety", "escalation", "cooldown_s"))
     rig.press("3")
     rig.run(PHONE_MIN + VOICE_AFTER + 0.3)
-    assert warnings(rig) == ["Lasă telefonul.", "Lasă telefonul."]
+    assert warnings(rig) == ["Andrei, lasă telefonul, te rog.", "Andrei, lasă telefonul, te rog."]
 
 
 def test_quiet_during_the_sos() -> None:
     rig = Rig(scene=8)
     rig.press("8")
-    rig.run(th("sos", "ask_after_alarm_s") + th("sos", "ask_clip_s") + th("sos", "answer_window_s") + 0.5)
+    rig.run(ALARM_S + ASK_AFTER + ASK_WINDOW + 0.5)
     assert rig.state.safety.level == "P0"
     rig.patch = lambda frame, t: frame["driver"]["phone"].update(in_use=True, source="detector", conf=0.9)
     rig.run(PHONE_MIN + ALARM_AFTER + 0.5)
@@ -169,8 +169,18 @@ def test_quiet_during_the_sos() -> None:
 def test_microsleep_counts_on_both_sides() -> None:
     rig = Rig(scene=8)
     rig.press("7")
-    rig.run(1.5)
+    rig.run(ALARM_S + 0.5)
     assert (rig.state.ab.naive_alerts, rig.state.ab.our_alerts) == (1, 1)
+
+
+def test_a_short_closure_is_only_the_simple_thresholds_alarm() -> None:
+    """1.5 s with the eyes closed: the simple threshold (1 s) alarms, DriveMate asks about a break instead."""
+    rig = Rig(scene=8)
+    rig.press("7")
+    rig.run(1.5)
+    rig.press("1")
+    rig.run(2.0)
+    assert (rig.state.ab.naive_alerts, rig.state.ab.our_alerts) == (1, 0)
 
 
 def test_director_reset_clears_the_counter() -> None:

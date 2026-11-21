@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from p2_helpers import FakeClient, Rig
+from p2_helpers import ALARM_S, ASK_AFTER, FakeClient, Rig
 
 from assistant.client import AnswerInfo, AssistantClient
 from core import messages_timing, validator
@@ -145,7 +145,7 @@ async def test_a_safety_alert_drops_the_pending_question() -> None:
     await rig.link.drain()
     assert rig.link.dialog.has_pending(rig.t)
     rig.press("7")
-    rig.run(1.2)
+    rig.run(ALARM_S + 0.2)
     assert rig.state.safety.level == "P1" and not rig.link.dialog.has_pending(rig.t)
 
 
@@ -153,7 +153,7 @@ async def test_the_sos_answer_never_reaches_the_assistant() -> None:
     client = FakeClient()
     rig = Rig(scene=8, assistant=client)
     rig.press("7")
-    rig.run(1.2 + th("sos", "ask_after_alarm_s") + 0.5)
+    rig.run(ALARM_S + 0.2 + ASK_AFTER + 0.5)
     rig.press("1")
     say(rig, "da")
     await rig.link.drain()

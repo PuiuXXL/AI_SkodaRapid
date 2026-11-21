@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from p2_helpers import FakeClient, Rig
+from p2_helpers import ALARM_S, FakeClient, Rig
 
 from assistant.client import AssistantClient
 from core.safe_contact import elapsed_text
@@ -108,7 +108,7 @@ async def test_scene_6_with_p3s_client(tmp_path: Path) -> None:
     rig.run(0.2)
     assert rig.state.safe_contact.notified_ts is not None
     rig.press("7")  # the assistant is silent, safety is not
-    rig.run(1.5)
+    rig.run(ALARM_S + 0.3)
     assert rig.hub.of_type("alarm") and rig.state.safety.level == "P1"
 
 

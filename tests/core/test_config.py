@@ -14,7 +14,9 @@ from shared import contracts as c
 # Keys the role file asks for (roluri/P2-context-siguranta.md, step 1).
 REQUIRED_KEYS = [
     ("demo_mode",),
-    ("safety", "microsleep", "closed_ms"),
+    ("safety", "drowsiness", "alarm_ms"),
+    ("safety", "drowsiness", "checkin_min_ms"),
+    ("safety", "checkin", "cooldown_min"),
     ("safety", "distraction", "off_road_ms"),
     ("safety", "distraction", "phone_min_ms"),
     ("safety", "escalation", "alarm_after_ms"),
@@ -75,9 +77,20 @@ def test_score_thresholds_have_hysteresis() -> None:
         assert 0 < settings.th(block, "low") < settings.th(block, "high") <= 1
 
 
-def test_microsleep_is_longer_than_a_blink() -> None:
-    # P1 calls a closure longer than eyes.blink_max_ms (500 ms) a closure, not a blink.
-    assert settings.th("safety", "microsleep", "closed_ms") > 500
+def test_drowsiness_stages_are_ordered_and_longer_than_a_blink() -> None:
+    # P1 calls a closure longer than eyes.blink_max_ms (400 ms) a closure, not a blink.
+    stage = {key: settings.th("safety", "drowsiness", key) for key in ("checkin_min_ms", "warn_ms", "alarm_ms")}
+    assert 500 < stage["checkin_min_ms"] < stage["warn_ms"] < stage["alarm_ms"]
+    # a closure held over a lost face reaches the alarm before the hold runs out
+    held = settings.th("safety", "drowsiness", "hold_from_ms") + settings.th("safety", "drowsiness",
+                                                                            "face_lost_hold_ms")
+    assert held >= stage["alarm_ms"]
+
+
+def test_sos_waits_for_the_clips() -> None:
+    """The fallback lengths are at least the real clips (1.9 s alarm / "Ești bine?", 7.2 s instructions)."""
+    assert settings.th("sos", "alarm_clip_s") >= 1.9 and settings.th("sos", "ask_clip_s") >= 1.9
+    assert settings.th("sos", "instructions_clip_s") >= 7.2
 
 
 def test_tuning_never_touches_safety_rules() -> None:
@@ -112,6 +125,15 @@ TEMPLATE_FIELDS = {
     ("sos", "call"): {"driver_name", "unresponsive_s", "occupants_n", "passenger_state_text", "time_hhmm"},
     ("sos", "sms"): {"driver_name", "unresponsive_s", "occupants_n", "passenger_state_text", "maps_url", "time_hhmm"},
     ("sos", "passenger_instructions"): {"passenger_name", "driver_name"},
+    ("sos", "reask"): {"driver_name"},
+    ("drowsiness", "checkin"): {"driver_name"},
+    ("drowsiness", "checkin_after_sos"): {"driver_name"},
+    ("drowsiness", "break_stop"): {"poi_name", "dist_km"},
+    ("drowsiness", "break_no_stop"): set(),
+    ("drowsiness", "declined"): set(),
+    ("escalation", "off_road"): {"driver_name"},
+    ("escalation", "phone"): {"driver_name"},
+    ("escalation", "phone_message"): {"driver_name"},
     ("safe_contact", "sms"): {"driver_name", "elapsed_text", "maps_url", "eta_min"},
     ("safe_contact", "sms_no_eta"): {"driver_name", "elapsed_text", "maps_url"},
     ("safe_contact", "elapsed_hours"): {"h", "m"},

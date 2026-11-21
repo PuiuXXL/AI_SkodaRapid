@@ -3,7 +3,7 @@
 > Work in progress. This page starts with the contract; the core loop, the safety rules and the scores are added as
 > they land.
 
-## 1. The contract: `shared/contracts.py` (v2.1)
+## 1. The contract: `shared/contracts.py` (v2.2)
 
 One file, Pydantic v2, imported by every module. It follows `DriveMate-PLAN-FINAL.md` section 7 (state), section 6
 (actions) and section 13 (interfaces). Changes: `CONTRACT: <field>, <type>, <who writes it>, <why>` on the group, new
@@ -13,6 +13,10 @@ fields optional with a default, bump `CONTRACT_VERSION`, update `tests/core/fixt
 - **2.1:** `driver.face_conf` may be `null` (P1 sends null before the first monitoring result; with a number-only
   field those frames failed validation); `passenger.monitoring_ok / monitoring_warnings / camera_mode / face_conf`
   declared (P1 already sends them); `alarm_played` and other log types added to `CORE_EVENT_TYPES` (list only).
+- **2.2:** `safety.drowsiness {stage, eyes_shut_ms, episodes_10min, last_episode_ms, last_episode_ts,
+  last_checkin_ts}` (P2's timer for eyes closed longer than a blink, section 3), `safety.sos.trigger / reasked`, and
+  the log types `drowsy_warning`, `eyes_reopened`, `drowsy_check`, `drowsy_check_skipped`, `break_accepted`,
+  `break_declined`, `drowsy_check_unanswered`, `sos_reask`. All optional; P1 and P3 need no change.
 
 ### 1.1 What is in it
 
@@ -61,8 +65,8 @@ gesture_score`, `passenger.monitoring_reason`, `occupants[].profile_score`, `per
 capture_ts / age_ms / dropped_results`, `perf.degrade_level / stages_ms / publish_ts`, the `calibrate.quick` and
 `enroll.camera` command fields, the `ack` and `calibration_prompt` messages.
 
-**Microsleep:** P1 reports `driver.eyes.closed_ms` and always sends `microsleep: false`; core decides microsleep from
-`closed_ms` with the threshold in `core/config/thresholds.yaml`.
+**Microsleep:** P1 reports `driver.eyes.closed_ms` and always sends `microsleep: false`; core decides from
+`closed_ms` with the thresholds in `core/config/thresholds.yaml` (`safety.drowsiness`, section 3).
 
 Adopted from P3's proposals (`docs/assistant.md` sections 3-5): the event types (`EVENT_TYPES`), the `/ws/ui` and
 `/ws/phone` message formats, the `Action` extras (`source`, `clip_id`, `needs_confirmation`, `streamed`, `volume`).
@@ -168,11 +172,12 @@ highway, eyes closed up to 1.9 s, covered camera -> `monitoring_ok=false` (`occl
 
 | File | Rule |
 |---|---|
-| `sos.py` | **C3, C4, C5.** `normal -> alarm (P1) -> asking (P1) -> countdown (P0) -> sos_sent (P0)`. Alarm when `driver.eyes.closed_ms >= safety.microsleep.closed_ms` (eyes reliable) or `driver.head.nodding`, **on the frame itself** (fast path, not at the next tick). After `sos.ask_after_alarm_s`: the "Ești bine?" clip + a dialog window. No answer (or "nu"): the passenger instructions clip by name, the countdown, the alarm again every `realarm_s` after the instructions, then the report to every SOS channel. Any yes (voice, nod, thumbs up) cancels before the end. One alarm per closure: the eyes must open before the next one. |
+| `drowsiness.py` | **C3, C4.** P2's own timer over `driver.eyes.closed_ms` (`safety.drowsiness.eyes_shut_ms`); it goes on while the face is lost inside a real closure (`hold_from_ms` or `head.nodding`, up to `face_lost_hold_ms`: a falling head leaves the face tracker, P1 holds 200 ms only). Stages: a closure of `checkin_min_ms` (1 s) that ends -> after `checkin.after_open_s` (1 s) with the eyes open the fixed question "Andrei, ai închis ochii câteva clipe. Facem o pauză?" (yes = the nearest stop from `pick_stop`; at most once per `checkin.cooldown_min`, also while the assistant is silenced; never over an alert or another question); still closed at `warn_ms` (2 s) -> `visual_cue` + P2 alert; still closed at `alarm_ms` (3 s) -> the alarm, **on the frame itself**, and the SOS machine. One alarm per closure: the eyes must open before the next one. Blinks (`blink_max_ms`) never reset "the eyes are open". |
+| `sos.py` | **C4, C5.** `normal -> alarm (P1) -> asking (P1) -> countdown (P0) -> sos_sent (P0)`, started by `drowsiness.py`. The dialog window opens with the alarm (a spoken "sunt bine" counts at once) and covers the whole SOS. "Ești bine?" after `alarm_played` + `sos.alarm_clip_s` + `ask_after_alarm_s`; the answer window (`answer_window_s`) from the question's `speak_done`; the `*_clip_s` values are the fallbacks when the browser does not report. No answer but the eyes open `reask_open_s`, or a bare "nu": asked once more ("Andrei, mă auzi?"). A clear no ("nu sunt bine", "ajutor", 👎) or no answer: the passenger instructions by name, the countdown (`countdown_s` 10 s), the alarm again `instructions_pause_s` after the instructions ended (never over them) and every `realarm_s`, then the report to every SOS channel. Any yes (voice incl. "nu-i nimic", nod, 👍) cancels, then `drowsiness.py` asks "Andrei, facem o pauză?". A head shake is ignored here (waking up is no "no"). |
 | `alarm.py` | `alarm` message with `alarm_<driver>.mp3`; `alarm_ms` = core detection -> `alarm_played` from the browser, both on core's clock -> `safety.alarm_ms_last`, `perf.alarm_ms_last`, event `alarm_played` (`on_target` vs `safety.alarm_target_ms`). |
-| `monitoring.py` | **C7.** `safety.monitoring_ok` false for `lost_after_ms` -> P2 + "Nu te mai văd" clip + the reason in the log, repeated every `repeat_s`; "Te văd din nou" when it is back. Silent until the camera has seen the driver once in this trip, and never over a more critical alert. |
+| `monitoring.py` | **C7.** `safety.monitoring_ok` false for `lost_after_ms` -> P2 + "Nu te mai văd" clip + the reason in the log, repeated every `repeat_s`; "Te văd din nou" when it is back. Silent until the camera has seen the driver once in this trip, never over a more critical alert, and not while `drowsiness.py` holds a closure over the lost face. |
 | `arbiter.py` | **C1, C8 veto.** Every rule raises / clears its alert; `safety.level` = the most critical, `safety.alert`, `llm_allowed` = level not in P0-P2. A rise to a more critical level sends `speak_control: stop` and `media: stop` before the rule's own sound. |
-| `answers.py` | Yes / no from the voice (phrases in `templates.yaml`, the first one in the sentence wins), the nod (`head.answer`), the gesture (`Thumb_Up` / `Thumb_Down`). |
+| `answers.py` | Yes / no from the voice (phrases in `templates.yaml`, the first one in the sentence wins), the nod (`head.answer`), the gesture (`Thumb_Up` / `Thumb_Down`). For "Ești bine?" `parse_sos_voice` (`sos_answers`): reassuring negations are a yes, a bare "nu" is `unclear`, "Nu, sunt bine." (with the comma) is a yes. |
 | `../dialog_window.py` | Opens the window on both sides: `dialog_window` to P1 (nods and gestures) and `interaction.dialog_window_open` for the voice (no wake word needed). |
 | `../clips.py` | Picks P3's clips (`clips.json`) by name: `alarm_<driver>`, `passenger_instructions_<passenger>_<driver>`; default names while P1 does not recognise the person. |
 
@@ -180,15 +185,21 @@ highway, eyes closed up to 1.9 s, covered camera -> `monitoring_ok=false` (`occl
 when it exists), `call` (Twilio) and `sms` (the driver's phone through the bridge) report `not_connected` until the
 phone part is wired. A channel that fails is logged as `error: ...` and the others still run (C9).
 
-Checked end to end (core + `fake_perception.py` + a client playing the browser): scene 8 (eyes closed -> stop +
-alarm in 31-36 ms detection -> `alarm_played`, "Ești bine?" -> "Da" -> normal, LLM allowed again) and scene 9 (head
-drop -> alarm -> no answer -> "Maria, Andrei nu răspunde..." -> 10 s countdown with re-alarms -> SOS report).
+Timeline without browser feedback (fake time, `tests/core/test_safety.py`): eyes closed 1.5 s -> check-in at 2.6 s,
+no alarm; closed 2.5 s -> warning at 2 s, check-in at 3.6 s; head drop that stays down -> warning 2 s, alarm 3 s,
+"Ești bine?" 5.5 s, countdown 15.5 s, SOS sent at ~26 s; eyes open after the alarm but no answer -> second question at
+15.5 s, countdown 26.5 s, SOS ~37 s. Before 2.2 the alarm came at 1 s and the SOS at 20 s.
+
+Checked end to end before 2.2 (core + `fake_perception.py` + a client playing the browser): scene 8 (eyes closed ->
+stop + alarm in 31-36 ms detection -> `alarm_played`, "Ești bine?" -> "Da" -> normal, LLM allowed again) and scene 9
+(head drop -> alarm -> no answer -> "Maria, Andrei nu răspunde..." -> 10 s countdown with re-alarms -> SOS report).
+Not re-run live with the 2.2 timings yet.
 
 ## 4. Distractions (C2) and the A/B counter (B8)
 
 | File | Rule |
 |---|---|
-| `safety/distraction.py` | **C2.** Above `safety.distraction.min_speed_kmh`: `driver.gaze.off_road_ms` past `off_road_ms` (`off_road_ms_high_speed` from `high_speed_kmh`), or `driver.phone.in_use` for `phone_min_ms`. One episode: at once `visual_cue` + a P2 alert (voice and music stop, LLM silent); after `escalation.voice_after_ms` a fixed sentence ("Ochii pe drum." / "Lasă telefonul." / "Lasă telefonul, ți-l citesc eu." when a message is waiting); after `alarm_after_ms` the alarm. The same sentence is not repeated within `cooldown_s`; nothing is said over the SOS; `unknown` zones and low gaze confidence never alert. `distraction_end` logs the time to come back (visual reaction). |
+| `safety/distraction.py` | **C2.** Above `safety.distraction.min_speed_kmh`: `driver.gaze.off_road_ms` past `off_road_ms` (`off_road_ms_high_speed` from `high_speed_kmh`), or `driver.phone.in_use` for `phone_min_ms`. One episode: at once `visual_cue` + a P2 alert (voice and music stop, LLM silent); after `escalation.voice_after_ms` a fixed sentence with the name ("Andrei, fii atent la drum, te rog." / "Andrei, lasă telefonul, te rog." / "Andrei, lasă telefonul, ți-l citesc eu." when a message is waiting); after `alarm_after_ms` the alarm. A distraction never starts the SOS (the driver is awake). The same sentence is not repeated within `cooldown_s`; nothing is said over the SOS; `unknown` zones and low gaze confidence never alert. `distraction_end` logs the time to come back (visual reaction). |
 | `ab_baseline.py` | **B8.** The simple threshold on the same perception, without zones, calibration, context or speed: head past `yaw_deg` / `pitch_deg` for `min_ms` (a mirror check counts), eyes closed `closed_ms`, any phone in the driver camera (the passenger's too). One per episode, one per `cooldown_s`, logged as `naive_alert`. DriveMate's side counts each distraction episode and each microsleep alarm. Both go to `state.ab`. |
 
 Fixed texts without a clip go through P3's TTS (`/tts/...`); P3's player falls back to the browser's voice. Clip ids

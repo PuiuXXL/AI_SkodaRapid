@@ -43,7 +43,7 @@ def _lost_or_changed(src: Any, out: Any, path: str = "") -> list[str]:
 
 
 def test_version() -> None:
-    assert c.CONTRACT_VERSION == "2.1"
+    assert c.CONTRACT_VERSION == "2.2"
 
 
 def test_plan_example_validates_and_round_trips() -> None:

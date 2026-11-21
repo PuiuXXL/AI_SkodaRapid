@@ -3,7 +3,8 @@
 ``safety.monitoring_ok`` is false when there is no fresh frame or P1 says the driver camera does not see the face.
 After ``safety.monitoring.lost_after_ms`` the rule raises a P2 alert (the LLM goes silent), says the clip, logs the
 reason, and repeats it every ``repeat_s`` while it lasts. It only speaks once the camera has seen the driver in this
-trip (no announcement while core starts before P1), and it does not talk over a more critical alert (the SOS).
+trip (no announcement while core starts before P1), and it does not talk over a more critical alert (the SOS). While a
+closure is in progress (``core/safety/drowsiness.py`` holds it over a lost face) it waits: that is the alarm's job.
 """
 
 from __future__ import annotations
@@ -47,6 +48,9 @@ class MonitoringRule:
             self.lost_since = now
         if (now - self.lost_since) * 1000.0 < float(th("safety", "monitoring", "lost_after_ms")):
             return
+        drowsiness = getattr(self.engine.safety, "drowsiness", None)
+        if drowsiness is not None and drowsiness.closure is not None:
+            return  # the face got lost inside a closure (the head fell): the drowsiness rule and the SOS own it
         if self.announced_at is not None and now - self.announced_at < float(th("safety", "monitoring", "repeat_s")):
             return
         reason = state.driver.monitoring_reason or "unknown"
