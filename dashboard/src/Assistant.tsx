@@ -1,9 +1,9 @@
 import type { StateProps, SessionData } from "./types";
-﻿import React,{useEffect,useRef,useState} from "react";
+import React,{useEffect,useRef,useState} from "react";
 import {initVoice,onTranscript,stopVoice} from "./voice/index.js";
 import {Detail,Panel,Rows,time,words,fmt,yes} from "./Panels";
 
-function Voice({socket}: {socket: WebSocket | null}){
+function Voice({socket}: {socket: SessionData["socket"]}){
  const [status,setStatus]=useState("Oprită"),[subtitle,setSubtitle]=useState("");
  const active=useRef(false),off=useRef<(() => void) | null>(null);
  function stop(){

@@ -2,6 +2,8 @@
 
 P4's local React + TypeScript dashboard. Start in simulated mode; select **Live · local** to connect to P2 and P1. Simulated readings are synthetic and use the provisional P3 fixture.
 
+P2 integration handoff: [simulator location payload, proposed transport, ownership and acceptance checks](../docs/design/dashboard-react-typescript.md#contract-de-integrare-simulator--p2--21-noiembrie-2026). The route simulator currently previews/copies JSON locally; it does not send location to core.
+
 ```sh
 cd dashboard
 npm ci
