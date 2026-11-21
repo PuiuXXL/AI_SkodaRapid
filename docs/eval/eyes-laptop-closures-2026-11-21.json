@@ -1,0 +1,37 @@
+{
+  "meta": {
+    "mode": "replay of a labelled session",
+    "session": "20261121-145034_eval-laptop-closures",
+    "frames": 1554
+  },
+  "metrics": {
+    "closures_labelled": 4,
+    "closures_detected": 4,
+    "closed_ms_error_mean": 624.6,
+    "closed_ms_error_max": 827.9,
+    "closed_detect_latency_ms_median": 53.3,
+    "closed_detect_latency_ms_max": 109.5,
+    "nods_labelled": 2,
+    "nods_detected": 0,
+    "false_closures": 1,
+    "false_closures_per_min": 1.07,
+    "blinks_spontaneous": 7,
+    "face_width_px_median": 348.1,
+    "face_present_pct": 97.4,
+    "duration_s": 56.3,
+    "frames": 1554
+  },
+  "checks": {
+    "blink_detection": null,
+    "closed_2s": false,
+    "closed_latency": true,
+    "nodding": false,
+    "false_alarms": false,
+    "squint_smile": null,
+    "yawn_detection": null,
+    "no_false_yawn_speaking": null,
+    "speaking_segments": null,
+    "angle_jitter": null,
+    "face_too_small": null
+  }
+}
