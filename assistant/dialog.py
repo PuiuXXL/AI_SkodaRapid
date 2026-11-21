@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from typing import Iterable, Literal, Optional
 
 from assistant import cabin, media_search, music
-from assistant.answers import InputEvent, fuse, parse_kss
+from assistant.answers import InputEvent, fuse, parse_kss, request_after_answer
 from assistant.contract import Action, Event, State
 from assistant.quiz import QuizSession
 from assistant.refusal import is_refusal
@@ -295,6 +295,7 @@ class DialogManager:
             return DialogResult()
         self.pending = None
         result = DialogResult(handled=True, answer=answer.value, channel=answer.channel)
+        follow = self._request_after(inputs, answer)
 
         if answer.value == "yes":
             for action in held:
@@ -302,9 +303,16 @@ class DialogManager:
             clip = next((CONFIRM_CLIPS[a.type] for a in held if a.type in CONFIRM_CLIPS), None)
             if clip:
                 result.speak.append(_clip(clip))
+            if follow:
+                result.events.append(Event(type="driver_speech", data={"text": follow}))
             return result
 
         result.cancelled = list(held)
+        if follow and answer.value == "no":
+            # "Nu, vreau să pui muzică": the "no" cancels, the rest is a new request with its own answer
+            # (no "Bine, am anulat." in between).
+            result.events.append(Event(type="driver_speech", data={"text": follow}))
+            return result
         if any(a.type == "suggest_media" for a in held) and answer.value == "no":
             result.events.append(Event(type="media_declined", data={}))  # plan D8: -> quiz offer
         elif answer.value == "no":
@@ -312,6 +320,14 @@ class DialogManager:
         elif answer.value == "refusal":
             result.events.append(Event(type="driver_refused", data={}))
         return result  # "silence" (open palm): cancel quietly
+
+    @staticmethod
+    def _request_after(inputs: list[InputEvent], answer) -> Optional[str]:
+        """The new request spoken after a yes / no ("nu, vreau să pui muzică"), if the answer came by voice."""
+        if answer.channel != "voice":
+            return None
+        spoken = next((i.value for i in inputs if i.channel == "voice" and i.ts == answer.ts), None)
+        return request_after_answer(spoken) if spoken else None
 
     @staticmethod
     def _confirmed(action: Action, state: Optional[State]) -> Action:
@@ -359,7 +375,10 @@ class DialogManager:
         if answer is not None:  # no / silence
             self.pending = None
             result = DialogResult(handled=True, answer=answer.value, channel=answer.channel)
-            if answer.value == "no":
+            follow = self._request_after(inputs, answer)
+            if follow:  # "nu, pune muzică" -> the request goes on
+                result.events.append(Event(type="driver_speech", data={"text": follow}))
+            elif answer.value == "no":
                 result.speak.append(_clip("confirm_ok"))
             return result
         return DialogResult()

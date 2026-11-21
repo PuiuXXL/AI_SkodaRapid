@@ -39,7 +39,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 #: Bumped on every contract change (section 13).
-CONTRACT_VERSION = "2.0"
+CONTRACT_VERSION = "2.1"
 
 
 class ContractModel(BaseModel):
@@ -227,7 +227,7 @@ class DriverPerception(ContractModel):
     monitoring_reason: str | None = None  # one of MONITORING_REASONS
     monitoring_warnings: list[str] = Field(default_factory=list)  # too_dark / blurred / face_too_small, face seen
     face_too_small: bool = False
-    face_conf: float = 0.0
+    face_conf: float | None = None  # 0..1 from the face width (R-FL3); null = no monitoring result yet
     camera_mode: Literal["color", "mono"] | None = None
     gesture_score: float | None = None
 
@@ -242,7 +242,12 @@ class Passenger(ContractModel):
     holding_phone: bool = False
     gesture: str | None = None
     answer: HeadAnswer | None = None
-    monitoring_reason: str | None = None  # P1 addition: why the passenger camera does not see anyone
+    # P1 additions: the passenger camera's own monitoring, same meaning as for the driver
+    monitoring_reason: str | None = None  # why the passenger camera does not see anyone
+    monitoring_ok: bool = True
+    monitoring_warnings: list[str] = Field(default_factory=list)
+    camera_mode: Literal["color", "mono"] | None = None
+    face_conf: float | None = None
 
 
 class CameraPerf(ContractModel):
@@ -553,7 +558,9 @@ EVENT_TYPES: tuple[str, ...] = (
 
 #: Events core only logs on ``/ws/ui`` (event log H3, visual cue C2); they never go to the LLM.
 CORE_EVENT_TYPES: tuple[str, ...] = (
-    "visual_cue",             # C2: discrete signal, the UI flashes a light / border
+    "visual_cue",             # C2: discrete signal, the UI flashes a light / border   data: alert, level
+    "distraction_end",        # C2: the distraction is over                  latency_ms = time to come back
+    "naive_alert",            # B8: the simple threshold would have alerted  data: reason
     "alert",                  # an alert was raised                          data: level, alert
     "alarm",                  # C3: the alarm clip was sent                  data: alarm_id, clip
     "alarm_played",           # C3: the browser played it                    latency_ms = alarm_ms, data: on_target

@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from core import clips
+from core.ab_baseline import AbBaseline
 from core.dialog_window import DialogWindow
 from core.safety.alarm import Alarms
 from core.safety.answers import Answer, parse_gesture, parse_voice
@@ -46,6 +47,7 @@ class SosMachine:
                  channels: dict[str, SosChannel] | None = None) -> None:
         self.engine, self.arbiter, self.alarms, self.dialog = engine, arbiter, alarms, dialog
         self.channels: dict[str, SosChannel] = dict(channels or {})
+        self.ab: AbBaseline | None = None  # the A/B counter (B8) counts every microsleep alarm as a DriveMate alert
         self.reset(0.0)
 
     def reset(self, now: float) -> None:
@@ -56,6 +58,7 @@ class SosMachine:
         self.alert = ""
         self.armed = True
         self.last_report: SosReport | None = None
+        self.consumed_at: float | None = None  # when an input last answered the SOS (not for the assistant then)
 
     # --- detection (fast path: every frame) ----------------------------------------------------------------------
 
@@ -101,6 +104,8 @@ class SosMachine:
         self.state, self.since, self.alarm_started, self.alert = "alarm", now, now, alert
         self.arbiter.raise_alert(RULE, "P1", alert, now)  # stops speech and music first
         self.alarms.send(now, alert, "P1", capture_ts=capture_ts or None, explanation=explanation)
+        if self.ab is not None:
+            self.ab.our_alert(now, alert)
         self.ask_at = now + float(th("sos", "ask_after_alarm_s"))
 
     def _ask(self, now: float) -> None:
@@ -152,6 +157,7 @@ class SosMachine:
         """A yes / no from any channel while the machine is active."""
         if self.state not in ACTIVE:
             return
+        self.consumed_at = now
         if value == "yes":
             stage = self.state
             self._normal(now)

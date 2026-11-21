@@ -7,6 +7,7 @@ import pytest
 
 from perception.config import load_config
 from perception.driver_cam.eyes import EyeOutput, EyeTracker, ear_from_points
+from perception.features import FaceFeatures
 from tests.perception.driver_factory import FPS, H, W, face, frame, frames, rotation_matrix
 
 OPEN, CLOSED = 0.30, 0.06  # EAR; baseline from the open phase ~0.30
@@ -242,3 +243,62 @@ def test_unreliable_small_eyes_give_unknown() -> None:
         )
     )
     assert lost.state == "UNKNOWN" and not lost.reliable
+
+
+# --- closed_ms continuity: reopen hysteresis, short face dropouts (diag 2026-11-21) --------------------------------
+
+
+def _closure_with(middle: Sequence[tuple[float, Mapping[str, object] | None]]) -> tuple[EyeTracker, list[EyeOutput]]:
+    """1 s open, 1 s closed, ``middle`` (None = no face), 1 s closed, 0.5 s open."""
+    tracker = _tracker()
+    closed = {"ear_left": CLOSED, "blink": 0.8}
+    spec: list[tuple[float, Mapping[str, object] | None]] = [(1.0, {"ear_left": OPEN}), (1.0, closed)]
+    spec += [*middle, (1.0, closed), (0.5, {"ear_left": OPEN})]
+    outs: list[EyeOutput] = []
+    i = 0
+    for duration, kwargs in spec:
+        for _ in range(round(duration * FPS)):
+            f = face(**kwargs) if kwargs is not None else FaceFeatures(present=False, conf=0.0)  # type: ignore[arg-type]
+            outs.append(tracker.update(frame(i, f)))
+            i += 1
+    return tracker, outs
+
+
+def _closed_run(outs: list[EyeOutput]) -> list[int]:
+    start = next(k for k, o in enumerate(outs) if o.state == "CLOSED")
+    end = next(k for k in range(start, len(outs)) if outs[k].state != "CLOSED")
+    return [o.closed_ms for o in outs[start:end]]
+
+
+def test_one_bright_frame_does_not_reset_closed_ms() -> None:
+    """Landmark jitter: one frame at r = 0.9 inside a 2 s closure. Before the reopen hysteresis it ended the closure
+    and closed_ms restarted from 0 (the eyes were never open)."""
+    tracker, outs = _closure_with([(1 / FPS, {"ear_left": OPEN * 0.9})])
+    run = _closed_run(outs)
+    assert run == sorted(run)  # monotonic: never reset
+    assert run[-1] == pytest.approx(2000, abs=100)
+    (ev,) = tracker.events
+    assert ev.kind == "closure" and ev.duration_ms == pytest.approx(2000, abs=100)
+
+
+def test_short_face_dropout_inside_a_closure_keeps_counting() -> None:
+    tracker, outs = _closure_with([(3 / FPS, None)])
+    run = _closed_run(outs)
+    assert run == sorted(run) and run[-1] == pytest.approx(2100, abs=100)  # 1 s + 0.1 s gap + 1 s
+    held = [o for o in outs if o.state == "CLOSED" and o.ear is None]
+    assert len(held) == 3 and all(o.reliable for o in held)  # P2's microsleep rule needs reliable
+    assert [e.kind for e in tracker.events] == ["closure"]
+
+
+def test_long_face_loss_ends_the_closure() -> None:
+    tracker, outs = _closure_with([(0.5, None)])
+    assert tracker.events[0].kind == "closure"
+    assert tracker.events[0].duration_ms == pytest.approx(1000, abs=100)  # ended at the last valid frame
+    assert any(o.state == "UNKNOWN" for o in outs)
+
+
+def test_confirmed_reopen_ends_the_closure() -> None:
+    """Two frames really open (reopen_min_frames) end it: the next closure is a new episode."""
+    tracker, outs = _closure_with([(2 / FPS, {"ear_left": OPEN})])
+    assert [e.kind for e in tracker.events] == ["closure", "closure"]
+    assert max(o.closed_ms for o in outs) < 1200

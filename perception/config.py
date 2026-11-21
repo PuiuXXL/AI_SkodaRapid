@@ -84,12 +84,20 @@ class CameraConfig(_Section):
     buffer_size: Annotated[int, Field(ge=1, le=4)]
     reconnect_s: PositiveFloat
     max_read_failures: Annotated[int, Field(ge=1, le=1000)]
+    # second way to find the camera when the usb: selector matches nothing: a unique, case-insensitive substring of
+    # the device's friendly name ("C615"); null = no name fallback
+    device_name: Annotated[str, StringConstraints(min_length=1)] | None
     controls: CameraControls
 
 
 class CamerasConfig(_Section):
     driver: CameraConfig
     passenger: CameraConfig
+    # development only: a camera found neither by usb: selector nor by name takes a device no camera claims (preferring
+    # one whose name contains fallback_name, e.g. the laptop's integrated camera); the driver has priority. The frame
+    # then reports monitoring_reason="camera_fallback".
+    dev_fallback: bool
+    fallback_name: Annotated[str, StringConstraints(min_length=1)] | None
 
     @model_validator(mode="after")
     def _driver_enabled(self) -> Self:
@@ -206,6 +214,8 @@ class EyesConfig(_Section):
     min_fall_depth: RatioOfRef
     slow_close_ratio: RatioOfRef
     min_state_frames: Annotated[int, Field(ge=1, le=10)]
+    reopen_min_frames: Annotated[int, Field(ge=1, le=10)]  # consecutive frames above the reopen level end a closure
+    closure_gap_max_ms: Annotated[float, Field(ge=0)]  # face / eyes unreliable this long keeps a closure going
     blink_max_ms: PositiveInt
     plateau_check_ms: PositiveFloat
     blendshape_closed: Fraction  # eyeBlink needed to accept a SLOW closure (drowsy lids), never needed for a fast one
@@ -255,6 +265,9 @@ class SpeakingConfig(_Section):
 class NodConfig(_Section):
     pitch_drop_deg: PositiveFloat
     window_s: PositiveFloat
+    closed_recent_s: PositiveFloat  # a closure longer than a blink within this long arms the nod (lids may read SQUINT)
+    max_gap_s: Annotated[float, Field(ge=0)]  # face lost this long keeps the pitch history (the head falls out of view)
+    hold_s: Annotated[float, Field(ge=0)]  # a detected nod is reported this long, also on frames without a face
 
 
 class HeadAnswerConfig(_Section):
@@ -456,7 +469,8 @@ class WorkersConfig(_Section):
     restart_backoff_max_s: PositiveFloat
     stale_s: PositiveFloat  # no message from a running worker for this long -> it hangs: restart it
     startup_s: PositiveFloat  # allowed silence before the first frame (camera open + model load)
-    first_frame_timeout_s: PositiveFloat
+    first_frame_timeout_s: PositiveFloat  # still opening after this long -> reported camera_unavailable
+    unavailable_report_s: PositiveFloat  # a camera that is not there: camera_unavailable logged this often (no restart)
 
 
 class OutputConfig(_Section):

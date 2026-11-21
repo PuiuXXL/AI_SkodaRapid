@@ -71,6 +71,9 @@ fallback:
   # D10: the driver refused the assistant ("lasă-mă în pace").
   refusal_ack: "Ok, te las în pace."
 
+  # Plain "pune muzică" without the LLM: a catalog track, after a "yes".
+  music_offer: "Pun ceva din ce-ți place?"
+
   # YouTube music / podcasts on request (assistant/media_search.py). {o1} {o2} {o3} {title} are
   # short spoken titles (2-4 words each); the whole question must stay within 15 words.
   youtube_searching: "Caut."

@@ -172,6 +172,7 @@ else:
 | confirmation ("Bine?", "Trimit?", "Oprim?", "Îl citesc?") | yes (voice / nod / 👍) | `execute` the held actions, plus a clip: `confirm_noted` (reminder), `confirm_sent` (reply), `confirm_ok` (stop, preference), `confirm_done` (reminder done) |
 | | no | `cancelled`, plus the `confirm_cancelled` clip. For refused music: event `media_declined` instead (→ quiz offer) |
 | | music offer answered with a wish: "da, ceva metal energic" | offer `cancelled`, event `driver_speech {text}` (→ YouTube search, section 6.1) |
+| | a yes / no **followed by a new request**: "nu, vreau să pui muzică", "da, și pune muzică" | the answer is applied (cancel without the clip / execute), and the rest of the sentence goes on as event `driver_speech {text}` (`answers.request_after_answer`). Also for the quiz offer |
 | | ✋ silence | cancelled quietly |
 | KSS ("Cât de obosit ești, 1–9?") | "șapte", "7", "cam opt" | event `kss_answer {value}` |
 | | "lasă-mă în pace", ✋, 👎 | event `driver_refused` (→ P2's rule C10) |

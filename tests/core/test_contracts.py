@@ -43,7 +43,7 @@ def _lost_or_changed(src: Any, out: Any, path: str = "") -> list[str]:
 
 
 def test_version() -> None:
-    assert c.CONTRACT_VERSION == "2.0"
+    assert c.CONTRACT_VERSION == "2.1"
 
 
 def test_plan_example_validates_and_round_trips() -> None:
@@ -95,6 +95,24 @@ def test_p3_state_fixture_validates() -> None:
     """The dashboard and the assistant tests use this file too."""
     raw = json.loads((ROOT / "tests" / "assistant" / "fixtures" / "state_example.json").read_text(encoding="utf-8"))
     c.State.model_validate(raw)
+
+
+def test_p1_nulls_before_the_first_monitoring_result() -> None:
+    """P1 sends null for values it does not have yet (perception/frame_builder.py); a frame must never fail on that."""
+    frame = c.PerceptionFrame.model_validate(
+        {
+            "ts": 1.0, "seq": 1,
+            "driver": {"face_conf": None, "camera_mode": None, "monitoring_reason": None,
+                       "head": {"yaw": None, "pitch": None, "roll": None}, "eyes": {"ear": None, "blink_rate": None},
+                       "phone": {"side": None, "usage": None}, "gesture_score": None},
+            "passenger": {"present": True, "monitoring_ok": True, "monitoring_warnings": [], "camera_mode": "mono",
+                          "face_conf": None},
+            "occupants": [{"id": 1, "seat": "driver", "source": "cam_driver", "profile": None,
+                           "profile_score": None}],
+        }
+    )
+    assert frame.driver.face_conf is None and frame.passenger.camera_mode == "mono"
+    assert not frame.passenger.model_extra  # the passenger monitoring fields are declared
 
 
 def test_frame_blocks_fit_the_state() -> None:
