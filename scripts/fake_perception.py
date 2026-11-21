@@ -239,7 +239,7 @@ class FakePerception:
         """(closed, blink length ms) for the blink pattern of the mode."""
         if self.mode in ("7", "8"):
             return True, 0.0
-        period, length = (3.0, 450.0) if self.mode == "6" else (6.0, 140.0) if self.mode == "5" else (4.0, 150.0)
+        period, length = (2.0, 420.0) if self.mode == "6" else (6.0, 140.0) if self.mode == "5" else (4.0, 150.0)
         phase = (now - self.start) % period
         return phase < length / 1000.0, length
 
@@ -331,7 +331,7 @@ class FakePerception:
             return {"ear": None, "eye_used": None, "reliable": False, "state": "UNKNOWN", "closed_ms": 0.0}
         closed_ms = (now - self.closed_since) * 1000.0 if self.closed_since is not None else 0.0
         perclos = sum(1 for _, c in self.eye_samples if c) / len(self.eye_samples) if self.eye_samples else 0.0
-        blink_rate = {"5": 10.0, "6": 20.0}.get(self.mode, 15.0)
+        blink_rate = {"5": 10.0, "6": 30.0}.get(self.mode, 15.0)
         return {
             "ear": round(0.08 if closed else 0.28 + 0.01 * self.rng.uniform(-1, 1), 3),
             "eye_used": "left",
@@ -399,7 +399,8 @@ class FakePerception:
             if z not in ("road", *MIRRORS):
                 off_60 += (t1 - t0) * 1000.0
         total = sum(counts.values())
-        entropy = -sum(v / total * math.log2(v / total) for v in counts.values() if v > 0) if total > 0 else None
+        entropy = (abs(sum(v / total * math.log2(v / total) for v in counts.values() if v > 0))
+                   if total > 0 else None)  # abs: one zone only gives -0.0
         return {
             "zone": zone,
             "conf": 0.0 if zone == "unknown" else 0.9,
