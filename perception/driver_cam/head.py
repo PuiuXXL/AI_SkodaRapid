@@ -60,8 +60,14 @@ class HeadTracker:
         self._plausible = head.plausible_deg
         self._pitch_history = RollingWindow(head.nod.window_s)
 
+    def reset(self) -> None:
+        """Forget the filter state (day <-> IR switch: the angles jump with the new image)."""
+        for f in self._filters.values():
+            f.reset()
+        self._pitch_history.clear()
+
     def update(self, t: float, matrix: Sequence[float] | None, eyes_closing: bool) -> HeadOutput:
-        """``eyes_closing``: the eye state is CLOSED or the EAR ratio is below ``reopen_ratio`` (needed for nodding)."""
+        """``eyes_closing``: the eye detector reports CLOSED on this frame (needed for nodding)."""
         if matrix is None:
             for f in self._filters.values():
                 f.reset()
@@ -78,7 +84,8 @@ class HeadTracker:
         out.pitch = round(self._filters["pitch"].update(t, pitch), 2)
         out.yaw = round(self._filters["yaw"].update(t, yaw), 2)
         out.roll = round(self._filters["roll"].update(t, roll), 2)
-        self._pitch_history.add(t, out.pitch)
-        drop = self._pitch_history.max() - out.pitch
+        # nodding on the RAW pitch: the head One Euro (min_cutoff 0.05 Hz) lags a slow fatigue drop by ~1 s
+        self._pitch_history.add(t, pitch)
+        drop = self._pitch_history.max() - pitch
         out.nodding = eyes_closing and drop > self._nod.pitch_drop_deg
         return out
