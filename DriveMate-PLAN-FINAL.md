@@ -396,6 +396,7 @@ Orice altceva primit de la LLM e respins și trecut în jurnal. Maximum 3 acțiu
 - `search_media {query, kind: music|podcast}`, permisă la P4. E **internă asistentului**: `handle_event` o rezolvă înainte să răspundă, deci **core nu o primește niciodată**. În locul ei, core primește un `ask` cu `expects: "choice"` și `options` (rezultatele căutării).
 - `ask.expects` poate fi și `"choice"` (doar din reguli, nu de la LLM), cu `options: [{track_id, title, full_title, channel, duration_s, offered}]`.
 - `play_media.track_id` poate fi `"yt:<id video>"`, cu câmpul nou `title` (titlul scurt rostit). Se redă la `music.track_url(track_id)` = `/media/yt/<id>.m4a`, cu `loop: false` (`music.loops(track_id)`).
+- „Oprește muzica” / „stop” și comenzile de volum („mai încet”, „e prea tare”, „la jumătate”, „volumul la 30”) sunt recunoscute **determinist, fără LLM**, și au răspuns imediat: `stop_media` / `set_preference {key: "volume", value}` + „Ok.”. **Excepție de la coloana „Cere confirmare”:** `set_preference` pentru `volume` se execută fără „Bine?” (șoferul a cerut explicit și se poate inversa la fel de ușor). Celelalte preferințe cer în continuare confirmare.
 - În `shared/contracts.py` (P2): `ActionType` + `"search_media"`, `Action` + `query`, `kind`, `options`, `title`, `expects` + `"choice"`, `media.source` (`"catalog"` / `"youtube"`). Toate opționale. Copia provizorie din `assistant/_TEMP_contract_DELETE_LATER.py` le are deja.
 
 ---

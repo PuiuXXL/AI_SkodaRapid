@@ -118,6 +118,14 @@ music:
   # Playback volume (0-1): normal, and when the front passenger is asleep (plan G3).
   volume_normal: 0.6
   volume_passenger_asleep: 0.25
+  # Spoken volume commands ("mai încet", "mai tare", "la jumătate", "volumul la 30"), handled without the
+  # LLM as set_preference {key: volume}: step per "mai încet / mai tare", "foarte" doubles it, and the
+  # quietest level a command may set (0 would look like a broken player; "oprește" stops the music).
+  volume_step: 0.2
+  volume_min: 0.05
+  # Volume changes are executed at once, without "Bine?": the driver asked explicitly and it is undone
+  # just as easily (plan section 6 asks a confirmation for set_preference in general).
+  volume_without_confirmation: true
   # How many candidate tracks are shown to the LLM to choose from.
   candidates_for_llm: 5
   # Catalog genre that marks spoken podcasts (offered with the quiz when music is

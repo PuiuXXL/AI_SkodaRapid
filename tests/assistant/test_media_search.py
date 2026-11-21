@@ -267,6 +267,95 @@ def test_fallback_without_llm_for_other_speech():
     assert actions[0]["type"] == "speak"
 
 
+# --- stopping the music ----------------------------------------------------------------------------------------
+
+PLAYING = {"playing": True, "track_id": "yt:uhBHL3v4d3I", "title": "Metallica, Hardwired"}
+
+
+@pytest.mark.parametrize("text, playing, expected", [
+    ("Oprește ce dă play acum", True, True),
+    ("oprește muzica", False, True),
+    ("stop", True, True),
+    ("pune pauză", True, True),
+    ("stop", False, False),               # nothing plays: not a media command
+    ("oprește aici", True, False),        # stopping the car
+    ("oprește la OMV", True, False),
+    ("pune ceva rock", True, False),
+])
+def test_stop_media_request(text, playing, expected):
+    from assistant.fallback import stop_media_request
+
+    state = city_state(media=PLAYING if playing else {"playing": False})
+    assert stop_media_request(text, state) is expected
+
+
+@pytest.mark.asyncio
+async def test_stop_is_deterministic_and_never_asks_the_llm():
+    provider = FakeProvider({"actions": [{"type": "speak", "to": "driver", "text": "Nu ar trebui."}]})
+    client = AssistantClient(provider)
+    event = Event(type="driver_speech", data={"text": "oprește ce dă play acum"})
+    actions = await client.handle_event(event, city_state(media=PLAYING), now=NOW)
+    assert [(a.type, a.clip_id) for a in actions] == [("stop_media", None), ("speak", "confirm_ok")]
+    assert client.last_result.reason == "deterministic" and provider.calls == []
+
+
+@pytest.mark.asyncio
+async def test_llm_action_without_sentence_gets_ok_instead_of_not_understood():
+    client = AssistantClient(FakeProvider({"actions": [{"type": "stop_media"}]}))
+    event = Event(type="driver_speech", data={"text": "las-o mai încet, de fapt închide tot"})
+    actions = await client.handle_event(event, city_state(media=PLAYING), now=NOW)
+    assert [a.type for a in actions] == ["stop_media", "speak"] and actions[1].clip_id == "confirm_ok"
+    assert client.last_result.reason == "ok"
+
+
+# --- volume ----------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("text, playing, expected", [
+    ("mai încet", True, 0.4),             # 0.6 - step 0.2
+    ("dă-l mai tare", True, 0.8),
+    ("e prea tare", True, 0.4),           # "prea tare" = quieter
+    ("foarte încet", True, 0.2),          # "foarte" doubles the step
+    ("pune volumul la jumătate", False, 0.5),
+    ("volumul la 30", False, 0.3),
+    ("dă muzica la maxim", True, 1.0),
+    ("mai încet", False, None),           # nothing plays and no volume word
+    ("vorbește mai încet", True, None),   # speech, not the volume
+    ("mergi mai încet", True, None),      # speed
+    ("pune ceva mai tare", True, None),   # another track -> search
+])
+def test_volume_request(text, playing, expected):
+    from assistant.fallback import volume_request
+
+    media = {**PLAYING, "volume": 0.6} if playing else {"playing": False, "volume": 0.6}
+    assert volume_request(text, city_state(media=media)) == expected
+
+
+def test_volume_stays_within_limits():
+    from assistant.fallback import volume_request
+
+    assert volume_request("mai încet", city_state(media={**PLAYING, "volume": 0.1})) == 0.05
+    assert volume_request("mai tare", city_state(media={**PLAYING, "volume": 0.95})) == 1.0
+
+
+@pytest.mark.asyncio
+async def test_volume_is_deterministic_and_needs_no_confirmation():
+    provider = FakeProvider({"actions": []})
+    client = AssistantClient(provider)
+    event = Event(type="driver_speech", data={"text": "mai încet"})
+    actions = await client.handle_event(event, city_state(media={**PLAYING, "volume": 0.6}), now=NOW)
+    volume = actions[0]
+    assert (volume.type, volume.key, float(volume.value), volume.needs_confirmation) == ("set_preference", "volume",
+                                                                                         0.4, False)
+    assert actions[1].clip_id == "confirm_ok" and provider.calls == []
+    assert DialogManager().register(actions, NOW) == actions   # nothing held for a "yes"
+
+
+def test_other_preferences_still_need_confirmation():
+    raw = [{"type": "set_preference", "key": "talkativeness", "value": "low"}]
+    assert validate_actions(raw, city_state()).accepted[0].needs_confirmation
+
+
 # --- router helpers --------------------------------------------------------------------------------------------
 
 

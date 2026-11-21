@@ -156,6 +156,7 @@ P3 a implementat căutarea și redarea de pe YouTube (ramura `p3-youtube-media`,
 - **Executarea `play_media`:** `{"type": "media", "action": "play", "url": music.track_url(track_id), "volume": …, "loop": music.loops(track_id)}`. Pui `state.media.title = action.title` și `state.media.source`. Alarmele și arbitrul opresc muzica la fel ca acum.
 - **`handle_event` poate dura mai mult** pentru o căutare (LLM + căutare, ~2–8 s). Rulează-l mereu ca task separat, niciodată în bucla de 10 Hz (oricum așa trebuie). Spune „Caut.” imediat prin `on_early_speech`.
 - **DialogManager:** răspunsurile la alegere („a doua”, 👍, „altceva”) trec prin același `dialog.handle(...)`. Dacă întoarce `handled=False`, textul e o cerere nouă → `driver_speech`. Evenimentele din `result.events` (inclusiv `driver_speech` pentru „da, ceva metal” la oferta de muzică) se trimit la `handle_event`, ca acum.
+- **Volumul și oprirea:** `set_preference {key: "volume", value}` vine **fără** `needs_confirmation` („mai încet”, „e prea tare”). Îl execuți imediat ca `{"type": "media", "action": "volume", "volume": value}` și pui `state.media.volume = value`. Validatorul tău trebuie să-l accepte la P4 fără confirmare. „Oprește muzica” vine ca `stop_media` (permis oricând).
 - **Warm-up la pornire** (plan §8, regula 5): `asyncio.create_task(assistant.media_search.warm_up())`.
 - **Eficiența intervenției (D6):** muzica pornită la cerere are `reason="driver_request"`. Doar cea pornită pentru D (`reason="disengagement"`) intră în măsurarea efectului.
 

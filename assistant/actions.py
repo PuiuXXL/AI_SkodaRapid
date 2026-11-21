@@ -105,6 +105,9 @@ def needs_confirmation(action: Action, state: State) -> bool:
     """Whether core must wait for a "yes" before executing (plan table + F2)."""
     if action.type == "read_message":
         return cabin.others_present(state)
+    if action.type == "set_preference" and action.key == "volume" and cfg("music", "volume_without_confirmation",
+                                                                         default=True):
+        return False  # "mai încet" is done at once (assistant.yaml -> music.volume_without_confirmation)
     return action.type in CONFIRMATION_REQUIRED
 
 

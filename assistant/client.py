@@ -216,7 +216,10 @@ class AssistantClient:
         if not decision.allowed:
             info.reason = f"policy:{decision.reason}"
             result = [fallback.silent(decision.reason)]
-        elif event.type in DETERMINISTIC_EVENTS:
+        elif event.type in DETERMINISTIC_EVENTS or (
+            event.type in SPEECH_EVENTS and fallback.media_command(str(event.data.get("text", "")), state)
+        ):
+            # "Oprește muzica" / "mai încet" are answered at once, without waiting for the LLM (like the refusal).
             info.reason = "deterministic"
             result = self._fallback(event, state, info)
         elif not self.provider.available:
@@ -278,6 +281,14 @@ class AssistantClient:
         checked = actions_mod.validate_actions(raw_actions, state, event, source="LLM")
         info.rejected = [(r.raw, r.reason) for r in checked.rejected]
         answers = ("speak", "ask", "search_media")  # a search becomes a spoken question (see _resolve_media_search)
+        acted = [a for a in checked.accepted if a.type not in ("stay_silent",) and not a.needs_confirmation]
+        if event.type in SPEECH_EVENTS and acted and not any(a.type in answers for a in checked.accepted):
+            # The LLM did what was asked (e.g. only stop_media) without a sentence: confirm it with "Ok."
+            # instead of throwing the action away.
+            ok = Action(type="speak", to="driver", text=get_texts().get("clips", {}).get("confirm_ok", "Ok."),
+                        clip_id="confirm_ok", source="RULE")
+            checked.accepted.append(ok)
+            checked.accepted_indexes.append(-1)
         if event.type in SPEECH_EVENTS and not any(a.type in answers for a in checked.accepted) and not any(
             a.type == "stay_silent" and a.reason == "driver_refused" for a in checked.accepted
         ):

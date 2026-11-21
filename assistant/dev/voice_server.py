@@ -141,6 +141,10 @@ def create_app(scene: str | None = None) -> FastAPI:
             elif action.type == "stop_media":
                 await send({"type": "media", "action": "stop"})
                 state.media.playing = False
+            elif action.type == "set_preference" and action.key == "volume":
+                state.media.volume = float(action.value)
+                await send({"type": "media", "action": "volume", "volume": state.media.volume})
+                await log_line(f"  volum muzică: {state.media.volume:.2f}")
             elif action.type == "read_message":
                 message = next((m for m in state.messages if m.id == action.msg_id), None)
                 if message is not None and message.text:
