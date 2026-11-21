@@ -569,6 +569,13 @@ CORE_EVENT_TYPES: tuple[str, ...] = (
     "action_rejected",        # C8: an LLM action was rejected               data: action, reason
     "input",                  # E3: an answer / request arrived              channel, data: value, from
     "llm_toggled",            # C6: director switched the LLM                data: enabled
+    "message_queued",         # a new message entered the queue (phone / Contact page / panel)   data: msg_id
+    "perception_connected",   # P1 connected to /ws/perception
+    "perception_disconnected",
+    "phone_bridge_connected", "phone_bridge_disconnected",  # P3's bridge on /ws/phone
+    "calibration_prompt",     # P1 calibration step, for the voice           data: zone, step, steps
+    "calibrate_done", "calibrate_error", "enroll_done", "enroll_error",  # P1 acks   data: detail
+    "reset",                  # director reset: a new trip
 )
 
 ALL_EVENT_TYPES: tuple[str, ...] = EVENT_TYPES + tuple(t for t in CORE_EVENT_TYPES if t not in EVENT_TYPES)

@@ -127,3 +127,34 @@ Commands from core (`dialog_window`, `calibrate`, `debug`, `enroll`) get an `ack
   the demo overrides, the C8 limits, every template's fields, no phone number in the templates.
 - `tests/core/test_fake_perception.py`: every key, the answers and gestures, the acks, and a round trip over a real
   WebSocket.
+
+## 2. The core process (`core/main.py`)
+
+```bash
+pip install -r requirements/p2-core.txt -r requirements/p3-assistant.txt   # P3's for /tts and /media
+python -m core.main                         # http://127.0.0.1:8000
+python -m core.main --host 0.0.0.0          # the phone bridge runs on another laptop (plan decision 9)
+python scripts/fake_perception.py           # second terminal: P1's stand-in
+curl http://127.0.0.1:8000/health           # connections, data age, simulator in use
+```
+
+| File | What it does |
+|---|---|
+| `core/main.py` | FastAPI: `/ws/perception`, `/ws/ui`, `/ws/phone`, `GET /health`; the 10 Hz loop; mounts `assistant.router` (P3) and `integrations.contact_app.router` (P4) when they import. An error in one tick or one message handler is logged once; the loop and the connections go on. |
+| `core/engine.py` | The state. Takes P1's frames, the browser's messages and the bridge's messages; builds `State` every tick; the event log (`log_event`). Plug-in points for the next steps: `add_frame_listener` (fast safety path, runs on every frame, not at the next tick), `add_browser_listener`, `add_tick_listener`. |
+| `core/hub.py` | One queue and one sender task per WebSocket peer: sending never blocks; old `state` messages go first when a browser is slow. |
+| `core/simulation.py` | P4's `simulator.Simulator` when it exists; otherwise `FakeSimulator`: a straight route with OMV (fuel, km 42) and a cafe, scene presets (scenes 5-9 on the highway at 118 km/h, scene 7 stopped at OMV). |
+
+**How the state is built.** P1's blocks (`driver` without `reaction`, `passenger`, `occupants`, `perf`) come from the
+newest frame if it is younger than `loop.perception_stale_ms`; otherwise the driver block is reset with
+`monitoring_ok=false` and `monitoring_reason` `no_frames` (connected, no data) or `camera_unavailable` (not
+connected). `safety.monitoring_ok` = fresh frame and P1's `driver.monitoring_ok`. Declared rear occupants (ids 3+) are
+added after the camera ones. Message texts stay in core: the `/ws/ui` state has no `messages[].text`.
+
+**Director commands handled now** (`{"type": "command", "cmd": ...}` on `/ws/ui`): `debug`, `calibrate`, `enroll`
+(forwarded to P1), `llm` (`on`: C6 switch), `declare_occupant` (`value: {profile, role}` or `{remove: id}`),
+`fake_message` (`value: {from, app, text}`), `scene`, `speed`, `time_scale`, `start`, `pause`, `stop_at_next_poi`,
+`reset`.
+
+Checked end to end (core + `fake_perception.py` + a `/ws/ui` client): 10.3 states/s, 15 frames/s, scene 8 on the
+highway, eyes closed up to 1.9 s, covered camera -> `monitoring_ok=false` (`occluded`), no invalid or dropped message.
