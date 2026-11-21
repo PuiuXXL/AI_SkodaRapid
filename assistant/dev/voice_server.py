@@ -7,7 +7,11 @@ Lets P3 test "speak -> LLM -> voice" without core (P2) or the dashboard (P4):
 * serves the pre-generated clips (``/sounds/clips/...``);
 * implements a minimal ``/ws/ui``: recognised speech is sent to the real
   :func:`assistant.client.AssistantClient.handle_event` with a scene fixture as the
-  state, and the resulting ``speak`` / ``ask`` actions are spoken back.
+  state, and the resulting actions are executed the way core would (speech, music,
+  reminders, message reading; phone replies are only logged);
+* uses the real :class:`assistant.dialog.DialogManager` for confirmations ("da" /
+  nod / thumbs-up), the KSS answer and the quiz. Buttons on the page simulate the
+  nod and gestures that P1's camera will provide.
 
 Run (from the repo root)::
 
@@ -37,10 +41,13 @@ from fastapi.staticfiles import StaticFiles
 
 from assistant import music
 from assistant.client import AssistantClient
-from assistant.contract import Action, Event, State
+from assistant.answers import InputEvent
+from assistant.contract import Action, Event, Reminder, State
+from assistant.dialog import DialogManager
 from assistant.refusal import is_refusal
 from assistant.router import router as assistant_router
 from assistant.settings import REPO_ROOT, cfg
+from assistant.textutil import normalize
 from assistant.tts import speak_message
 
 log = logging.getLogger("drivemate.assistant.dev")
@@ -90,6 +97,7 @@ def create_app(scene: str | None = None) -> FastAPI:
         """Minimal /ws/ui: speech -> handle_event -> speak (see module docstring)."""
         await ws.accept()
         state = load_state(scene)
+        dialog = DialogManager()  # pending confirmations, KSS, quiz (assistant/dialog.py)
 
         async def send(message: dict[str, Any]) -> None:
             """Send one JSON message to the browser."""
@@ -108,8 +116,54 @@ def create_app(scene: str | None = None) -> FastAPI:
             state.interaction.dialog_window_open = False
             await send({"type": "state", "state": {"interaction": {"dialog_window_open": False}}})
 
+        async def execute(action: Action) -> None:
+            """Simulate what core would do with one executable action (log + audio)."""
+            if action.type in ("speak", "ask"):
+                if not action.streamed:
+                    await send(speak_message(action))
+            elif action.type == "play_media" and action.track_id:
+                await send({"type": "media", "action": "play", "url": music.track_url(action.track_id),
+                            "volume": action.volume or music.volume_for(state)})
+                state.media.playing, state.media.track_id = True, action.track_id
+            elif action.type == "stop_media":
+                await send({"type": "media", "action": "stop"})
+                state.media.playing = False
+            elif action.type == "read_message":
+                message = next((m for m in state.messages if m.id == action.msg_id), None)
+                if message is not None and message.text:
+                    # Reading a message is not an LLM sentence: no 15-word rule, said as is.
+                    await send(speak_message(Action(type="speak", to="driver", text=message.text, source="RULE")))
+                    message.state = "read"
+            elif action.type == "reply_message":
+                await log_line(f"  [simulat] trimis prin telefon către {action.msg_id}: {action.text!r}")
+            elif action.type == "create_reminder" and action.trigger is not None:
+                reminder_id = f"r{len(state.reminders) + 1}"
+                state.reminders.append(Reminder(id=reminder_id, task=action.task or "", trigger=action.trigger,
+                                                state="active", created_ts=time.time()))
+                await log_line(f"  [simulat] memento ACTIV {reminder_id}: {action.task} @ {action.trigger.category}")
+            elif action.type == "complete_reminder":
+                for reminder in state.reminders:
+                    if reminder.id == action.reminder_id:
+                        reminder.state = "done"
+            elif action.type == "suggest_stop":
+                await log_line(f"  [simulat] oprire acceptată: {action.poi_id}")
+
+        async def apply_dialog(result) -> None:
+            """Execute a DialogResult: confirmed actions, short replies, follow-up events."""
+            await log_line(f"answer={result.answer} channel={result.channel} "
+                           f"execute={[a.type for a in result.execute]} cancelled={[a.type for a in result.cancelled]}")
+            for action in result.execute:
+                await log_line("  EXECUTAT " + action.model_dump_json(exclude_none=True, exclude_defaults=True))
+                await execute(action)
+            for action in result.speak:
+                # Quiz questions are already tracked inside the DialogManager: do NOT
+                # register them again (that would drop the running quiz).
+                await send(speak_message(action))
+            for follow_up in result.events:
+                await run_event(Event(type=follow_up.type, ts=time.time(), data=follow_up.data))
+
         async def run_event(event: Event) -> None:
-            """Send one event through the real assistant client and speak the result."""
+            """Send one event through the real assistant client and execute the result."""
             state.ts = time.time()
             early: list[asyncio.Future] = []
 
@@ -121,16 +175,59 @@ def create_app(scene: str | None = None) -> FastAPI:
             await asyncio.gather(*early)
             info = client.last_result
             await log_line(f"{event.type} -> source={info.source} reason={info.reason} "
-                           f"latency={info.latency_ms:.0f}ms ttft={info.llm_ttft_ms} rejected={len(info.rejected)}")
+                           f"latency={info.latency_ms:.0f}ms ttft={info.llm_ttft_ms and round(info.llm_ttft_ms)} "
+                           f"rejected={len(info.rejected)}" + (f" error={info.error}" if info.error else ""))
+            if info.error and info.error.startswith("429"):
+                await log_line("  (429 = limita de cereri pe minut a cheii gratuite Gemini; așteaptă ~1 minut)")
+            elif info.error and info.error.startswith(("500", "503", "504")):
+                await log_line("  (eroare temporară pe serverul Google; reîncearcă)")
+            immediate = dialog.register(actions, time.time())
             for action in actions:
-                await log_line("  " + action.model_dump_json(exclude_none=True, exclude_defaults=True))
-                if action.type in ("speak", "ask") and not action.streamed:
-                    await send(speak_message(action))
-                elif action.type == "play_media" and action.track_id:
-                    await send({"type": "media", "action": "play", "url": music.track_url(action.track_id),
-                                "volume": action.volume or music.volume_for(state)})
-                elif action.type == "stop_media":
-                    await send({"type": "media", "action": "stop"})
+                tag = "  ÎN AȘTEPTARE (cere „da”) " if action.needs_confirmation else "  "
+                await log_line(tag + action.model_dump_json(exclude_none=True, exclude_defaults=True))
+            for action in immediate:
+                await execute(action)
+            await simulate_p2_rules(event)
+
+        async def simulate_p2_rules(event: Event) -> None:
+            """SIMULATION of P2's deterministic rules, so whole demo scenes can be tested here.
+
+            In the real system these live in core/ (P2) - not in assistant/:
+            * plan D3 / K3: after a high KSS answer, the rule picks the stop (the next POI,
+              solving an open reminder of the same category) and sends ``stop_suggested``;
+            * plan C10: a refusal while fatigue is high mutes the assistant (P3-P4 only) and
+              sends the trusted contact an SMS from the driver's phone.
+            """
+            if event.type == "kss_answer" and int(event.data.get("value", 0)) >= int(cfg("kss", "high", default=7)):
+                poi = state.trip.next_poi
+                if poi is None:
+                    return
+                task = next((r.task for r in state.reminders
+                             if r.state == "active" and r.trigger.category == poi.category), None)
+                await log_line(f"[simulat P2 · regula D3/K3] KSS mare -> oprire propusă: {poi.name or poi.id}"
+                               + (f" (rezolvă și mementoul: {task})" if task else ""))
+                await run_event(Event(type="stop_suggested", ts=time.time(), data={
+                    "poi_id": poi.id, "poi_name": poi.name or poi.id, "dist_km": poi.dist_km, "task": task}))
+            elif event.type == "driver_refused" and state.assessment.fatigue >= 0.6:
+                contact = state.safe_contact
+                mute_s = 15 * 60
+                state.assistant.muted_until = time.time() + mute_s
+                state.assistant.mute_reason = "driver_refused"
+                await log_line(f"[simulat P2 · regula C10] asistent pe liniște {mute_s // 60} min (alarmele rămân active)")
+                if contact.configured and contact.consent and contact.name:
+                    if contact.announce:
+                        clip = f"notify_contact_{normalize(contact.name).replace(' ', '_')}"
+                        await send(speak_message(Action(type="speak", to="driver", source="RULE",
+                                                        text=f"Îi dau de veste lui {contact.name}.", clip_id=clip)))
+                    await log_line(f"[simulat P2 · regula C10] SMS de pe telefonul șoferului către {contact.name} "
+                                   "+ notificare galbenă pe DriveMate Contact")
+
+        async def answer(inputs: list[InputEvent]) -> bool:
+            """Give inputs to the dialog manager; True if they answered the pending question."""
+            result = dialog.handle(inputs, time.time(), state=state, fatigue_dialog=state.assessment.fatigue >= 0.6)
+            if result.handled:
+                await apply_dialog(result)
+            return result.handled
 
         await log_line(f"connected; LLM provider = {client.provider.name}; scene = {scene or 'state_example'}")
         try:
@@ -139,8 +236,13 @@ def create_app(scene: str | None = None) -> FastAPI:
                 kind = message.get("type")
                 if kind == "speech" and message.get("final"):
                     text = message.get("text", "")
-                    await log_line(f"heard: {text!r} (addressed={message.get('addressed')})")
+                    how = {"quick": "răspuns scurt, trimis devreme", "stable": "text stabil, trimis devreme"}.get(
+                        message.get("early"), "final Chrome")
+                    await log_line(f"heard: {text!r} (addressed={message.get('addressed')}, {how}, "
+                                   f"la {message.get('wait_ms')} ms după ultimul cuvânt)")
                     if not message.get("addressed"):
+                        continue
+                    if dialog.has_pending(time.time()) and await answer([InputEvent("voice", text, time.time())]):
                         continue
                     if state.assessment.fatigue >= 0.6 and is_refusal(text):
                         await run_event(Event(type="driver_refused", ts=time.time(), data={"text": text}))
@@ -151,6 +253,12 @@ def create_app(scene: str | None = None) -> FastAPI:
                     asyncio.create_task(open_dialog_window())
                 elif kind in ("speech_onset", "alarm_played", "speak_done"):
                     await log_line(f"{kind}: {json.dumps(message)}")
+                elif kind == "command" and message.get("name") == "input":
+                    # Buttons simulating P1's nod / gesture recognition (plan E3).
+                    channel, value = message.get("channel"), message.get("value")
+                    await log_line(f"input {channel}={value}")
+                    if not await answer([InputEvent(channel, value, time.time())]):
+                        await log_line("  (nicio întrebare în așteptare sau nu e un răspuns)")
                 elif kind == "command":
                     await handle_command(message, send, run_event, log_line)
         except WebSocketDisconnect:

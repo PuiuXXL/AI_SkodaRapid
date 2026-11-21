@@ -59,7 +59,9 @@ Privacy note for the slide (plan section 3): the LLM receives only the ~10-line 
 | `assistant/summary.py` | State → ~10 lines of text for the LLM. |
 | `assistant/memory.py` | Last 3 utterances (short memory). |
 | `assistant/music.py` | Music candidates by taste / energy / cabin (plan D8), volume. |
-| `assistant/answers.py` | Multimodal yes / no / silence / refusal fusion (plan E3). |
+| `assistant/answers.py` | Multimodal yes / no / silence / refusal fusion (plan E3), and `parse_kss` for the KSS value 1–9 (plan D3). |
+| `assistant/dialog.py` | **Used by core.** `DialogManager`: holds actions waiting for "yes", resolves the answer (voice, nod or gesture), and drives the KSS answer and the quiz. |
+| `assistant/quiz.py` + `assistant/data/quiz.json` | Short spoken quiz (20 questions, all ≤ 15 words, kid-safe), offered when the driver refuses music (plan D8). |
 | `assistant/cabin.py` | Who is in the car (names, child, passenger asleep). |
 | `assistant/textutil.py` | Normalisation (diacritics), word count, sentence split, safe templates. |
 | `assistant/settings.py` | Loads `assistant/config/*.yaml` and `.env`. |
@@ -71,7 +73,7 @@ Privacy note for the slide (plan section 3): the LLM receives only the ~10-line 
 | `assistant/config/texts.ro.yaml` | Fixed Romanian texts: fallbacks and clips. Copy to `texts.en.yaml` to switch to English. |
 | `assistant/data/media_catalog.json` | Music catalog (6 tracks; titles and sources still TODO). The mp3 files go in `assistant/data/media/` (gitignored). |
 | `assistant/dev/try_llm.py` | Manual LLM test on the scene fixtures. |
-| `assistant/dev/voice_server.py` | Fake core and voice test page (port 8010). |
+| `assistant/dev/voice_server.py` | Fake core and voice test page (port 8010). It also **simulates two P2 rules** (logged as `[simulat P2]`): KSS ≥ 7 → `stop_suggested` for the next POI (D3/K3), and a refusal with high fatigue → assistant muted 15 min plus a simulated SMS to the trusted contact (C10). |
 | `integrations/audio_clips.py` | Pre-generates the critical clips into `dashboard/public/sounds/clips/` and writes `clips.json`. |
 | `integrations/phone_bridge.py` | KDE Connect ↔ core bridge (separate process, Linux), with `--dry-run` for any OS. |
 | `dashboard/src/voice/` | Browser voice: `index.js` (API for P4), `stt.js`, `player.js`, `onset.js`, `dev.html`. |
@@ -109,7 +111,8 @@ info = get_client().last_result          # source LLM/RULE, reason, latency, llm
 | `cause_detected` | `state.cause.label` set (plan B4) | – (reads `state.cause`) |
 | `fatigue_high` | F above threshold (D3/D10) | – |
 | `disengagement_high` | D above threshold, monotonous context (D8) | – |
-| `media_declined` | driver said no to the music | – |
+| `media_declined` | driver said no to the music (`DialogManager` emits it) | – (handled without the LLM: quiz offer with `reason="quiz_offer"`) |
+| `kss_answer` | driver answered the KSS question (`DialogManager` emits it) | `value` (1–9). The assistant only acknowledges it ("Ok, 7 e mult. Hai să găsim o pauză."). **P2 must then pick the stop** (plan D3/K3) and send `stop_suggested`, because the concrete question "Oprim la OMV peste 12 km?" opens the next dialog window. |
 | `message_received` | F2 timing rule allows delivery | `msg_id`, `delivery`: `"ask"` or `"read"` |
 | `safe_contact_reply` | reply of the trusted contact (F8) | `msg_id`, `delivery` |
 | `message_reply_dictated` | driver dictated a reply (F3) | `msg_id`, `text` |
@@ -131,7 +134,50 @@ A single flat model (`Action` in the contract). The `type` values and their para
 | `streamed` | already spoken during streaming |
 | `volume` | for `play_media` (cabin-aware, see `music.volume_for`) |
 
-### 3.4 Policies applied before the LLM
+### 3.4 Answers, confirmations, KSS and quiz: `DialogManager`
+
+Actions with `needs_confirmation` must not run until the driver says yes. Core keeps one `DialogManager` per trip:
+
+```python
+from assistant.dialog import DialogManager
+from assistant.answers import InputEvent
+
+dialog = DialogManager()
+
+actions = await handle_event(event, state)
+for action in dialog.register(actions, now):    # held actions are NOT returned
+    execute(action)                              # speak the question, etc.
+
+# For every input while something is pending (voice text from /ws/ui, head.answer and
+# gesture from the state, all with timestamps):
+result = dialog.handle([InputEvent("voice", text, ts), InputEvent("nod", "yes", ts2)],
+                       now, state=state, fatigue_dialog=fatigue_dialog_open)
+if result.handled:
+    for action in result.execute: execute(action)   # confirmed; suggest_media -> play_media
+    for action in result.speak:   say(action)       # "Notat." / "Trimis." / quiz feedback (clips or TTS)
+    for ev in result.events:      await handle_event(ev, state)   # media_declined, kss_answer, driver_refused
+    log(result.answer, result.channel)               # plan E3: which channel answered
+else:
+    ...  # not an answer: treat the text as a normal driver_speech
+```
+
+| Pending question | Answer | Result |
+|---|---|---|
+| confirmation ("Bine?", "Trimit?", "Oprim?", "Îl citesc?") | yes (voice / nod / 👍) | `execute` the held actions, plus a clip: `confirm_noted` (reminder), `confirm_sent` (reply), `confirm_ok` (stop, preference), `confirm_done` (reminder done) |
+| | no | `cancelled`, plus the `confirm_cancelled` clip. For refused music: event `media_declined` instead (→ quiz offer) |
+| | ✋ silence | cancelled quietly |
+| KSS ("Cât de obosit ești, 1–9?") | "șapte", "7", "cam opt" | event `kss_answer {value}` |
+| | "lasă-mă în pace", ✋, 👎 | event `driver_refused` (→ P2's rule C10) |
+| quiz offer | "da" / "quiz" | first question (`ask`, free answer) |
+| | "podcast" (if the catalog has a track with genre `podcast`) | `play_media` of the podcast |
+| quiz question | any answer | "Corect!" or "Nu chiar, era X." + the next question; after `quiz.length` questions: "Gata quizul: 2 din 3. Bravo!" |
+| | "gata" / "stop" / ✋ | "Bine, oprim quizul." |
+
+An unanswered question expires after `speech.pending_timeout_s` (20 s). Its held actions are cancelled and never executed. A new utterance of the assistant (e.g. a cause or message interrupting a quiz) replaces the pending question.
+
+To read a message after `read_message` is confirmed, core says the message text as is (no 15-word rule): `speak_message(Action(type="speak", to="driver", text=message.text, source="RULE"))`.
+
+### 3.5 Policies applied before the LLM
 
 1. Safety veto: `safety.level` in P0–P2 or `safety.llm_allowed = false` → `stay_silent("safety_veto")`.
 2. Muted (`assistant.muted_until` in the future) → no initiative. Exceptions in `policies.allowed_while_muted` (messages, contact reply, driver requests).
@@ -184,7 +230,13 @@ Build `speak` with `assistant.tts.speak_message(action)`. It also starts synthes
 {"type": "alarm_played", "id": "a7", "ts": 1763672401.05}   // alarm latency (plan J1)
 ```
 
-- `addressed` is true when the text contains the wake word (`drivemate`, `drive mate`, `copilot`) or the dialog window is open. Core should act only on addressed final results.
+- `addressed` is true when the text contains the wake word (`drivemate`, `drive mate`, `copilot`) or the dialog window is open. Core should act only on addressed final results. The wake word is removed from `text`; diacritics are kept. An utterance that **started** while the window was open stays addressed even if Chrome publishes its final text after the window closed (Chrome often needs 1.5–3 s).
+- **Early finalisation (latency).** Chrome publishes a final result only after ~0.5–1 s of silence. So an addressed interim result that stays unchanged is sent as final before that:
+  - after `quickAnswerMs` (300 ms) for a short answer while the dialog window is open (`da`, `nu`, `7`, `gata`...), with `early: "quick"`;
+  - after `earlyFinalMs` (800 ms) for any other request of at least 2 words, with `early: "stable"`.
+
+  Chrome's later final for the same result is ignored. If the driver kept talking after the early send, the full sentence is sent too. `wait_ms` is the time since the last change of the text. Both delays are options of `initVoice` (0 disables).
+- **Streamed TTS.** `/tts/<id>.mp3` is streamed while edge-tts is still generating it: the browser starts playing at the first chunk (~0.9–1.5 s) instead of waiting for the whole file. The next sentences are already being synthesized in the background, so they usually start instantly.
 - After `speak_done` for a question, core opens the 6 s dialog window (plan E1). The voice also keeps a local copy, so it works with a fake core.
 - Half-duplex (plan E6): recognition and onset detection are off while the assistant speaks.
 
@@ -261,6 +313,7 @@ The Gemini answer schema has one branch per action type, with all of its fields 
 | Area | Status |
 |---|---|
 | Refusal, policies, validation, fallback, summary, memory, music logic, answer fusion | done, tested |
+| Confirmations (yes/no on any channel), KSS answer, quiz after refused music | done, tested; simulated on the voice test page (buttons for 👍 👎 ✋ and nods until P1 is connected) |
 | Gemini client (streaming, JSON schema, 2.5 s deadline, early speech) | done; real call to test once the key is in `.env` |
 | TTS router, clips (27 generated), browser voice modules, voice test page | done; Chrome microphone test pending (a manual step) |
 | Phone bridge | written and dry-run tested; real KDE Connect test pending (needs the Linux laptop + Android) |
