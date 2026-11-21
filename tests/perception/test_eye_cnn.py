@@ -86,7 +86,7 @@ def test_eye_crop_and_input() -> None:
     assert crop is not None and crop.shape[0] == crop.shape[1] == round(50 * 1.6)  # factory eyes are 50 px wide
     x = eye_input(crop)
     assert x.shape == (1, 3, 32, 32) and x.dtype == np.float32
-    assert float(x.min()) >= -0.51 and float(x.max()) <= 0.51  # (x - 127) / 255
+    assert float(np.min(x)) >= -0.51 and float(np.max(x)) <= 0.51  # (x - 127) / 255
     assert eye_crop(img, f, "left", 60.0) is None  # leaves the frame
 
 

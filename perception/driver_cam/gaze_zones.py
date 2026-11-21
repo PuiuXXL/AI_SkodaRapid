@@ -196,7 +196,7 @@ class ZoneModel:
     def __post_init__(self) -> None:
         self._z = self.transform(self.samples)
         hy, hp = self.samples[:, 0], self.samples[:, 1]
-        self.head_range = (float(hy.min()), float(hy.max()), float(hp.min()), float(hp.max()))
+        self.head_range = (float(np.min(hy)), float(np.max(hy)), float(np.min(hp)), float(np.max(hp)))
 
     # --- fit ------------------------------------------------------------------------------------------------
 
