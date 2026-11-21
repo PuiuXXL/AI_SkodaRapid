@@ -1,0 +1,33 @@
+﻿<!doctype html>
+<html lang="ro"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DriveMate · Moodboard P4</title>
+<style>
+:root{--paper:#f1f3f0;--ink:#172522;--teal:#116c63;--muted:#52635e;--amber:#875300;--alarm:#ae343c;font:16px/1.5 "Instrument Sans","Segoe UI",sans-serif;color:var(--ink);background:var(--paper)}
+*{box-sizing:border-box}body{max-width:1100px;margin:auto;padding:clamp(16px,4vw,52px)}header{border-bottom:1px solid #bdc7bf;padding-bottom:20px}h1{font-size:clamp(36px,6vw,68px);line-height:1.05;letter-spacing:-.055em;font-weight:550;margin:14px 0}h2{font-size:23px;letter-spacing:-.035em;margin:0 0 12px}p{max-width:68ch}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(310px,100%),1fr));gap:18px}section{background:white;border-radius:18px;padding:24px}header,main{margin-bottom:24px}.span{grid-column:1/-1}.mono,output,small{font-family:"IBM Plex Mono",Consolas,monospace;font-variant-numeric:tabular-nums}.swatches{display:flex;flex-wrap:wrap;gap:16px}.swatches span{min-width:118px}.swatches i{display:block;height:36px;border:1px solid #ccd4cd;border-radius:6px;background:var(--sample)}.dark{background:#192c2a;color:#f1f3f0}.lens{border:2px solid transparent;border-radius:12px;background:#233d3c;padding:20px;text-align:center}.lens svg{max-width:236px;width:100%;height:auto}.trace{fill:none;stroke:#a8e6d8;stroke-width:2;transition:opacity 160ms}.lost .trace{opacity:0}.cue{animation:signal 240ms ease-out}@keyframes signal{from{border-color:#a8e6d8}to{border-color:transparent}}button{font:inherit;border:1px solid #8ca29b;border-radius:8px;padding:9px 12px;background:white;color:#172522;cursor:pointer;margin:10px 3px 0 0}button:focus-visible,summary:focus-visible{outline:3px solid #3685b0;outline-offset:3px}summary{cursor:pointer}output{display:block;margin-top:8px}.rail{height:16px;position:relative;background:#e1e9e4;border-radius:3px;margin:22px 0 8px}.rail:after{content:"";position:absolute;left:50%;height:24px;top:-4px;border-left:2px dashed var(--ink)}.marker{position:absolute;left:65%;top:0;width:8px;height:16px;background:var(--teal);transition:left 180ms ease-out}
+@media(prefers-reduced-motion:reduce){*,*::after{animation:none!important;transition:none!important}}
+</style>
+<header><small>DriveMate / P4 · Studiu de design</small><h1>Privirea pe drum.</h1><p>Un ecran luminos pentru pasager și juriu. Imaginea cabinei rămâne stabilă, iar mișcarea arată momentul în care sistemul observă ceva sau șoferul răspunde.</p></header>
+<main class="grid">
+<section class="span"><h2>Material și culoare</h2><div class="swatches">
+<span style="--sample:#f1f3f0"><i></i>Porțelan<br><small>#F1F3F0 · fond</small></span><span style="--sample:#172522"><i></i>Cerneală<br><small>#172522 · text</small></span><span style="--sample:#192c2a"><i></i>Grafit<br><small>#192C2A · video</small></span><span style="--sample:#116c63"><i></i>Petrol<br><small>#116C63 · selecție</small></span><span style="--sample:#875300"><i></i>Chihlimbar<br><small>#875300 · degradat</small></span><span style="--sample:#ae343c"><i></i>Carmin<br><small>#AE343C · alarmă</small></span></div></section>
+<section class="dark"><h2>Vizor ocular</h2><div class="lens" id="lens"><svg viewBox="0 0 220 90" role="img" aria-label="Schiță ilustrativă de ochi"><path d="M10 45 Q105 -22 210 45 Q105 112 10 45Z" fill="none" stroke="#9caeaa"/><circle cx="110" cy="45" r="21" fill="#314b49" stroke="#9caeaa"/><g class="trace"><path d="M32 34 Q105 -6 188 34"/><path d="M110 16v10m0 38v10M80 45h9m42 0h9"/></g></svg><output id="eye" aria-live="polite">Exemplu · semnal fiabil</output></div>
+<button id="toggle">Simulează semnal nesigur</button><button id="cue">Semnal discret</button><p>Linie fină inspirată de conturul farului din referință. Marcajul anatomic live cere un decupaj al aceluiași cadru de la P1.</p></section>
+<section><h2>Reacție vizuală</h2><small>Exemplu · referință personală 500 ms</small><div class="rail" aria-hidden="true"><b id="marker" class="marker"></b></div><output id="reaction" aria-live="polite">650 ms · 1,30× referința</output><button id="next">Încearcă altă reacție</button><p>Linia întreruptă fixează referința. Marcajul petrol se deplasează o singură dată, la primirea unei reacții noi. Scara exemplului este 0–1.000 ms.</p></section>
+<section><h2>Voce vizuală</h2><p>Instrument Sans pentru titluri și etichete. IBM Plex Mono pentru cifre, ore și unități. Mostrele folosesc fonturile instalate, cu Segoe UI și Consolas ca rezervă.</p><span class="mono">24 fps &nbsp; 120 ms &nbsp; 0,27 EAR</span><p>Margini desktop 32 px, spațiere de bază 8 px, suprafețe mate, rază 16 px. Pe video, etichetele au fundal opac.</p></section>
+<section><h2>Ierarhie și interacțiune</h2><p>Performanță sus. Camera ancorată în stânga. Stare generală și previzualizări în dreapta. Privire, stare, reacție, cabină și asistent au fiecare două sau trei valori dominante.</p><details><summary>Detalii și stări de verificat</summary><p>Fiecare modul păstrează locul valorii lipsă cu „—”. Conexiunea pierdută arată vechimea datelor. Graficele se actualizează direct, cu întreruperi la mostre lipsă. Alarma apare imediat, cu text și simbol. Harta și simulatorul au ecrane proprii.</p></details></section></main>
+<script>
+const lens=document.getElementById('lens');
+document.getElementById('toggle').onclick=function(){
+ const lost=lens.classList.toggle('lost');
+ document.getElementById('eye').textContent=lost?'Exemplu · semnal nesigur':'Exemplu · semnal fiabil';
+ this.textContent=lost?'Restabilește semnalul':'Simulează semnal nesigur';
+};
+document.getElementById('cue').onclick=()=>{lens.classList.remove('cue');void lens.offsetWidth;lens.classList.add('cue');};
+let index=0;
+const samples=[650,420,780];
+document.getElementById('next').onclick=()=>{
+ index=(index+1)%samples.length;
+ const ms=samples[index];
+ document.getElementById('marker').style.left=ms/10+'%';
+ document.getElementById('reaction').textContent=ms+' ms · '+(ms/500).toLocaleString('ro-RO',{minimumFractionDigits:2})+'× referința';
+};
+</script></html>

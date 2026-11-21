@@ -1,0 +1,38 @@
+<div id="dm-optic" lang="ro" aria-label="DriveMate, studiu de design cu valori ilustrative">
+<style>
+#dm-optic{--paper:#f1f3f0;--ink:#172522;--dim:#52635e;--teal:#116c63;background:var(--paper);color:var(--ink);font:15px/1.45 Inter,"Segoe UI",sans-serif;border-radius:18px;overflow:hidden}
+#dm-optic *{box-sizing:border-box}
+#dm-optic header,#dm-optic .perf,#dm-optic footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#dm-optic header{padding:18px 4%;border-bottom:1px solid #d1d8d3}
+#dm-optic .brand{font-weight:650;letter-spacing:-.06em;font-size:24px}
+#dm-optic .label{font:12px/1.4 "IBM Plex Mono",Consolas,monospace;letter-spacing:.045em}
+#dm-optic .perf{padding:12px 4%;background:#192c2a;color:#f4faf6;font-variant-numeric:tabular-nums}
+#dm-optic .layout{display:grid;grid-template-columns:minmax(210px,.85fr) minmax(0,1.55fr);gap:24px;padding:24px 4%}
+#dm-optic .cam{color:#eef6f3;background:radial-gradient(ellipse at 50% 42%,#374c49,#192625 70%);border-radius:14px;padding:18px;display:grid;align-content:space-between;gap:12px;min-height:230px}
+#dm-optic .frame{width:55%;height:100px;margin:auto;background:linear-gradient(#9dbab1,#9dbab1) top left/16px 1px,linear-gradient(#9dbab1,#9dbab1) top left/1px 16px,linear-gradient(#9dbab1,#9dbab1) bottom right/16px 1px,linear-gradient(#9dbab1,#9dbab1) bottom right/1px 16px;background-repeat:no-repeat;display:grid;place-items:center}
+#dm-optic .frame i{width:32px;height:32px}
+#dm-optic .body{display:grid;gap:10px;align-content:start}
+#dm-optic h2,#dm-optic h3,#dm-optic p{margin:0}
+#dm-optic h2{font:500 clamp(25px,3.3vw,40px)/1.12 Inter,"Segoe UI",sans-serif;letter-spacing:-.05em}
+#dm-optic .scores{display:flex;gap:8px 24px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #bdc9c4}
+#dm-optic .scores b{font:500 22px/1.2 Consolas,monospace}
+#dm-optic .lens{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:center;border-radius:12px;background:#193639;color:#ecf7f6;padding:17px}
+#dm-optic .optics{display:grid;place-items:center;min-height:90px;background:linear-gradient(transparent 49.5%,#699899 50%,transparent 50.5%),radial-gradient(circle,transparent 34%,#699899 35%,transparent 36%)}
+#dm-optic .eye{width:73px;height:44px;border:1px solid #bde6df;border-radius:70% 15%;transform:rotate(19deg);display:grid;place-items:center}
+#dm-optic .iris{width:27px;height:27px;border:1px solid #bde6df;border-radius:50%;background:radial-gradient(circle,#b8dbd6 14%,transparent 17%)}
+#dm-optic summary{cursor:pointer;color:var(--teal);padding:9px 0;font-weight:600}
+#dm-optic details p{color:var(--dim)}
+#dm-optic footer{padding:12px 4%;border-top:1px solid #d1d8d3;color:var(--dim)}
+@media(max-width:620px){#dm-optic .layout{grid-template-columns:1fr;gap:14px}#dm-optic .cam{min-height:120px}#dm-optic .frame{height:42px}}
+</style>
+<header><span class="brand">DriveMate</span><span class="label">Studiu de design · date ilustrative</span></header>
+<div class="perf"><span>Performanță</span><span>Șofer <b>24 fps</b></span><span>Pasager <b>10 fps</b></span><span>Ultima alarmă <b>120 ms</b></span></div>
+<div class="layout">
+<aside class="cam"><span class="label">CAMERA ȘOFERULUI</span><div class="frame"><i data-lucide="video" aria-hidden="true"></i></div><span>Zonă video permanentă</span></aside>
+<div class="body"><span class="label">STARE GENERALĂ</span><h2>Privirea pe drum</h2>
+<div class="scores"><span>Atenție <b>82</b></span><span>Oboseală <b>35</b></span><span>Dezinteres <b>30</b></span></div>
+<div class="lens"><div class="optics" aria-hidden="true"><div class="eye"><div class="iris"></div></div></div><div><span class="label">PRIVIRE · SCHEMĂ</span><h3>Ochiul stâng</h3><p>PERCLOS 8% · 60 s</p></div></div>
+<details><summary>Măsurători oculare</summary><p>Deschidere relativă (EAR) 0,27 · Clipire 180 ms · Semnal fiabil</p></details>
+</div></div>
+<footer><span>Reacție vizuală <b>650 ms</b></span><span>Referință personală <b>500 ms</b></span></footer>
+</div>
