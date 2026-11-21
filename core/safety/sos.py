@@ -58,6 +58,7 @@ class SosMachine:
         self.alert = ""
         self.armed = True
         self.last_report: SosReport | None = None
+        self.consumed_at: float | None = None  # when an input last answered the SOS (not for the assistant then)
 
     # --- detection (fast path: every frame) ----------------------------------------------------------------------
 
@@ -156,6 +157,7 @@ class SosMachine:
         """A yes / no from any channel while the machine is active."""
         if self.state not in ACTIVE:
             return
+        self.consumed_at = now
         if value == "yes":
             stage = self.state
             self._normal(now)

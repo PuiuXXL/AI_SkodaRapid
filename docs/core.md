@@ -199,7 +199,34 @@ Checked end to end: scene 2 (mirror glance -> "prag simplu 1 / DriveMate 0") and
 message waiting -> cue at 1.1 s -> "Lasă telefonul, ți-l citesc eu." -> alarm at 3 s -> phone down -> end; counter
 "prag simplu 2 / DriveMate 1").
 
-## 5. Testing without the others
+## 5. The assistant link (C): `core/assistant_link.py`
+
+The slow path. Safety never waits for it: events go to `assistant.handle_event` one at a time in a background task
+(an answer can take seconds), the actions that come back are checked again (C8) and executed.
+
+| Events core sends | When |
+|---|---|
+| `trip_start` | the driver has been seen for `assistant.greet_after_s` (once per trip); new messages wait for it |
+| `driver_speech` | an addressed final utterance that answers neither the SOS nor the assistant's pending question |
+| `driver_refused` | a refusal while the fatigue dialog is on (`assessment.fatigue >= safe_contact.fatigue_min`); C10 in step H |
+| `message_received` / `safe_contact_reply` | the F2 rule allows it, with `delivery` `ask` or `read` |
+| `stop_suggested` | after a KSS answer of `assistant.kss_break_min` or more: the stop picked by `core/reminders.py` (K3) |
+| follow-ups | what P3's `DialogManager` returns (`media_declined`, `kss_answer`, `driver_refused`, ...) |
+
+| File | What it does |
+|---|---|
+| `validator.py` | **C8.** Rejects an unknown or internal type (`search_media`), a missing parameter, a level that does not allow it (the veto at P0-P2, `null` = P4), an action that needs a "yes" and did not get it (volume excepted). Logged as `action_rejected`. |
+| `messages_timing.py` | **F2.** Defer (alert, risk, speed, distraction cause; "Ți-l citesc imediat ce e liniște." once, retried every `retry_s`), ask (someone else in the car), read (alone). |
+| `reminders.py` | **K3** (first version): the next POI in range, solving an open reminder of the same category. |
+| `assistant_link.py` | Events, early speech while the LLM streams (said once), execution (speech, music with `loop` / `source` / `reason`, volume, reading a message as is, the reply through the phone bridge with `send_reply`, reminders, stops, screen text, silence), answers on every channel through P3's `DialogManager`, the dialog window after a question (`speak_done`), **D4** (the voice pauses at a mirror glance, resumes "...cum ziceam"), ✋ to silence it, LLM latency and status (`perf.llm_*`, `integrations.llm`), the scorecard (accepted / rejected suggestions, hands-free messages, reminders done). |
+
+The SOS has priority: an input that answered "Ești bine?" never reaches the assistant, and a safety alert drops the
+pending question. Without P3's code installed, core and safety run, the assistant is off.
+
+Checked end to end with P3's real client (no LLM key, its fixed texts): scene 1 greeting (paused at a mirror glance,
+resumed), scene 3 message ("Mesaj de la Mihai. Îl citesc tare?" -> "da" -> the text read as is), "oprește muzica".
+
+## 6. Testing without the others
 
 ```bash
 pytest tests/core                                   # the rules, scene by scene, in fake time

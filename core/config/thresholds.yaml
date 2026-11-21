@@ -49,6 +49,11 @@ sos:                            # P0 (C4, C5): alarm -> "Ești bine?" -> countdo
 dialog:
   window_s: 6                   # E1: dialog window opened at speak_done of a question (interaction.dialog_window_open)
 
+assistant:                      # C: core <-> P3's assistant (core/assistant_link.py)
+  greet_after_s: 2              # trip_start once the driver has been seen this long (scene 1: "Salut Andrei")
+  kss_break_min: 7              # a KSS answer at or above -> core picks a stop and sends stop_suggested (D3, K3)
+  yield_zones: [mirror_left, mirror_right, mirror_rear]   # D4: the voice pauses while the driver looks here
+
 # C8: thumbs down adjusts only P3-P4 thresholds, inside fixed limits. Microsleep, distraction, SOS: never.
 tuning:
   step: 0.05

@@ -66,6 +66,7 @@ clips:
   passenger_instructions: "passenger_instructions_{passenger}_{driver}"   # "Maria, Andrei nu răspunde. ..."
   monitoring_lost: "monitoring_lost"                        # "Nu te mai văd. Monitorizarea e întreruptă."
   confirm_ok: "confirm_ok"                                  # "Ok."
+  message_deferred: "message_deferred"                      # "Ți-l citesc imediat ce e liniște." (F2)
   # C2 voice stage. These clips do not exist yet: the text goes through P3's TTS until P3 generates them.
   eyes_on_road: "eyes_on_road"                              # escalation.off_road
   phone_down: "phone_down"                                  # escalation.phone

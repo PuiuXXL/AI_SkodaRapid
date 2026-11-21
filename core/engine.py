@@ -95,6 +95,8 @@ class Engine:
         self._reset_listeners: list[Callable[[float], None]] = []
         self._utterance_counter = 0
         self.safety: Any = None  # core.safety.Safety, attached by it
+        self.assistant: Any = None  # core.assistant_link.AssistantLink, attached by it
+        self.llm_status = "unknown"  # last status reported by the assistant; "off" while the director has it off
 
     # --- plug-in points for the next steps ----------------------------------------------------------------------
 
@@ -318,10 +320,7 @@ class Engine:
         state.safety.monitoring_ok = frame is not None and state.driver.monitoring_ok
         state.integrations.phone_bridge = "ok" if self.hub.phone is not None else "down"
         state.integrations.contact_app = "ok" if self.contact_app else "off"
-        if not state.safety.llm_enabled:
-            state.integrations.llm = "off"
-        elif state.integrations.llm == "off":
-            state.integrations.llm = "unknown"
+        state.integrations.llm = "off" if not state.safety.llm_enabled else self.llm_status
 
         for listener in self._tick_listeners:
             listener(state, now)

@@ -25,6 +25,7 @@ from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
+from core.assistant_link import AssistantLink
 from core.engine import Engine
 from core.hub import Hub, Peer
 from core.safety import Safety
@@ -101,20 +102,24 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     else:
         contact_router = None
     if engine.safety is None:
-        Safety(engine)  # C: alarm, SOS, "Nu te mai văd", arbiter
+        Safety(engine)  # C: alarm, SOS, "Nu te mai văd", distractions, arbiter, A/B
+    if engine.assistant is None:
+        AssistantLink(engine)  # the slow path: P3's assistant, after the safety rules
     assistant_router = _optional_router("assistant.router")
     hub = engine.hub
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        task = asyncio.create_task(state_loop(engine))
-        log.info("core started: simulator=%s, demo_mode=%s", engine.simulator_name, th("demo_mode"))
+        tasks = [asyncio.create_task(state_loop(engine)), asyncio.create_task(engine.assistant.run()),
+                 asyncio.create_task(engine.assistant.warm_up())]
+        log.info("core started: simulator=%s, demo_mode=%s, assistant=%s", engine.simulator_name, th("demo_mode"),
+                 "on" if engine.assistant.available else "off")
         try:
             yield
         finally:
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     app = FastAPI(title="DriveMate core", lifespan=lifespan)
     app.state.engine = engine
