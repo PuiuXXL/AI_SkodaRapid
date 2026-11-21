@@ -81,6 +81,7 @@ def phone_config(cfg: PerceptionConfig) -> PhoneSettings:
         foreign_dx_ratio=p.foreign_dx_ratio,
         passenger_side=p.passenger_side,
         mirrored=p.mirrored,
+        owned_needs_contact=p.owned_needs_contact,
         lap_conf=p.lap_pattern.conf,
         threads=m.phone_threads,
     )
