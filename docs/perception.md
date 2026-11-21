@@ -108,7 +108,7 @@ Lighting is the factor that hurts vision-based driver monitoring most (see the 1
 | **R-FL1** | `num_faces = 1` on each camera. MediaPipe's internal tracking/smoothing between frames only works with a single face. Each camera sees one person by design. | `face.num_faces` (fixed to 1 by validation) |
 | **R-FL2** | The three confidence thresholds live in yaml: detection 0.5, presence 0.5, tracking 0.6 (starting values). | `face.min_detection_conf`, `face.min_presence_conf`, `face.min_tracking_conf` |
 | **R-FL3** | The face must be **≥ ~250 px wide** in the frame. Below that, eye landmarks are too coarse for EAR: the frame is flagged `face_too_small` and the face confidence is reduced (`width / min_face_width_px`). | `face.min_face_width_px`; `FeatureFrame.face.too_small`, `.conf` |
-| **R-FL4** | **High `eyeSquint` + moderately low EAR = squinting, not closed.** Squinting (sun, smiling, concentrating) lowers EAR without the lids meeting; it must not count in PERCLOS or `closed_ms`. Squint if `eyeSquint ≥ squint_threshold` and `EAR / baseline` lies inside `squint_ear_band`. | `eyes.squint_threshold`, `eyes.squint_ear_band` |
+| **R-FL4** | **Lids lowered but not meeting = squinting, not closed.** Squinting (sun, smiling, concentrating) lowers EAR without the lids meeting; it must not count in PERCLOS or `closed_ms`. Squint if `EAR / reference` lies inside `squint_ear_band` **and `eyeBlink` < `blendshape_closed`**; a fast fall that settles there for longer than `plateau_check_ms` is cancelled. *Revised 2026-11-21:* `eyeSquint` is not used, it is person-dependent (0.49 at rest in the diag session) and just as high with the eyes squeezed shut (0.71). | `eyes.squint_ear_band`, `eyes.blendshape_closed`, `eyes.plateau_check_ms` |
 | **R-FL5** | Face Landmarker **does not identify people**: identity is YuNet + SFace only (§3.7). `brow*` blendshapes are optional signals at most, never used for identity or safety decisions. | — |
 
 Face Landmarker exposes **no per-face confidence score** in the Tasks API (landmark `presence` / `visibility` are
@@ -118,42 +118,107 @@ linearly below it, 0 when no face is found.
 Measured on the dev laptop webcam (1280×720, normal sitting distance): the face is only **~165 px** wide, below
 R-FL3. For the demo, the driver camera must be closer to the face (or have a narrower field of view).
 
-### 3.2 Eyes: EAR + eyeBlink, relative thresholds
-- **EAR on each eye** (right `33,160,158,133,153,144`; left `362,385,387,263,373,380`), plus the `eyeBlinkLeft/Right`
-  blendshapes. The better-seen eye is used and reported in `eye_used`.
-- **Thresholds are relative to the driver's personal baseline** (open-eye EAR, a high percentile over a calibration
-  window): closed if `EAR < k_close · baseline`, open if `EAR > k_open · baseline`. EAR differs a lot between people
-  and camera angles, so a fixed 0.18/0.23 gives false alarms for narrow eyes and missed closures for wide ones.
-- **Filtering:** a **median over 3 frames**, then **hysteresis**, then a **minimum of 2 frames** in a state.
-  - **No EMA and no 300 ms minimum duration.** Both erase normal blinks of 100–300 ms, and blink duration is one
-    of the fatigue signals P2 uses.
-  - Episode durations are measured from the hysteresis **transition times** (first frame of the confirming run), so
-    the median and min-frame delays cancel out: a synthetic 150 ms blink is measured as 133–167 ms (± 1 frame).
-- Implementation: `perception/driver_cam/eyes.py` (`EyeTracker`), on FeatureFrames (identical live and on replay).
-  - EAR in **pixels** (normalized coordinates distort the ratio on 16:9); `eye_used` = the eye with the larger corner
-    distance (least foreshortened); `reliable` needs an eye at least `eyes.min_eye_width_px` wide.
-  - **Baseline** per eye: from calibration, or provisional = p90 of the first `baseline_window_s` with a valid face,
-    usable after `baseline_min_s` (state `UNKNOWN` before); reported as `baseline_provisional`.
-  - **Fusion with `eyeBlink`:** when mean(eyeBlinkL, R) ≥ `blendshape_closed` and r is inside the hysteresis band,
-    r is pushed below `k_close` (the blendshape confirms what the geometry suggests).
-  - **R-FL4 squint, checked first:** max(eyeSquintL, R) ≥ `squint_threshold` and r inside `squint_ear_band` → state
-    `SQUINT`, `squint = true`; no PERCLOS, no `closed_ms`, no blink; a closure in progress ends there. The band
-    [0.50, 0.80] **deliberately reaches below `k_close` (0.65)**: a broad smile pushes r to ~0.5–0.65, and the exit
-    criterion is zero smiles/squints reported as closed. A really closed eye has r < 0.5, so it stays `CLOSED`.
-  - Closed episode ≤ `blink_max_ms` → blink (`blink_ms`, `blink_rate` per minute over 60 s); longer → closure.
-- **Outputs:** `ear`, `eye_used`, `blink_ms`, `closed_ms` (current closure duration), `perclos_60s`, `reliable`
-  (+ `squint`, `state`, `blink_rate`, see §9).
+### 3.2 Eyes: EAR, local reference, blink shape
+Rewritten 2026-11-21 after a diagnostic on a labelled live session (`scripts/diag_eyes.py`, numbers below). The
+old design (one global baseline from the first 10 s, Median3, hysteresis 0.65 / 0.80) failed for two reasons that
+had nothing to do with filtering: **(1)** the open-eye EAR drifts with head pitch (0.30 at the start, 0.24 a minute
+later with the head 7-10 deg lower), so open eyes read as ratio ~0.78 < `k_open` and the hysteresis stayed CLOSED for
+up to 13 s (14 of 18 false closures had the eyes open); **(2)** looking down lowers the lids as much as a closure.
+Blinks themselves were sharp: 180 ms at 50 % depth in the raw EAR, 192 ms after Median3.
+
+- **EAR on each eye** in **pixels** (right `33,160,158,133,153,144`; left `362,385,387,263,373,380`) and the
+  `eyeBlink`, `eyeLookDown` blendshapes. An eye is unreliable if narrower than `min_eye_width_px` or than
+  `unilateral_width_ratio` x the other eye (head turned, foreshortened).
+- **Reference per eye** (`EarReference`): p90 of the EAR over the last `local_ref_window_s` (4 s), floored at
+  `ref_floor_ratio` (0.6) x the global reference (calibration, or provisional p90 of the first 10 s).
+  - **All frames** go into the window: blinks are < 10 % of the frames, so the p90 is the open level. Excluding
+    "closed" frames deadlocks: a closure started on a too-high reference freezes the reference and never ends.
+  - The floor keeps a closure longer than the window closed (a closed eye reads ~0.5-0.6 of the floor).
+  - `get(side, zone)` takes a gaze zone: the per-zone reference of the gaze calibration (phase 5) plugs in there.
+- **Bilateral rule:** the eye signal r is the MAX of EAR / reference over the reliable eyes: "closed" needs both eyes
+  (one eye only when the other is unreliable). A wink or a one-eye landmark glitch is not a closure.
+- **Gaze conditioning:** head pitch <= -`pitch_down_deg` (15) or >= `pitch_up_deg` (20), or `eyeLookDown` >=
+  `look_down_threshold` on the **last open frame** -> threshold `drop_ratio_relaxed` (0.45) instead of `drop_ratio`.
+  `eyeLookDown` is read before the fall because it rises during every blink (the lids cover the iris).
+  **No closure may start while the head moves** (> `head_motion_deg` in `head_motion_window_s`), and one that
+  started is cancelled if the head starts moving within that window: the eyes lead the head in a gaze shift.
+- **Shape, not a level:**
+  - **fast fall**: from the last frame above `drop_ratio + min_fall_depth` to below the threshold in <=
+    `fall_max_ms` (150) -> blink or closure. `min_state_frames` (2) frames below confirm `CLOSED`, but `closed_ms`
+    counts from the interpolated drop, not from the confirmation;
+  - **slow fall** (drowsy lids) counts only deep (`slow_close_ratio` 0.47) with the lids meeting
+    (`eyeBlink` >= `blendshape_closed` 0.45, or >= `blendshape_strong` 0.65 alone), never while relaxed;
+  - **end**: r back above half the depth of the episode (the same 50 % rule as the duration);
+  - **plateau check** (from `plateau_check_ms`, 300): the episode stays closed only while the lids look closed
+    (r < squint band low and `eyeBlink` >= `blendshape_closed`, or `eyeBlink` >= `blendshape_strong`); otherwise
+    it was a fast squint (cancelled, no event) or a closure that opened into a squint (ends there).
+- **Duration = time below 50 % of the depth**, interpolated between frames (`perception/eye_signal.py`); <=
+  `blink_max_ms` = blink, longer = closure (`long_closure` while it lasts). Each event also carries `min_ratio`,
+  `reopen_ms` (minimum -> 50 % on the way up, Schleicher et al. 2008) and `close_speed` (depth / s).
+- **PERCLOS P80** (Wierwille / Dinges, FHWA 1998): share of the last 60 s with closure >= 80 %, closure =
+  (1 - r) / (1 - closed level); the closed level is the median minimum of the last 10 blinks
+  (`closed_level_default` before that). Separate from the blink threshold: half-closed lids do not count.
+- **Outputs:** `ear`, `eye_used`, `blink_ms`, `closed_ms`, `perclos_60s` (P80), `reliable`, `state`, `squint`,
+  `long_closure`, `relaxed`, `ratio`, `ratio_left/right`, `ref_left/right` (see §9).
   - **P1 reports `closed_ms`. The microsleep threshold belongs to P2.**
-  - `reliable=false` (sunglasses, eyes not visible) → only head metrics are trusted.
+  - `reliable=false` (sunglasses, eyes not visible) -> only head metrics are trusted.
+- **Tuned on one session** (laptop webcam, 1280x720 YUY2 at 29.6 fps, face ~285 px): `drop_ratio` 0.70 (0.65
+  missed shallow blinks, 0.75 added false closures), `slow_close_ratio` 0.47 (2 s closures 0.42-0.47, a hard squint
+  0.48-0.51). Re-check both on every new camera / person with `scripts/diag_eyes.py`.
+
+| Replay of `20261121-022040_eval-cristian-before` | old detector | new detector |
+|---|---|---|
+| cued blinks detected | 9/10 (90 %), median 192 ms | **10/10, median 167 ms** |
+| false closures | 18 (4.7/min) | **1 (0.26/min)** (a 1.7 s look at the lap at -27 deg) |
+| squint / smile reported closed | 7 | **0** |
+| closed_ms vs the raw signal (2 labelled closures) | 1617 vs 1603, 1312 vs 1304 ms | 1586 vs 1603, 1277 vs 1308 ms |
+
+The `closed_ms` error against the **instruction window** (568-601 ms) is a labelling artefact: the closures started
+0.5-0.8 s after the prompt and lasted 1.3-1.6 s, not 2 s. The guided protocol now labels closures with SPACE (press
+when closing, press when opening).
+
+**Held-out live session** `20261121-025703_eval-cristian-after` (new protocol, thresholds NOT tuned on it):
+- blinks: 8/10 by the eval rule; of the 2 misses, one was a blink made 1.2 s after the cue (detected, outside the
+  1.0 s match window) and one cue was not followed by a blink (ratio never below 0.83);
+- 2 s closures: no SPACE label was recorded (window focus), so the 4 real closures count as "false" in the report;
+  against the raw signal, `closed_ms` was 2524 / 2104 / 822 / 2483 ms vs 2654 / 2197 / 1007 / 2432 ms (51-185 ms);
+- **open problem: hard squints.** 3 labelled squints went down to ratio 0.30-0.42 with eyeBlink 0.51-0.55, the same
+  as a closure (0.28-0.45, 0.52-0.65). EAR + blendshapes cannot separate them at this resolution; the upgrade path is
+  an eye-crop CNN (§11, Ersoy et al., 99.1 % eye state);
+- 1 look at the lap at pitch -34 deg for 3.5 s read as closed (ratio 0.28, eyeBlink 0.57): with the head that low the
+  lids cover the eye; a stricter rule below ~-25 deg is a candidate, to be decided on a third session;
+- head: jitter 0.006 / 0.007 / 0.028 deg, signs correct (yaw +31, pitch +32, roll +25 / -40); speaking 5/5 segments,
+  0.44 s median latency.
+
+### Diagnostics and evaluation tools
+- `scripts/eval_eyes.py --name <n>`: guided live protocol (~4 min) -> labelled session in `data/features/` + report
+  in `docs/eval/`; `--session <dir>`: re-evaluate a recorded session; `--ab-num-faces`: R-FL1 A/B (two Face
+  Landmarkers on the same frames). Result 2026-11-21: blink width 165 vs 160 ms (num_faces 1 vs 2), no reason to
+  change R-FL1.
+- `scripts/diag_eyes.py --session <dir>`: plots and tables in `data/diag/<session>/` (local): raw EAR per eye,
+  detector input, blendshapes, pitch, labels, states; one panel per cued blink, closure, false closure, squint,
+  look-down; the real frame rate.
+- `scripts/tune_one_euro.py --session <dir>`: per-axis One Euro grid (§3.3).
 
 ### 3.3 Head angles and slow events
-- Yaw / pitch / roll from the transformation matrix, smoothed with a **One Euro filter**: little lag on fast
-  movements (mirror checks, nods), strong smoothing when the head is still (`perception/driver_cam/head.py`).
+- Yaw / pitch / roll from the transformation matrix (Euler ZYX, R = Rz(roll) Ry(yaw) Rx(pitch)), smoothed with a
+  **One Euro filter per axis** (`filters.one_euro_head`): little lag on fast movements (mirror checks, nods),
+  strong smoothing when the head is still (`perception/driver_cam/head.py`).
+  - **Tuning** (`scripts/tune_one_euro.py`, Casiez et al. 2012): lowest frame-to-frame jitter on neutral still frames
+    with a lag <= 50 ms on fast head movements. Raw jitter yaw 0.10 / pitch 0.14 / roll 0.18 deg -> filtered
+    0.03 / 0.06 / 0.15 deg (`docs/eval/one-euro-2026-11-21.md`).
+  - **Jitter metric:** std of consecutive differences / sqrt(2), on neutral frames (eyes open, not speaking, not
+    yawning). The old metric (plain std over the "still" window, 2.2 deg pitch / 3.8 deg roll) measured the real slow
+    drift of a head that is never perfectly still: raw and filtered were equal, so no filter could fix it.
+  - **Plausibility:** |yaw| > 70, |pitch| > 50 or |roll| > 45 deg -> angles reported as unknown and the filters
+    restart. A near-profile face gives garbage fits (roll 80 deg while the head was turned +50 deg left).
 - **Axis signs, in the driver's terms:** `yaw > 0` = head turned to the driver's **left** (left mirror);
   `pitch > 0` = head **up**; `roll > 0` = head tilted to the **left shoulder**. MediaPipe's pose is in camera space
   (x = image right, y = up, z = towards the camera, image not mirrored); `AXIS_SIGNS` maps the raw rotations about
   x / y / z to this convention. Unit tests use known rotation matrices; the guided eval (`scripts/eval_eyes.py`,
-  "turn left / up / tilt left") checks the signs live and reports `pose_*_sign_ok`.
+  "turn left / up / tilt left / tilt right", 5 s each, the first 2 s skipped for the reaction time) checks the
+  signs live and reports `pose_*_sign_ok`. **Verified 2026-11-21:** yaw left +57, pitch up +31, roll left +11 /
+  right -13 deg, all correct; the earlier "wrong roll sign" came from 3 s windows shorter than the reaction time.
 - **Slow events need a minimum duration:**
   - yawn = `jawOpen` above its threshold for **≥ 1.5 s**;
   - gesture held for **≥ 0.5 s**.
@@ -162,9 +227,13 @@ R-FL3. For the demo, the driver camera must be closer to the face (or have a nar
   - ≥ 2 direction reversals in < 1.2 s, with the eyes open;
   - pitch reversals = yes, yaw reversals = no.
 - `speaking` (`perception/driver_cam/mouth.py`): standard deviation over 1 s of the inner-lip gap (13–14) divided by
-  the face height (10–152) ≥ `speaking.lip_std_threshold`, **and** at least `speaking.min_reversals` direction
-  changes of the gap in the window (speech oscillates; a yawn opens and closes once), and never during or within one
-  window after a wide-open jaw (the closing of a yawn would otherwise look like speech).
+  the face height (10–152) ≥ `speaking.lip_std_threshold` (0.003), **and** at least `speaking.min_reversals` (2)
+  direction changes of the gap (steps ≥ `speaking.reversal_step`) in the window (speech oscillates; a yawn opens and
+  closes once), and never during or within one window after a wide-open jaw. **Held** for `speaking.hold_ms`
+  (800 ms) after the last oscillating window, so pauses between words do not drop it. Diag session: rest
+  `lip_std` p90 0.0007, reading p50 0.0087; the old 0.008 caught 3 of 5 sentences, 0.003 catches 5 of 5 with a
+  median 0.5 s from the first lip movement. The eval scores speaking per **segment** (detected < 1 s after the lips
+  leave their rest level), not per frame.
 
 ### 3.4 Gaze zones: MobileGaze + kNN
 - **Why a gaze model.** Euro NCAP distinguishes **owl** glances (the head turns) from **lizard** glances (only the
@@ -314,6 +383,10 @@ Not yet in `shared/contracts.py` (owned by P2). To be announced on the group as 
 | `driver.phone.near_face` | `bool` | `false` | P1 | Phone held near the face (call / reading) vs. in the hand. |
 | `driver.phone.side` | `"left" \| "right" \| null` | `null` | P1 | Which side the phone is on; useful for the cause and the overlay. |
 | `driver.eyes.squint` | `bool` | `false` | P1 | R-FL4: squinting / smiling eyes, explicitly *not* closed. |
+| `driver.eyes.long_closure` | `bool` | `false` | P1 | CLOSED for longer than `blink_max_ms` (a closure, not a blink). |
+| `driver.eyes.relaxed` | `bool` | `false` | P1 | Looking down / head tilted: the closing threshold is stricter. |
+| `driver.eyes.ratio`, `ratio_left/right`, `ref_left/right` | `float \| null` | `null` | P1 | Eye openness vs. the local reference (dashboard debug). |
+| `driver.head.raw_yaw/pitch/roll` | `float \| null` | `null` | P1 | Angles before One Euro (debug overlay, jitter checks). |
 | `driver.eyes.state` | `"OPEN" \| "CLOSED" \| "SQUINT" \| "UNKNOWN"` | `"UNKNOWN"` | P1 | Discrete eye state for the dashboard and P2's rules. |
 | `driver.eyes.blink_rate` | `float \| null` | `null` | P1 | Blinks per minute over 60 s (fatigue signal for F). |
 | `driver.face_too_small` | `bool` | `false` | P1 | R-FL3: face narrower than `face.min_face_width_px`; landmarks too coarse. |
@@ -348,8 +421,8 @@ thresholds and with two small CNNs (64×64 eye / mouth crops, CLAHE).
 
 What it means for P1:
 - **Relative EAR thresholds are confirmed.** The big gain is on *open* eyes (89.0% → 98.9%): fewer open eyes read as
-  closed means **fewer false alarms**, which is our main goal. Their single 0.75 sits inside our hysteresis band
-  (`k_close` 0.65 / `k_open` 0.80).
+  closed means **fewer false alarms**, which is our main goal. Their single 0.75 sits between our `drop_ratio`
+  (0.70) and `reopen_ratio` (0.80).
 - Our baseline is a high percentile over `baseline_window_s` (10 s) instead of a 5 s mean, so blinks during
   calibration do not lower it.
 - They average over 15 frames before warning. **We do not smooth that much in perception**: it would erase the

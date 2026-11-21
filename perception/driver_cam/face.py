@@ -74,10 +74,19 @@ def face_box_px(face: FaceFeatures, frame_w: int, frame_h: int) -> Box | None:
 
 
 class FaceLandmarkerModel:
-    """Face Landmarker for one camera. ``min_tracking_conf`` can be overridden (R-FL2 tuning only)."""
+    """Face Landmarker for one camera.
+
+    ``min_tracking_conf`` (R-FL2 tuning) and ``num_faces`` (R-FL1 A/B, ``scripts/eval_eyes.py --ab-num-faces``) can be
+    overridden for experiments only; the config itself stays validated to ``num_faces = 1``.
+    """
 
     def __init__(
-        self, cfg: PerceptionConfig, *, camera: str = "driver", min_tracking_conf: float | None = None
+        self,
+        cfg: PerceptionConfig,
+        *,
+        camera: str = "driver",
+        min_tracking_conf: float | None = None,
+        num_faces: int | None = None,
     ) -> None:
         if camera == "driver" and cfg.face.num_faces != 1:
             raise ValueError(f"R-FL1: face.num_faces must be 1 on the driver camera, got {cfg.face.num_faces}")
@@ -86,11 +95,12 @@ class FaceLandmarkerModel:
         self._cfg = cfg
         self.path = cfg.models.path(cfg.models.face_landmarker)
         self.min_tracking_conf = cfg.face.min_tracking_conf if min_tracking_conf is None else min_tracking_conf
+        self.num_faces = cfg.face.num_faces if num_faces is None else num_faces
         self._landmarker = vision.FaceLandmarker.create_from_options(
             vision.FaceLandmarkerOptions(
                 base_options=BaseOptions(model_asset_path=str(self.path)),
                 running_mode=vision.RunningMode.VIDEO,
-                num_faces=cfg.face.num_faces,
+                num_faces=self.num_faces,
                 min_face_detection_confidence=cfg.face.min_detection_conf,
                 min_face_presence_confidence=cfg.face.min_presence_conf,
                 min_tracking_confidence=self.min_tracking_conf,

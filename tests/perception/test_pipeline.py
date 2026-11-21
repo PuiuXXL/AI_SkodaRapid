@@ -100,7 +100,7 @@ def _latest_real_session() -> Path | None:
     return sessions[-1] if sessions else None
 
 
-@pytest.mark.data
+@pytest.mark.realdata
 def test_latest_real_eval_session_meets_minimums() -> None:
     session = _latest_real_session()
     if session is None:
@@ -111,6 +111,7 @@ def test_latest_real_eval_session_meets_minimums() -> None:
     run = run_pipeline(cfg, replay.frames(), (cam["width"], cam["height"]))
     _, events = load_labels(session / "labels.jsonl")
     result = evaluate(run, to_intervals(events), cfg.eyes.blink_max_ms)
-    # minimum bar for a real session (the full exit criteria are in the eval report)
+    # regression bar for a real session (the full exit criteria are in the eval report)
     assert result.checks.get("squint_smile") is not False, result.metrics
-    assert result.metrics.get("blink_detection_pct", 100) >= 80, result.metrics
+    assert result.checks.get("false_alarms") is not False, result.metrics
+    assert result.metrics.get("blink_detection_pct", 100) >= 90, result.metrics

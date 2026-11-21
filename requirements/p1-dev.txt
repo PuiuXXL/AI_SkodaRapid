@@ -7,3 +7,4 @@ types-PyYAML
 types-psutil
 onnx>=1.17          # tiny test models + YOLO ONNX export
 onnxslim>=0.1.40    # used by the Ultralytics ONNX export
+matplotlib>=3.8     # scripts/diag_eyes.py plots (data/diag/, local only)

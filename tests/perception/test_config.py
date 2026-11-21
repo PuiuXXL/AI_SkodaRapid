@@ -39,8 +39,9 @@ def test_passenger_camera_disabled_by_default() -> None:
 
 def test_key_decisions_are_in_yaml() -> None:
     cfg = load_config()
-    assert cfg.eyes.k_close < cfg.eyes.k_open
-    assert cfg.eyes.median_frames == 3
+    assert cfg.eyes.drop_ratio_relaxed <= cfg.eyes.drop_ratio < cfg.eyes.reopen_ratio
+    assert cfg.eyes.ref_floor_ratio == pytest.approx(0.6)  # local EAR reference never below 0.6 x global
+    assert cfg.eyes.squint_ear_band[1] == pytest.approx(cfg.eyes.drop_ratio)
     assert cfg.identity.cosine_threshold == pytest.approx(0.363)
     assert cfg.phone.class_id == 67
     assert (cfg.phone.vote_min, cfg.phone.vote_window) == (3, 5)
@@ -56,7 +57,7 @@ def test_model_path_is_relative_to_repo_root() -> None:
 def test_config_is_frozen() -> None:
     cfg = load_config()
     with pytest.raises(ValidationError):
-        cfg.eyes.k_close = 0.1  # type: ignore[misc]
+        cfg.eyes.drop_ratio = 0.1  # type: ignore[misc]
 
 
 def test_tmp_yaml_loads(tmp_path: Path) -> None:
@@ -66,11 +67,11 @@ def test_tmp_yaml_loads(tmp_path: Path) -> None:
     assert cfg.cameras.passenger.enabled is True
 
 
-def test_k_close_must_be_below_k_open(tmp_path: Path) -> None:
+def test_drop_ratio_must_be_below_reopen_ratio(tmp_path: Path) -> None:
     data = _default_data()
-    data["eyes"]["k_close"] = 0.9
-    data["eyes"]["k_open"] = 0.8
-    with pytest.raises(ValidationError, match="k_close"):
+    data["eyes"]["drop_ratio"] = 0.9
+    data["eyes"]["reopen_ratio"] = 0.8
+    with pytest.raises(ValidationError, match="drop_ratio"):
         load_config(_write(tmp_path, data))
 
 
@@ -92,7 +93,7 @@ def test_missing_key_rejected(tmp_path: Path) -> None:
     ("section", "key", "value"),
     [
         ("phone", "vote_min", 6),
-        ("eyes", "median_frames", 4),
+        ("eyes", "ref_floor_ratio", 1.2),
         ("output", "publish_hz", 60),
         ("output", "ws_url", "http://localhost:8000"),
         ("identity", "cosine_threshold", 1.5),
@@ -133,7 +134,7 @@ def test_face_landmarker_rules_in_yaml() -> None:
     assert (cfg.face.min_detection_conf, cfg.face.min_presence_conf, cfg.face.min_tracking_conf) == (0.5, 0.5, 0.6)
     assert cfg.face.min_face_width_px == 250  # R-FL3
     low, high = cfg.eyes.squint_ear_band  # R-FL4
-    assert 0 < low < high < 1 and 0 < cfg.eyes.squint_threshold <= 1
+    assert 0 < low < high < 1
 
 
 @pytest.mark.parametrize(
@@ -142,6 +143,7 @@ def test_face_landmarker_rules_in_yaml() -> None:
         ("face", "num_faces", 2),
         ("eyes", "squint_ear_band", [0.8, 0.5]),
         ("eyes", "squint_ear_band", [0.5]),
+        ("eyes", "drop_ratio_relaxed", 0.9),
         ("models", "gaze_providers", ["CUDAExecutionProvider"]),
     ],
 )

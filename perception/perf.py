@@ -1,14 +1,29 @@
-"""Timing helpers shared by capture, runtime and benchmark (plan §J: perf_counter + deque(maxlen=120))."""
+"""Timing helpers shared by capture, runtime, the camera workers and benchmark (plan §J1).
+
+* :class:`LatencyWindow`: ``perf_counter`` durations in a ``deque(maxlen=120)``, p50 / p95.
+* :class:`RateMeter`: events per second over a sliding window (fps).
+* :class:`PerfTracker`: named windows per model and per stage, one picklable :meth:`PerfTracker.snapshot`.
+* :class:`SystemMonitor`: CPU %, RAM (this process tree) and GPU % (pynvml, optional), sampled at most once a second.
+"""
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections import deque
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from typing import Any
 
-__all__ = ["LatencyWindow", "RateMeter", "percentile"]
+__all__ = ["LatencyWindow", "PerfTracker", "RateMeter", "SystemMonitor", "percentile", "round_or_none"]
+
+
+def round_or_none(value: float | None, digits: int = 1) -> float | None:
+    """Round, mapping None / NaN to None (JSON-friendly)."""
+    if value is None or math.isnan(value):
+        return None
+    return round(value, digits)
 
 
 def percentile(values: list[float], q: float) -> float:
@@ -94,3 +109,106 @@ class RateMeter:
     def _trim(self, now: float) -> None:
         while self._stamps and now - self._stamps[0] > self._window_s:
             self._stamps.popleft()
+
+
+class PerfTracker:
+    """Named latency windows (models and pipeline stages) plus a frame-rate meter, for one camera process.
+
+    ``with perf.time("face"): ...`` or ``perf.add("e2e", ms)``; :meth:`snapshot` returns plain floats only, so it can
+    cross a process boundary inside a queue message.
+    """
+
+    def __init__(self, maxlen: int = 120) -> None:
+        self._maxlen = maxlen
+        self._windows: dict[str, LatencyWindow] = {}
+        self.rate = RateMeter()
+
+    def window(self, name: str) -> LatencyWindow:
+        if name not in self._windows:
+            self._windows[name] = LatencyWindow(self._maxlen)
+        return self._windows[name]
+
+    def add(self, name: str, ms: float) -> None:
+        self.window(name).add(ms)
+
+    @contextmanager
+    def time(self, name: str) -> Iterator[None]:
+        with self.window(name).time():
+            yield
+
+    def attach(self, name: str, window: LatencyWindow) -> None:
+        """Use a window owned by a model wrapper (e.g. ``OnnxModel.latency``) under ``name``."""
+        self._windows[name] = window
+
+    def snapshot(self) -> dict[str, dict[str, float | None]]:
+        """``{name: {"p50": ms, "p95": ms, "n": count}}``; empty windows give None."""
+        return {
+            name: {"p50": round_or_none(w.p50(), 2), "p95": round_or_none(w.p95(), 2), "n": float(w.count)}
+            for name, w in self._windows.items()
+        }
+
+
+class SystemMonitor:
+    """CPU %, RAM MB and GPU % for the perception process tree.
+
+    * CPU: ``psutil.cpu_percent`` of the whole machine (what competes with the models), non-blocking.
+    * RAM: resident memory of this process and its children (the camera workers), in MB.
+    * GPU: utilisation of GPU 0 via ``pynvml`` when an NVIDIA driver is present, otherwise None.
+    Values are cached for ``min_interval_s`` so a 15 Hz publisher does not poll the OS 15 times a second.
+    """
+
+    def __init__(self, min_interval_s: float = 1.0) -> None:
+        import psutil
+
+        self._psutil = psutil
+        self._proc = psutil.Process()
+        self._min_interval_s = min_interval_s
+        self._last_t = 0.0
+        self._cache: dict[str, float | None] = {"cpu": None, "ram_mb": None, "gpu": None}
+        self._nvml: Any = None
+        self._gpu_handle: Any = None
+        try:
+            import pynvml
+
+            pynvml.nvmlInit()
+            self._gpu_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            self._nvml = pynvml
+        except Exception:  # no NVIDIA driver / library: GPU stays None
+            self._nvml = None
+        psutil.cpu_percent(None)  # prime the non-blocking measurement
+
+    def sample(self) -> dict[str, float | None]:
+        now = time.monotonic()
+        if now - self._last_t < self._min_interval_s:
+            return dict(self._cache)
+        self._last_t = now
+        ram = 0
+        try:
+            procs = [self._proc, *self._proc.children(recursive=True)]
+            for p in procs:
+                try:
+                    ram += p.memory_info().rss
+                except (self._psutil.NoSuchProcess, self._psutil.AccessDenied):
+                    continue
+        except self._psutil.NoSuchProcess:
+            pass
+        gpu: float | None = None
+        if self._nvml is not None:
+            try:
+                gpu = float(self._nvml.nvmlDeviceGetUtilizationRates(self._gpu_handle).gpu)
+            except Exception:
+                gpu = None
+        self._cache = {
+            "cpu": round(float(self._psutil.cpu_percent(None)), 1),
+            "ram_mb": round(ram / 1e6, 1),
+            "gpu": gpu,
+        }
+        return dict(self._cache)
+
+    def close(self) -> None:
+        if self._nvml is not None:
+            try:
+                self._nvml.nvmlShutdown()
+            except Exception:
+                pass
+            self._nvml = None

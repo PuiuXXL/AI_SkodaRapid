@@ -42,8 +42,16 @@ class DriverEyes(_Out):
     state: Literal["OPEN", "CLOSED", "SQUINT", "UNKNOWN"] = "UNKNOWN"
     ear_left: float | None = None
     ear_right: float | None = None
-    ratio: float | None = None
+    ratio: float | None = None  # bilateral: max EAR / local reference over the reliable eyes
+    ratio_left: float | None = None
+    ratio_right: float | None = None
+    ref_left: float | None = None  # local open-eye reference
+    ref_right: float | None = None
     eye_squint: float | None = None
+    eye_blink: float | None = None
+    look_down: float | None = None
+    relaxed: bool = False  # gaze conditioning active (looking down / head tilted)
+    long_closure: bool = False  # CLOSED for longer than eyes.blink_max_ms
     baseline_left: float | None = None
     baseline_right: float | None = None
     baseline_provisional: bool = True
@@ -55,6 +63,9 @@ class DriverHead(_Out):
     roll: float | None = None
     nodding: bool = False
     answer: Literal["yes", "no"] | None = None  # AS8, only inside the dialog window (step 4)
+    raw_yaw: float | None = None  # before One Euro (jitter measurement, debug overlay)
+    raw_pitch: float | None = None
+    raw_roll: float | None = None
 
 
 class DriverFace(_Out):
@@ -71,6 +82,7 @@ class DriverState(_Out):
     head: DriverHead
     yawn: bool
     speaking: bool
+    lip_ratio: float | None = None  # inner-lip gap / face height (speech onset in the eval, debug overlay)
     face: DriverFace
     perf: dict[str, float]  # detector stage timings in ms
 
@@ -95,7 +107,7 @@ class DriverPipeline:
         t0 = time.perf_counter()
         eyes = self.eyes.update(ff)
         t1 = time.perf_counter()
-        closing = eyes.state == "CLOSED" or (eyes.ratio is not None and eyes.ratio < self.cfg.eyes.k_open)
+        closing = eyes.state == "CLOSED" or (eyes.ratio is not None and eyes.ratio < self.cfg.eyes.reopen_ratio)
         head = self.head.update(ff.t, ff.face.head_matrix, closing)
         t2 = time.perf_counter()
         mouth = self.mouth.update(ff.t, ff.face)
@@ -118,14 +130,31 @@ class DriverPipeline:
                 ear_left=eyes.ear_left,
                 ear_right=eyes.ear_right,
                 ratio=eyes.ratio,
+                ratio_left=eyes.ratio_left,
+                ratio_right=eyes.ratio_right,
+                ref_left=eyes.ref_left,
+                ref_right=eyes.ref_right,
                 eye_squint=eyes.eye_squint,
+                eye_blink=eyes.eye_blink,
+                look_down=eyes.look_down,
+                relaxed=eyes.relaxed,
+                long_closure=eyes.long_closure,
                 baseline_left=eyes.baseline_left,
                 baseline_right=eyes.baseline_right,
                 baseline_provisional=eyes.baseline_provisional,
             ),
-            head=DriverHead(yaw=head.yaw, pitch=head.pitch, roll=head.roll, nodding=head.nodding),
+            head=DriverHead(
+                yaw=head.yaw,
+                pitch=head.pitch,
+                roll=head.roll,
+                nodding=head.nodding,
+                raw_yaw=head.raw_yaw,
+                raw_pitch=head.raw_pitch,
+                raw_roll=head.raw_roll,
+            ),
             yawn=mouth.yawn,
             speaking=mouth.speaking,
+            lip_ratio=mouth.lip_ratio,
             face=DriverFace(present=face.present, conf=face.conf, width_px=face.width_px, too_small=face.too_small),
             perf={
                 "eyes_ms": round((t1 - t0) * 1000, 3),

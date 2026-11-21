@@ -33,6 +33,8 @@ def face(
     *,
     blink: float = 0.05,
     squint: float = 0.05,
+    look_down: float = 0.05,
+    width_right: float = 50.0,
     jaw: float = 0.02,
     lip_gap: float = 0.01,
     width_px: float = 300.0,
@@ -44,12 +46,12 @@ def face(
     def put(index: int, x_px: float, y_px: float) -> None:
         pts[landmark_slot(index)] = (x_px / W, y_px / H, 0.0)
 
-    for side, ear, cx in (
-        ("left", ear_left, 700.0),
-        ("right", ear_right if ear_right is not None else ear_left, 580.0),
+    for side, ear, cx, eye_w in (
+        ("left", ear_left, 700.0, 50.0),
+        ("right", ear_right if ear_right is not None else ear_left, 580.0, width_right),
     ):
         p1, p2, p3, p4, p5, p6 = EAR_POINTS[side]
-        dx, cy = 25.0, 330.0  # half eye width in px (eye width 50 px)
+        dx, cy = eye_w / 2.0, 330.0  # half eye width in px (50 px eyes; a narrower one = foreshortened, head turned)
         v = ear * dx  # EAR = vertical / horizontal = (2v + 2v) / (2 * 2dx)
         put(p1, cx - dx, cy)
         put(p4, cx + dx, cy)
@@ -63,7 +65,15 @@ def face(
     put(13, 640.0, 450.0)
     put(14, 640.0, 450.0 + lip_gap * FACE_HEIGHT_PX)
     blend = {name: 0.05 for name in REQUIRED_BLENDSHAPES}
-    blend.update(eyeBlinkLeft=blink, eyeBlinkRight=blink, eyeSquintLeft=squint, eyeSquintRight=squint, jawOpen=jaw)
+    blend.update(
+        eyeBlinkLeft=blink,
+        eyeBlinkRight=blink,
+        eyeSquintLeft=squint,
+        eyeSquintRight=squint,
+        eyeLookDownLeft=look_down,
+        eyeLookDownRight=look_down,
+        jawOpen=jaw,
+    )
     return FaceFeatures(
         present=True,
         conf=min(1.0, width_px / min_width),

@@ -3,6 +3,7 @@
     python scripts/eval_eyes.py --name andrei                 # guided live protocol (~3 min), then the report
     python scripts/eval_eyes.py --session data/features/<s>   # re-evaluate a recorded, labelled session (replay)
     python scripts/eval_eyes.py --tune-tracking               # compare min_tracking_conf 0.5 / 0.6 / 0.7 (~30 s)
+    python scripts/eval_eyes.py --ab-num-faces                # R-FL1 A/B: blink width with num_faces 1 vs 2 (~35 s)
 
 Guided mode shows instructions with a countdown; the instruction windows become the ground-truth labels and the
 session is saved under data/features/<session>/ (FeatureFrames + labels, no pixels), so it can be re-evaluated
@@ -15,6 +16,7 @@ import argparse
 import datetime as dt
 import json
 import re
+import statistics
 import sys
 import time
 from dataclasses import dataclass
@@ -29,14 +31,16 @@ import numpy.typing as npt
 
 from perception.capture import LatestFrameCamera
 from perception.config import REPO_ROOT, PerceptionConfig, load_config
+from perception.driver_cam.eyes import EAR_POINTS, ear_from_points
 from perception.driver_cam.face import FaceLandmarkerModel
 from perception.driver_cam.pipeline import DriverPipeline, DriverState
 from perception.evaluation import EvalResult, PipelineRun, evaluate, render_markdown, run_pipeline
+from perception.eye_signal import measure_dip
 from perception.features import FaceFeatures
 from perception.labels import LabelEvent, LabelWriter, load_labels, to_intervals
 from perception.log import configure_logging
 from perception.overlay import draw_driver, mean_luma
-from perception.perf import RateMeter
+from perception.perf import RateMeter, percentile
 from perception.recorder import DATA_DIR, RecordingSession
 from perception.replay import FeatureReplay
 
@@ -45,6 +49,9 @@ WINDOW = "DriveMate eval (q to abort)"
 SENTENCES = (
     "Azi conduc spre Timisoara si opresc la benzinarie.",
     "Maria, cat mai avem pana ajungem la destinatie?",
+    "Pune te rog ceva muzica, dar nu prea tare.",
+    "Spune-i lui Mihai ca ajung pe la sapte.",
+    "Unde e cea mai apropiata cafenea pe traseu?",
 )
 
 
@@ -53,23 +60,41 @@ class Step:
     prompt: str
     duration_s: float
     label: str | None = None
-    kind: str = "window"  # "window" (start/end labels) or "cue" (one instant label at the start)
+    kind: str = "window"  # "window" (start/end labels), "cue" (one instant label) or "keyed" (SPACE start/end)
 
 
 def guided_protocol() -> list[Step]:
     steps = [
         Step("Priveste camera, ochii deschisi (calibrare)", 5.0),
         Step("Stai NEMISCAT si priveste camera", 10.0, "still"),
-        Step("Intoarce capul spre STANGA ta", 3.0, "pose_left"),
+        # 5 s: people react after ~1.5-2 s (POSE_SKIP_S); ~30 deg, like a mirror check: a near-profile face loses
+        # its landmarks (diag 2026-11-21)
+        Step("Intoarce capul spre STANGA ta, ~30 grade (ca spre oglinda)", 5.0, "pose_left"),
         Step("Inapoi la camera", 2.0),
-        Step("Ridica capul in SUS", 3.0, "pose_up"),
+        Step("Ridica capul in SUS, ~20 grade", 5.0, "pose_up"),
         Step("Inapoi la camera", 2.0),
-        Step("Inclina capul spre umarul STANG", 3.0, "pose_tilt_left"),
+        Step("Inclina capul spre umarul STANG, ~15 grade", 5.0, "pose_tilt_left"),
         Step("Inapoi la camera", 2.0),
+        Step("Inclina capul spre umarul DREPT, ~15 grade", 5.0, "pose_tilt_right"),
+        Step("Inapoi la camera", 2.0),
+        Step("Misca RAPID capul: stanga-dreapta, sus-jos", 6.0, "head_fast"),
+        Step("Inapoi la camera, nemiscat", 3.0),
     ]
-    steps += [Step(f"CLIPESTE ACUM  ({k + 1}/10)", 2.5, "blink", "cue") for k in range(10)]
     for k in range(3):
-        steps += [Step(f"INCHIDE OCHII 2 s  ({k + 1}/3)", 2.0, "eyes_closed"), Step("Deschide ochii", 3.0)]
+        steps += [
+            Step(f"PRIVESTE IN JOS, spre poala / telefon  ({k + 1}/3)", 3.0, "look_down"),
+            Step("Inapoi la drum", 2.0),
+        ]
+    steps += [Step(f"CLIPESTE ACUM  ({k + 1}/10)", 2.5, "blink", "cue") for k in range(10)]
+    # closures are labelled by the person: SPACE when the eyes close, SPACE when they open (instruction windows were
+    # 0.5-2 s off the real closure in the diag session)
+    for k in range(3):
+        steps += [
+            Step(
+                f"SPATIU + INCHIDE OCHII ~2 s, apoi SPATIU cand ii deschizi  ({k + 1}/3)", 7.0, "eyes_closed", "keyed"
+            ),
+            Step("Ochii deschisi", 2.0),
+        ]
     for k in range(3):
         steps += [Step(f"CASCA larg, natural  ({k + 1}/3)", 6.0, "yawn"), Step("Pauza", 3.0)]
     for k, sentence in enumerate(SENTENCES):
@@ -93,20 +118,28 @@ def _slug(text: str) -> str:
 def _yaml_values(cfg: PerceptionConfig) -> dict[str, Any]:
     e = cfg.eyes
     return {
-        "eyes.k_close": e.k_close,
-        "eyes.k_open": e.k_open,
+        "eyes.local_ref_window_s": e.local_ref_window_s,
+        "eyes.ref_floor_ratio": e.ref_floor_ratio,
+        "eyes.drop_ratio": e.drop_ratio,
+        "eyes.reopen_ratio": e.reopen_ratio,
+        "eyes.fall_max_ms": e.fall_max_ms,
         "eyes.min_state_frames": e.min_state_frames,
         "eyes.blink_max_ms": e.blink_max_ms,
         "eyes.blendshape_closed": e.blendshape_closed,
-        "eyes.squint_threshold": e.squint_threshold,
+        "eyes.unilateral_width_ratio": e.unilateral_width_ratio,
+        "eyes.look_down_threshold": e.look_down_threshold,
+        "eyes.pitch_down_deg": e.pitch_down_deg,
+        "eyes.pitch_up_deg": e.pitch_up_deg,
+        "eyes.drop_ratio_relaxed": e.drop_ratio_relaxed,
         "eyes.squint_ear_band": e.squint_ear_band,
+        "eyes.closed_level_default": e.closed_level_default,
         "yawn.jaw_open_threshold": cfg.yawn.jaw_open_threshold,
         "yawn.min_duration_s": cfg.yawn.min_duration_s,
         "speaking.lip_std_threshold": cfg.speaking.lip_std_threshold,
         "speaking.min_reversals": cfg.speaking.min_reversals,
         "face.min_tracking_conf": cfg.face.min_tracking_conf,
         "face.min_face_width_px": cfg.face.min_face_width_px,
-        "filters.one_euro": cfg.filters.one_euro.model_dump(),
+        "filters.one_euro_head": cfg.filters.one_euro_head.model_dump(),
     }
 
 
@@ -154,9 +187,10 @@ def run_guided(cfg: PerceptionConfig, name: str) -> int:
     try:
         for idx, step in enumerate(steps):
             start = session.now()
+            keyed_open = False
             if step.label and step.kind == "cue":
                 writer.write(LabelEvent(t=start, label=step.label, kind="instant"))
-            elif step.label:
+            elif step.label and step.kind == "window":
                 writer.write(LabelEvent(t=start, label=step.label, kind="start"))
             while (elapsed := session.now() - start) < step.duration_s:
                 step_out = session.step(timeout=0.5)
@@ -179,10 +213,14 @@ def run_guided(cfg: PerceptionConfig, name: str) -> int:
                     banner=banner,
                 )
                 cv2.imshow(WINDOW, img)
-                if (cv2.waitKey(1) & 0xFF) in (ord("q"), 27):
+                key = cv2.waitKey(1) & 0xFF
+                if key in (ord("q"), 27):
                     aborted = True
                     break
-            if step.label and step.kind == "window":
+                if key == ord(" ") and step.label and step.kind == "keyed":
+                    writer.write(LabelEvent(t=session.now(), label=step.label, kind="end" if keyed_open else "start"))
+                    keyed_open = not keyed_open
+            if step.label and (step.kind == "window" or (step.kind == "keyed" and keyed_open)):
                 writer.write(LabelEvent(t=session.now(), label=step.label, kind="end"))
             if aborted:
                 break
@@ -364,17 +402,168 @@ def run_tune_tracking(cfg: PerceptionConfig) -> int:
     return 0
 
 
+# --- R-FL1: num_faces = 1 vs 2 (MediaPipe internal smoothing) ------------------------------------------
+
+
+def _ears(face: FaceFeatures, w: int, h: int) -> tuple[float, float]:
+    out = []
+    for side in ("left", "right"):
+        pts = [face.point(i) for i in EAR_POINTS[side]]
+        out.append(ear_from_points([(x * w, y * h) for x, y, _ in pts])[0])
+    return out[0], out[1]
+
+
+def run_ab_num_faces(cfg: PerceptionConfig, blinks: int = 10) -> int:
+    """Two Face Landmarkers on the SAME live frames, num_faces=1 vs 2; blink width at 50 % of the raw EAR dip."""
+    import mediapipe as mp
+
+    variants = (1, 2)
+    models = {n: FaceLandmarkerModel(cfg, num_faces=n) for n in variants}
+    series: dict[int, list[tuple[float, float, float, float]]] = {n: [] for n in variants}  # t, earL, earR, blink
+    cues: list[float] = []
+    phases: list[tuple[str, float, str | None]] = [
+        ("Pregateste-te, priveste camera", 3.0, None),
+        ("Ochii deschisi, nemiscat", 3.0, None),
+    ]
+    phases += [(f"CLIPESTE ACUM  ({k + 1}/{blinks})", 2.5, "cue") for k in range(blinks)]
+    with LatestFrameCamera(cfg.cameras.driver, "driver") as cam:
+        first = cam.wait_new(0, timeout=10.0)
+        info = cam.stats().info
+        if first is None or info is None:
+            print("camera delivered no frame", file=sys.stderr)
+            return 1
+        w, h = info.width, info.height
+        last_id = first.frame_id
+        t_origin = time.perf_counter()
+        frames_seen = 0
+        aborted = False
+        for prompt, duration, kind in phases:
+            start = time.perf_counter()
+            if kind == "cue":
+                cues.append(start - t_origin)
+            while (elapsed := time.perf_counter() - start) < duration:
+                frame = cam.wait_new(last_id, timeout=1.0)
+                if frame is None:
+                    continue
+                last_id = frame.frame_id
+                frames_seen += 1
+                image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(frame.image, cv2.COLOR_BGR2RGB))
+                t = frame.t_capture - t_origin
+                for n, model in models.items():
+                    face, _ = model.detect(image, frame.t_capture, w, h)
+                    if face.present and face.blendshapes is not None:
+                        el, er = _ears(face, w, h)
+                        bs = face.blendshapes
+                        series[n].append((t, el, er, (bs["eyeBlinkLeft"] + bs["eyeBlinkRight"]) / 2))
+                img = frame.image.copy()
+                show = prompt if kind != "cue" or elapsed < 0.8 else "..."
+                cv2.putText(
+                    img,
+                    f"{show}  {duration - elapsed:3.1f}s",
+                    (20, h - 40),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1.0,
+                    (255, 255, 255),
+                    3,
+                    cv2.LINE_AA,
+                )
+                cv2.imshow(WINDOW, img)
+                if (cv2.waitKey(1) & 0xFF) in (ord("q"), 27):
+                    aborted = True
+                    break
+            if aborted:
+                break
+        span = time.perf_counter() - t_origin
+    cv2.destroyAllWindows()
+    latency = {n: (round(m.latency.p50(), 2), round(m.latency.p95(), 2)) for n, m in models.items()}
+    for model in models.values():
+        model.close()
+
+    def widths(n: int, cue: float) -> dict[str, float | None]:
+        rows = series[n]
+        pre = [r for r in rows if cue - 2.0 <= r[0] < cue - 0.3]
+        win = [r for r in rows if cue - 0.3 <= r[0] < cue + 1.5]
+        out: dict[str, float | None] = {}
+        for k, name in ((1, "L"), (2, "R")):
+            ref = percentile([r[k] for r in pre], 90) if pre else float("nan")
+            shape = measure_dip([r[0] for r in win], [r[k] for r in win], ref) if win and pre else None
+            out[f"w50_{name}"] = round(shape.width_ms, 0) if shape and shape.width_ms else None
+            out[f"depth_{name}"] = round(shape.depth, 3) if shape else None
+        openness = [1.0 - r[3] for r in win]
+        ref_b = percentile([1.0 - r[3] for r in pre], 90) if pre else float("nan")
+        shape_b = measure_dip([r[0] for r in win], openness, ref_b) if win and pre else None
+        out["w50_eyeBlink"] = round(shape_b.width_ms, 0) if shape_b and shape_b.width_ms else None
+        return out
+
+    table = []
+    for k, cue in enumerate(cues):
+        row: dict[str, Any] = {"blink": k + 1}
+        for n in variants:
+            for key, val in widths(n, cue).items():
+                row[f"n{n}_{key}"] = val
+        table.append(row)
+
+    def med(key: str) -> float | None:
+        vals = [r[key] for r in table if r.get(key) is not None]
+        return round(statistics.median(vals), 1) if vals else None
+
+    summary = {
+        f"n{n}": {
+            "w50_ear_L_ms_median": med(f"n{n}_w50_L"),
+            "w50_ear_R_ms_median": med(f"n{n}_w50_R"),
+            "w50_eyeBlink_ms_median": med(f"n{n}_w50_eyeBlink"),
+            "depth_L_median": med(f"n{n}_depth_L"),
+            "frames_with_face": len(series[n]),
+            "latency_ms_p50_p95": latency[n],
+        }
+        for n in variants
+    }
+    fps = round(frames_seen / span, 1) if span > 0 else None
+    EVAL_DIR.mkdir(parents=True, exist_ok=True)
+    path = EVAL_DIR / f"num-faces-ab-{dt.date.today().isoformat()}.md"
+    header = list(table[0]) if table else []
+    lines = [
+        f"# Face Landmarker num_faces 1 vs 2 (R-FL1), {dt.date.today().isoformat()}",
+        "",
+        f"Camera {w}x{h} @ {info.fps:.0f} fps reported, {fps} fps processed (both models on every frame). "
+        f"Two Face Landmarker instances on the **same live frames**, differing only in `num_faces`. "
+        f"{len(cues)} cued blinks. Width = time below 50 % of the raw EAR dip (interpolated); ref = p90 of EAR "
+        "in the 2 s before the cue. Blink duration in humans is ~100-400 ms (Schiffman 2001; Caffier et al. 2003).",
+        "",
+        "## Summary",
+        "",
+        "```",
+        *[f"{k}: {v}" for k, v in summary.items()],
+        "```",
+        "",
+        "## Per blink",
+        "",
+    ]
+    if header:
+        lines += ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+        lines += ["| " + " | ".join("-" if r[k] is None else str(r[k]) for k in header) + " |" for r in table]
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+    for variant, values in summary.items():
+        print(variant, values)
+    print(f"processed fps: {fps}\nreport: {path}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--name", default="laptop", help="report name (no personal data needed)")
     p.add_argument("--session", type=Path, default=None, help="evaluate a recorded labelled session (replay)")
     p.add_argument("--tune-tracking", action="store_true")
+    p.add_argument("--ab-num-faces", action="store_true", help="R-FL1 A/B: num_faces 1 vs 2 on the same frames")
     p.add_argument("--config", type=Path, default=None)
     args = p.parse_args(argv)
     configure_logging("WARNING", json=False)
     cfg = load_config(args.config)
     if args.tune_tracking:
         return run_tune_tracking(cfg)
+    if args.ab_num_faces:
+        return run_ab_num_faces(cfg)
     if args.session:
         return run_session(cfg, args.session, args.name if args.name != "laptop" else None)
     return run_guided(cfg, args.name)

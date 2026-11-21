@@ -22,6 +22,7 @@ from perception.config import PerceptionConfig
 from perception.driver_cam.face import FaceLandmarkerModel, VideoClock
 from perception.features import FeatureFrame, GazeFeatures, HandFeatures, PhoneBox
 from perception.log import get_logger
+from perception.perf import LatencyWindow
 from perception.postprocess import gaze_from_outputs, yolo26_detections
 from perception.preprocess import crop_box, gaze_input, letterbox
 from perception.runtime import OnnxModel, available_providers
@@ -86,6 +87,8 @@ class FeatureExtractor:
             self.models["phone"] = {"file": path.name, "backend": self._phone.provider}
 
         self._gesture: Any = None
+        self._gesture_on = bool(gesture_hz)
+        self._gesture_latency = LatencyWindow(cfg.rates.perf_window)
         self._gesture_every = every_n_frames(camera_fps, gesture_hz or 0)
         if gesture_hz:
             gesture_path = cfg.models.path(cfg.models.gesture_recognizer)
@@ -141,12 +144,48 @@ class FeatureExtractor:
             ]
 
         hands: list[HandFeatures] | None = None
-        if self._gesture is not None and index % self._gesture_every == 0:
-            hands = self._hand_features(mp_image, frame.t_capture)
+        if self._gesture is not None and self._gesture_on and index % self._gesture_every == 0:
+            with self._gesture_latency.time():
+                hands = self._hand_features(mp_image, frame.t_capture)
 
         return FeatureFrame(
             t=round(t, 4), frame_id=frame.frame_id, camera=camera, face=face, gaze=gaze_out, hands=hands, phones=phones
         )
+
+    def set_phone_hz(self, rate_hz: float) -> None:
+        """Change the YOLO rate at run time (degradation rule, plan §8)."""
+        self._phone_every = every_n_frames(self.camera_fps, rate_hz)
+        self.cadence["phone_every"] = self._phone_every
+
+    def set_gesture(self, rate_hz: float | None) -> None:
+        """Gesture Recognizer on (inside the dialog window) or off; the model is loaded on first use."""
+        if not rate_hz:
+            self._gesture_on = False
+            return
+        if self._gesture is None:
+            from mediapipe.tasks.python import BaseOptions, vision
+
+            gesture_path = self._cfg.models.path(self._cfg.models.gesture_recognizer)
+            self._gesture = vision.GestureRecognizer.create_from_options(
+                vision.GestureRecognizerOptions(
+                    base_options=BaseOptions(model_asset_path=str(gesture_path)),
+                    running_mode=vision.RunningMode.VIDEO,
+                    num_hands=2,
+                )
+            )
+            self._gesture_clock = VideoClock()
+            self.models["gesture_recognizer"] = {"file": gesture_path.name, "backend": "mediapipe"}
+        self._gesture_every = every_n_frames(self.camera_fps, rate_hz)
+        self.cadence["gesture_every"] = self._gesture_every
+        self._gesture_on = True
+
+    @property
+    def phone_latency(self) -> LatencyWindow | None:
+        return self._phone.latency if self._phone is not None else None
+
+    @property
+    def gesture_latency(self) -> LatencyWindow:
+        return self._gesture_latency
 
     def close(self) -> None:
         self.face.close()

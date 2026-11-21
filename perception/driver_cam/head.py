@@ -51,19 +51,29 @@ class HeadOutput:
 
 class HeadTracker:
     def __init__(self, head: HeadConfig, filters: FiltersConfig) -> None:
-        oe = filters.one_euro
-        self._filters = {axis: OneEuroFilter(oe.min_cutoff, oe.beta, oe.d_cutoff) for axis in ("yaw", "pitch", "roll")}
+        per_axis = filters.one_euro_head
+        self._filters = {
+            axis: OneEuroFilter(cfg.min_cutoff, cfg.beta, cfg.d_cutoff)
+            for axis, cfg in (("yaw", per_axis.yaw), ("pitch", per_axis.pitch), ("roll", per_axis.roll))
+        }
         self._nod = head.nod
+        self._plausible = head.plausible_deg
         self._pitch_history = RollingWindow(head.nod.window_s)
 
     def update(self, t: float, matrix: Sequence[float] | None, eyes_closing: bool) -> HeadOutput:
-        """``eyes_closing``: the eye state is CLOSED or the EAR ratio is below ``k_open`` (needed for nodding)."""
+        """``eyes_closing``: the eye state is CLOSED or the EAR ratio is below ``reopen_ratio`` (needed for nodding)."""
         if matrix is None:
             for f in self._filters.values():
                 f.reset()
             self._pitch_history.clear()
             return HeadOutput()
         pitch, yaw, roll = euler_from_matrix(matrix)
+        lim = self._plausible
+        if abs(yaw) > lim.yaw or abs(pitch) > lim.pitch or abs(roll) > lim.roll:
+            # near-profile face: the landmark fit is garbage; report unknown, do not feed the filters
+            for f in self._filters.values():
+                f.reset()
+            return HeadOutput(raw_pitch=round(pitch, 2), raw_yaw=round(yaw, 2), raw_roll=round(roll, 2))
         out = HeadOutput(raw_pitch=round(pitch, 2), raw_yaw=round(yaw, 2), raw_roll=round(roll, 2))
         out.pitch = round(self._filters["pitch"].update(t, pitch), 2)
         out.yaw = round(self._filters["yaw"].update(t, yaw), 2)

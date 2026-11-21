@@ -157,32 +157,63 @@ class RatesConfig(_Section):
     identity_recheck_s: PositiveFloat
     perf_window: Annotated[int, Field(ge=10, le=10_000)]
     degrade_e2e_p95_ms: PositiveFloat
+    degrade_step: Annotated[float, Field(gt=0, lt=1)]  # rate multiplier per degradation step
+    degrade_min_passenger_face_hz: PositiveFloat
+    degrade_min_phone_hz: PositiveFloat
+    degrade_recover_ratio: Annotated[float, Field(gt=0, lt=1)]  # recover below ratio x degrade_e2e_p95_ms
+    degrade_hold_s: PositiveFloat  # minimum time between two degradation / recovery steps
 
 
 # --- per-signal thresholds -----------------------------------------------------------------------------
 
 
+RatioOfRef = Annotated[float, Field(gt=0, lt=1)]
+
+
 class EyesConfig(_Section):
+    # global reference (calibration, or provisional p90 of the first seconds): only a floor for the local one
     baseline_window_s: PositiveFloat
     baseline_percentile: Annotated[float, Field(gt=50, le=100)]
-    k_close: Annotated[float, Field(gt=0, lt=1)]
-    k_open: Annotated[float, Field(gt=0, lt=1)]
-    median_frames: Annotated[int, Field(ge=1, le=9)]
+    baseline_min_s: PositiveFloat
+    # local reference: p90 of open-eye EAR over the last seconds, never below ref_floor_ratio x global
+    local_ref_window_s: PositiveFloat
+    local_ref_percentile: Annotated[float, Field(gt=50, le=100)]
+    local_ref_min_s: PositiveFloat
+    ref_floor_ratio: RatioOfRef
+    # blink shape (ratios of the local reference)
+    drop_ratio: RatioOfRef
+    reopen_ratio: RatioOfRef
+    fall_max_ms: PositiveFloat
+    fall_window_s: PositiveFloat
+    min_fall_depth: RatioOfRef
+    slow_close_ratio: RatioOfRef
     min_state_frames: Annotated[int, Field(ge=1, le=10)]
     blink_max_ms: PositiveInt
-    blendshape_closed: Fraction
-    squint_threshold: Fraction  # R-FL4
+    plateau_check_ms: PositiveFloat
+    blendshape_closed: Fraction  # eyeBlink needed to accept a SLOW closure (drowsy lids), never needed for a fast one
+    blendshape_strong: Fraction  # eyeBlink that confirms closed on its own (people whose EAR barely drops)
+    # bilateral rule + gaze conditioning
+    unilateral_width_ratio: RatioOfRef
+    look_down_threshold: Fraction
+    pitch_down_deg: PositiveFloat
+    pitch_up_deg: PositiveFloat
+    drop_ratio_relaxed: RatioOfRef
+    head_motion_window_s: PositiveFloat
+    head_motion_deg: PositiveFloat
+    # R-FL4
     squint_ear_band: Annotated[list[Annotated[float, Field(gt=0, lt=1)]], Field(min_length=2, max_length=2)]
-    baseline_min_s: PositiveFloat
-    min_eye_width_px: Annotated[float, Field(ge=1)]
+    # PERCLOS P80
+    closed_level_default: RatioOfRef
+    perclos_closure: RatioOfRef
     perclos_window_s: PositiveFloat
+    min_eye_width_px: Annotated[float, Field(ge=1)]
 
     @model_validator(mode="after")
     def _check(self) -> Self:
-        if self.k_close >= self.k_open:
-            raise ValueError("eyes.k_close must be lower than eyes.k_open (hysteresis band)")
-        if self.median_frames % 2 == 0:
-            raise ValueError("eyes.median_frames must be odd")
+        if self.drop_ratio >= self.reopen_ratio:
+            raise ValueError("eyes.drop_ratio must be lower than eyes.reopen_ratio")
+        if self.drop_ratio_relaxed > self.drop_ratio:
+            raise ValueError("eyes.drop_ratio_relaxed must not exceed eyes.drop_ratio (stricter when looking down)")
         low, high = self.squint_ear_band
         if low >= high:
             raise ValueError("eyes.squint_ear_band must be [low, high] with low < high (fractions of the EAR baseline)")
@@ -197,7 +228,9 @@ class YawnConfig(_Section):
 class SpeakingConfig(_Section):
     window_s: PositiveFloat
     lip_std_threshold: PositiveFloat
+    reversal_step: PositiveFloat  # smallest lip-gap change (fraction of face height) that counts as a movement
     min_reversals: Annotated[int, Field(ge=1, le=20)]
+    hold_ms: Annotated[float, Field(ge=0)]  # keep speaking=true this long after the last oscillating window
 
 
 class NodConfig(_Section):
@@ -211,9 +244,16 @@ class HeadAnswerConfig(_Section):
     min_amplitude_deg: PositiveFloat
 
 
+class PlausibleAnglesConfig(_Section):
+    yaw: PositiveFloat
+    pitch: PositiveFloat
+    roll: PositiveFloat
+
+
 class HeadConfig(_Section):
     nod: NodConfig
     answer: HeadAnswerConfig
+    plausible_deg: PlausibleAnglesConfig
 
 
 class GazeConfig(_Section):
@@ -284,14 +324,36 @@ class OneEuroConfig(_Section):
     d_cutoff: PositiveFloat
 
 
+class HeadOneEuroConfig(_Section):
+    """Per-axis One Euro for the head angles (scripts/tune_one_euro.py, docs/eval/one-euro-*.md)."""
+
+    yaw: OneEuroConfig
+    pitch: OneEuroConfig
+    roll: OneEuroConfig
+
+
 class FiltersConfig(_Section):
-    one_euro: OneEuroConfig
+    one_euro: OneEuroConfig  # default for continuous signals without their own tuning
+    one_euro_head: HeadOneEuroConfig
     unknown_below_conf: Fraction
+
+
+class PassengerConfig(_Section):
+    asleep_closed_s: PositiveFloat  # AP2: eyes closed this long -> awake = false
+
+
+class WorkersConfig(_Section):
+    restart_backoff_s: PositiveFloat  # first restart delay after a camera process died
+    restart_backoff_max_s: PositiveFloat
+    stale_s: PositiveFloat  # no message from a live worker for this long -> it hangs: restart it
+    first_frame_timeout_s: PositiveFloat
 
 
 class OutputConfig(_Section):
     ws_url: Annotated[str, StringConstraints(pattern=r"^wss?://.+")]
     ws_reconnect_s: PositiveFloat
+    ws_reconnect_max_s: PositiveFloat
+    proposed_fields: bool  # also send the fields proposed for the contract (docs/perception.md §9)
     publish_hz: Annotated[float, Field(gt=0, le=60)]
     mjpeg_port: Annotated[int, Field(ge=1024, le=65535)]
     video_width: Annotated[int, Field(ge=160, le=1920)]
@@ -316,7 +378,9 @@ class PerceptionConfig(_Section):
     gesture: GestureConfig
     identity: IdentityConfig
     monitoring: MonitoringConfig
+    passenger: PassengerConfig
     filters: FiltersConfig
+    workers: WorkersConfig
     output: OutputConfig
 
     @model_validator(mode="after")

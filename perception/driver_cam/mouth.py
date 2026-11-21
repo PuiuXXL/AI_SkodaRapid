@@ -4,8 +4,10 @@
 * Speaking: standard deviation over ``speaking.window_s`` of the inner-lip gap (landmarks 13-14) divided by the face
   height (10-152), at least ``speaking.lip_std_threshold``, and never during a yawn. A yawn opens the mouth too,
   but once and slowly; speech makes the gap oscillate. So speaking also needs ``speaking.min_reversals`` direction
-  changes of the gap inside the window, and is blocked for one window after the jaw was wide open (otherwise the
-  closing of a yawn still sits in the window and looks like a large standard deviation).
+  changes of the gap (steps of at least ``speaking.reversal_step``) inside the window, and is blocked for one window
+  after the jaw was wide open (otherwise the closing of a yawn still sits in the window and looks like a large
+  standard deviation). Speech pauses between words: ``speaking`` is held for ``speaking.hold_ms`` after the last
+  oscillating window.
 """
 
 from __future__ import annotations
@@ -75,6 +77,7 @@ class MouthTracker:
         self._lips = RollingWindow(speaking.window_s)
         self._yawning_since: float | None = None
         self._last_jaw_wide: float | None = None
+        self._last_moving: float | None = None  # last time the lips oscillated like speech
         self.events: list[MouthEvent] = []
 
     def update(self, t: float, face: FaceFeatures) -> MouthOutput:
@@ -99,12 +102,16 @@ class MouthTracker:
         if ratio is not None:
             out.lip_ratio = round(ratio, 4)
             self._lips.add(t, ratio)
-        if self._lips.span_s >= 0.5 * self._speak_cfg.window_s:
-            threshold = self._speak_cfg.lip_std_threshold
+        cfg = self._speak_cfg
+        after_wide_jaw = self._last_jaw_wide is not None and t - self._last_jaw_wide < cfg.window_s
+        if self._lips.span_s >= 0.5 * cfg.window_s:
             out.lip_std = round(self._lips.std(), 5)
-            after_wide_jaw = self._last_jaw_wide is not None and t - self._last_jaw_wide < self._speak_cfg.window_s
-            oscillates = _reversals(self._lips.values(), min_step=threshold) >= self._speak_cfg.min_reversals
-            out.speaking = out.lip_std >= threshold and oscillates and not after_wide_jaw and not out.yawn
+            oscillates = _reversals(self._lips.values(), min_step=cfg.reversal_step) >= cfg.min_reversals
+            if out.lip_std >= cfg.lip_std_threshold and oscillates and not after_wide_jaw and not out.yawn:
+                self._last_moving = t
+        # hold: speech has pauses between words; one quiet window must not drop "speaking"
+        held = self._last_moving is not None and (t - self._last_moving) * 1000.0 <= cfg.hold_ms
+        out.speaking = held and not after_wide_jaw and not out.yawn
         return out
 
     def _finish_yawn(self, t: float, out: MouthOutput) -> None:

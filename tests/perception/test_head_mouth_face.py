@@ -42,6 +42,28 @@ def test_angles_are_steady_when_still() -> None:
     assert statistics.pstdev([y for y in yaws[30:] if y is not None]) < 0.5  # input noise 0.6 deg -> filtered
 
 
+def test_each_axis_has_its_own_filter() -> None:
+    cfg = load_config()
+    head = HeadTracker(cfg.head, cfg.filters)
+    per_axis = cfg.filters.one_euro_head
+    for axis in ("yaw", "pitch", "roll"):
+        f = head._filters[axis]
+        want = getattr(per_axis, axis)
+        assert (f.min_cutoff, f.beta, f.d_cutoff) == (want.min_cutoff, want.beta, want.d_cutoff)
+
+
+def test_implausible_angles_are_unknown() -> None:
+    """Near-profile faces give garbage fits (roll 80 deg in the diag session): reported as unknown."""
+    cfg = load_config()
+    head = HeadTracker(cfg.head, cfg.filters)
+    head.update(0.0, rotation_matrix(yaw=10), eyes_closing=False)
+    out = head.update(1 / FPS, rotation_matrix(roll=-80), eyes_closing=False)
+    assert out.roll is None and out.yaw is None and out.pitch is None
+    assert out.raw_roll == pytest.approx(80, abs=1e-3)
+    back = head.update(2 / FPS, rotation_matrix(yaw=10), eyes_closing=False)
+    assert back.yaw == pytest.approx(10, abs=1e-3)  # filters restarted, no smear from the garbage frame
+
+
 def test_nodding_needs_closing_eyes() -> None:
     cfg = load_config()
 
@@ -88,12 +110,32 @@ def test_speaking_from_lip_oscillation() -> None:
     spec: list[tuple[float, dict[str, object]]] = [(1.0, {})]
     for k in range(30):  # ~4 syllables per second: gap alternates 0.01 / 0.06
         spec.append((0.12, {"lip_gap": 0.06 if k % 2 else 0.01, "jaw": 0.15}))
-    spec.append((1.5, {}))
+    spec.append((2.5, {}))
     outs = [m.update(ff.t, ff.face) for ff in frames(spec)]
     talking = outs[round(1.8 * FPS) : round(4.4 * FPS)]
     assert sum(o.speaking for o in talking) / len(talking) > 0.9
-    assert not outs[-1].speaking  # quiet again after the window
+    assert not outs[-1].speaking  # quiet again after the window + hold
     assert not any(o.yawn for o in outs)
+
+
+def _syllables(seconds: float) -> list[tuple[float, dict[str, object]]]:
+    return [(0.12, {"lip_gap": 0.06 if k % 2 else 0.01, "jaw": 0.15}) for k in range(round(seconds / 0.12))]
+
+
+def test_speaking_is_held_through_a_pause_between_words() -> None:
+    m = _mouth()
+    spec = [(1.0, {}), *_syllables(1.5), (0.5, {}), *_syllables(1.5), (3.0, {})]
+    outs = [m.update(ff.t, ff.face) for ff in frames(spec)]
+    pause = outs[round(2.55 * FPS) : round(3.0 * FPS)]  # the 0.5 s pause between the two words
+    assert all(o.speaking for o in pause)
+    assert not outs[-1].speaking
+
+
+def test_speaking_onset_within_one_second() -> None:
+    m = _mouth()
+    outs = [m.update(ff.t, ff.face) for ff in frames([(2.0, {}), *_syllables(2.0)])]
+    first = next(i for i, o in enumerate(outs) if o.speaking) / FPS
+    assert 2.0 <= first < 3.0
 
 
 # --- face (R-FL3) --------------------------------------------------------------------------------------

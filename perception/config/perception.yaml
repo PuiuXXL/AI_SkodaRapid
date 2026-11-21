@@ -82,23 +82,53 @@ rates:
   pose_hz: 2                   # rear_seat confirmation only
   identity_recheck_s: 10
   perf_window: 120             # samples kept per model for p50/p95
-  degrade_e2e_p95_ms: 150      # above this: lower the passenger rate first, then YOLO
+  degrade_e2e_p95_ms: 150      # above this: lower the passenger rate first, then YOLO (driver face: never)
+  degrade_step: 0.5            # each step halves the rate being degraded
+  degrade_min_passenger_face_hz: 2.5
+  degrade_min_phone_hz: 1.25
+  degrade_recover_ratio: 0.7   # step back up when p95 < 0.7 x the limit
+  degrade_hold_s: 3.0          # at least this long between two steps (no oscillation)
 
-eyes:
-  baseline_window_s: 10        # open-eye EAR baseline learned over the first seconds with the face visible
-  baseline_percentile: 90      # high percentile of EAR = "eyes open" for this person and camera angle
-  k_close: 0.65                # closed if EAR < k_close * baseline
-  k_open: 0.80                 # open   if EAR > k_open  * baseline   (hysteresis band in between)
-  median_frames: 3             # median filter length (odd). No EMA: it would erase short blinks
-  min_state_frames: 2          # frames needed to accept a state change. No 300 ms minimum
-  blink_max_ms: 500            # closures longer than this are reported as closures, not blinks
-  blendshape_closed: 0.55      # eyeBlinkLeft/Right above this supports "closed"
-  squint_threshold: 0.55       # R-FL4: eyeSquintLeft/Right at or above this ...
-  squint_ear_band: [0.50, 0.80]  # ... with EAR/baseline inside this band = squinting, NOT closed (no PERCLOS).
-                               # Deliberately reaches below k_close: a broad smile pushes EAR/baseline to ~0.5-0.65
+eyes:                          # docs/perception.md §3.2; values from docs/eval/ (diag of 2026-11-21)
+  # global reference: calibration, or the p90 of the first seconds. Only a FLOOR for the local reference
+  # (the open-eye EAR drifts with head pitch: 0.30 at the start -> 0.24 a minute later in the diag session).
+  baseline_window_s: 10
+  baseline_percentile: 90
   baseline_min_s: 2.0          # provisional baseline usable after this much valid face time (state UNKNOWN before)
-  min_eye_width_px: 18         # eye corner distance below this -> eyes.reliable = false
+  local_ref_window_s: 4.0      # local reference = p90 of EAR over the last seconds (blinks < 10 % of frames: ignored)
+  local_ref_percentile: 90
+  local_ref_min_s: 1.0         # below this much open-eye history, the global reference is used
+  ref_floor_ratio: 0.60        # local reference never below 0.6 x global (does not collapse with drowsy lids)
+  # blink shape, as ratios of the local reference
+  drop_ratio: 0.70             # closing: ratio below this ... (0.65 missed shallow blinks: min 0.58-0.63)
+  reopen_ratio: 0.80           # ... until it comes back above this
+  fall_max_ms: 150             # fast fall (blink / real closure): from the local peak to drop_ratio
+  fall_window_s: 1.0           # the local peak = max ratio over this window before the fall
+  min_fall_depth: 0.10         # the peak must be at least this far above the threshold (else: a slow drift)
+  slow_close_ratio: 0.47       # a SLOW fall counts only below this (2 s closures: 0.42-0.47; a hard squint
+                               # hovered at 0.48-0.51). Tuned on ONE session: re-check on every new one
+  min_state_frames: 2          # frames below drop_ratio before CLOSED is reported (closed_ms starts at the drop)
+  blink_max_ms: 500            # longer than this = closure (separate state), shorter = blink
+  plateau_check_ms: 300        # from here on, CLOSED needs ratio < squint band low AND eyeBlink >= blendshape_closed
+  blendshape_closed: 0.45      # eyeBlink needed to accept a SLOW fall (drowsy lids); 2 s closures reach ~0.5,
+                               # smiles 0.31-0.46, speech 0.26-0.36 in the diag session
+  blendshape_strong: 0.65      # eyeBlink alone confirms closed (never reached in the diag session: max 0.59)
+  # bilateral rule + gaze conditioning
+  unilateral_width_ratio: 0.70 # eye narrower than this x the other (head turned) -> only the wider eye decides
+  look_down_threshold: 0.50    # eyeLookDown (mean L/R) at or above this -> relaxed threshold
+  pitch_down_deg: 15           # head pitch at or below -this -> relaxed (looking at the lap: -27..-32 deg)
+  pitch_up_deg: 20             # head pitch at or above this -> relaxed (EAR drops when the head tilts back)
+  drop_ratio_relaxed: 0.45     # closing threshold while relaxed (stricter: the eyes must really close)
+  head_motion_window_s: 0.30   # no closure may START while pitch or yaw moved more than head_motion_deg in this
+  head_motion_deg: 6.0         # window (the lids follow the head when looking down / at a mirror)
+  # R-FL4: squinting / smiling is not closed: ratio inside this band with eyeBlink < blendshape_closed (lids
+  # lowered, not meeting). eyeSquint is NOT used: 0.49 at rest and 0.71 with the eyes squeezed shut (diag session).
+  squint_ear_band: [0.50, 0.70] # [closed-plateau floor, drop_ratio]: lowered lids that would otherwise be closing
+  # PERCLOS P80 (FHWA / Dinges): fraction of time with the eyes >= 80 % closed
+  closed_level_default: 0.40   # ratio of a fully closed eye until measured (median of the last blink minima)
+  perclos_closure: 0.80
   perclos_window_s: 60
+  min_eye_width_px: 18         # eye corner distance below this -> that eye is unreliable
 
 yawn:
   jaw_open_threshold: 0.50     # jawOpen blendshape
@@ -106,8 +136,11 @@ yawn:
 
 speaking:
   window_s: 1.0
-  lip_std_threshold: 0.008     # std of inner-lip gap (13-14) / face height (10-152) over the window
-  min_reversals: 3             # direction changes of the gap per window: speech oscillates, a yawn does not
+  lip_std_threshold: 0.003     # std of inner-lip gap (13-14) / face height (10-152) over the window. Diag session:
+                               # rest p90 0.0007, reading p50 0.0087 (0.008 caught 3/5 sentences, 0.003 caught 5/5)
+  reversal_step: 0.003         # smallest gap change counted as a lip movement (fraction of face height)
+  min_reversals: 2             # direction changes of the gap per window: speech oscillates, a yawn does not
+  hold_ms: 800                 # speaking stays true this long after the last oscillating window (pauses)
 
 head:
   nod:                         # fatigue head drop (with eyes closing)
@@ -117,6 +150,10 @@ head:
     min_reversals: 2
     window_s: 1.2
     min_amplitude_deg: 6
+  plausible_deg:               # beyond these the landmarks are garbage (near-profile face: roll 80, yaw -23 while
+    yaw: 70                    # the head was turned +50 left, diag 2026-11-21) -> head angles reported as unknown
+    pitch: 50
+    roll: 45
 
 gaze:
   zones: [road, mirror_left, mirror_right, mirror_rear, cluster, infotainment, lap, passenger]
@@ -158,16 +195,33 @@ monitoring:
   frozen_pixel_diff: 0.5       # mean absolute pixel difference below this = identical
   dark_luma: 60                # mean frame luma (0-255) below this -> "TOO DARK" warning
 
+passenger:
+  asleep_closed_s: 10          # AP2: passenger eyes closed this long -> awake = false
+
 filters:
-  one_euro:                    # head angles (and other continuous signals)
+  one_euro:                    # default for continuous signals without their own tuning
     min_cutoff: 1.0            # Hz; lower = smoother at rest
     beta: 0.05                 # higher = less lag on fast moves
     d_cutoff: 1.0
+  one_euro_head:               # per axis, from scripts/tune_one_euro.py (docs/eval/one-euro-2026-11-21.md):
+                               # lowest frame-to-frame jitter with lag <= 50 ms on fast head moves.
+                               # Raw noise: yaw 0.10, pitch 0.14, roll 0.18 deg -> 0.05 / 0.06 / 0.15 deg
+    yaw:   { min_cutoff: 0.05, beta: 0.01, d_cutoff: 1.0 }
+    pitch: { min_cutoff: 0.05, beta: 0.01, d_cutoff: 1.0 }
+    roll:  { min_cutoff: 0.5, beta: 0.005, d_cutoff: 1.0 }
   unknown_below_conf: 0.5      # any output below this confidence is reported as unknown
+
+workers:                       # one OS process per camera (docs/perception.md §2)
+  restart_backoff_s: 1.0       # a dead camera process is restarted after 1, 2, 4 ... s
+  restart_backoff_max_s: 10.0
+  stale_s: 5.0                 # a live process silent this long is hung: kill and restart
+  first_frame_timeout_s: 10.0
 
 output:
   ws_url: ws://localhost:8000/ws/perception
-  ws_reconnect_s: 1.0
+  ws_reconnect_s: 1.0          # first retry; doubles up to ws_reconnect_max_s (works without core)
+  ws_reconnect_max_s: 10.0
+  proposed_fields: true        # also send the fields proposed for the contract (§9); false = strict plan §7
   publish_hz: 15
   mjpeg_port: 8001
   video_width: 640
