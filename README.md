@@ -4,6 +4,10 @@ AI driver-monitoring copilot, built at CodeLap Hackathon 2026 (AI Drive track).
 
 > Work in progress. Setup and run instructions will be added here.
 
+## Design și contribuții
+
+Interfețele web folosesc [Obsidian Orange](.agents/skills/obsidian-orange-web-skill/SKILL.md). Pachetul complet este inclus în repository. Vezi [regulile pentru agenți](AGENTS.md) și [aplicarea în DriveMate](docs/design/obsidian-orange.md) înainte de modificări UI.
+
 ## Repository structure
 
 | Folder | Purpose |

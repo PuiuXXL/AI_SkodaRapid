@@ -178,7 +178,7 @@ class VoiceController {
 /**
  * Start the voice on an open (or opening) WebSocket to `/ws/ui`.
  * Call from a user gesture (click). Calling it again replaces the previous instance.
- * @param {WebSocket} ws
+ * @param {EventTarget & {readonly readyState: number, send(data: string): void}} ws
  * @param {Partial<typeof DEFAULT_OPTIONS>} [options]
  * @returns {Promise<VoiceController>}
  */

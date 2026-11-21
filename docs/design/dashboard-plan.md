@@ -2,6 +2,8 @@
 
 Propunere P4 pentru aprobare. Publicul este pasagerul și juriul, pe laptopul de demo. Ecranul de monitorizare are două repere permanente, imaginea șoferului și performanța. Harta și simularea au un spațiu separat. Scopul primei versiuni este să poți urmări un eveniment de la imagine și semnal până la decizie și răspuns.
 
+Intrarea prin Connect, profilul unic, meniul La volan și dialogul cu copilotul sunt descrise în [planul paginilor pentru șofer](experienta-sofer.md).
+
 ## Referințe și decizii
 
 | Observație | Aplicare propusă |

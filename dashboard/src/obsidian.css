@@ -1,0 +1,185 @@
+/* Obsidian Orange: material, hierarchy and responsive navigation. */
+:root { font: 16px/1.5 "Segoe UI Variable", "Segoe UI", sans-serif; color: var(--text); background: var(--ui-bg); font-synthesis: none; }
+body { color: var(--text); background: var(--ui-bg); }
+.dashboard { --sidebar-width: 268px; background: radial-gradient(ellipse at 25% 0%,var(--ui-accent-dim),transparent 42rem),var(--ui-bg); }
+button, input, select, textarea { font: inherit; }
+button, select, summary { min-height: 44px; }
+button, select, input, textarea { color: var(--text); border: 1px solid var(--ui-stroke-strong); background-color: var(--ui-surface-2); }
+button { transition: background-color var(--ui-fast),color var(--ui-fast),border-color var(--ui-fast); }
+button:hover:not(:disabled) { background-color: var(--ui-bg-raised); border-color: var(--ui-accent-stroke); }
+input, select, textarea { accent-color: var(--accent); }
+:where(a,button,input,select,textarea,summary,[tabindex]):focus-visible { outline: 2px solid var(--ui-accent-hover); outline-offset: 3px; }
+a, summary, .disclosure-trigger, .content section > small, .section-heading > small, .trip-strip dt svg, .mini-scores span svg { color: var(--accent); }
+.dashboard .title h1 { font-size: clamp(26px,2.2vw,34px); letter-spacing: -.04em; }
+.content h2 { font-size: clamp(20px,1.8vw,28px); }
+.title p, .content p { font-size: 14px; }
+.content section > small, .section-heading > small { font-size: 12px; }
+.content section, .camera, aside > details, .dashboard .perf { background: var(--ui-surface-1); backdrop-filter: none; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: none; }
+.content section { padding: 24px; }
+.dashboard .perf { padding: 16px 20px; }
+.perf-reading > span, .alarm-reading small, .camHead small, .videoNote, .caption, .dashboard-footer { color: var(--muted); font-size: 12px; }
+.perf-reading b, .gauge-number, .scores b { font-variant-numeric: tabular-nums; }
+.safety-banner, .recent-events .alarm-event { background: var(--ui-danger-dim); color: var(--ui-danger); border: 1px solid var(--ui-danger); }
+.dashboard .alarm-slow b, .dashboard .alarm-slow small { color: var(--ui-warning); }
+.content p[role=alert], #general [role=alert] { color: var(--ui-danger); }
+.status-pill { background: var(--ui-surface-1); color: var(--text); border: 1px solid var(--line); }
+.status-pill:before { background: var(--ui-success); }
+.status-pill.waiting { background: var(--ui-surface-1); color: var(--ui-warning); }
+.status-pill.waiting:before { background: var(--ui-warning); }
+.road-mark { background: var(--accent); border-radius: 11px; box-shadow: none; }
+.road-mark i { background: var(--ui-on-accent); }
+.camera-stage { background: var(--ui-inset); }
+.camera-standby { background: radial-gradient(ellipse at 60% 20%,var(--ui-accent-dim),transparent 75%),var(--ui-inset); }
+.standby-info { color: var(--text); }
+.viewfinder i, .optical-field::before, .optical-field::after { border-color: var(--ui-stroke-strong); }
+.primary-action, .standby-info button, .voice button, .history-selector button[aria-pressed=true] { background: var(--accent); color: var(--ui-on-accent); border-color: transparent; font-weight: 600; }
+.primary-action:hover:not(:disabled), .standby-info button:hover:not(:disabled), .voice button:hover:not(:disabled), .history-selector button[aria-pressed=true]:hover:not(:disabled) { background: var(--ui-accent-hover); }
+.trip-strip { gap: 8px; }
+.trip-strip > div { padding: 12px; background: var(--ui-surface-1); border: 1px solid var(--line); border-radius: 12px; }
+.dashboard .gauge-card, .dashboard .trend-chart, .mini-scores > div, .mini-scores > div:last-child, .scores > span, .ocular { background: var(--ui-inset); border: 1px solid var(--line); border-radius: 12px; }
+.gauge-card > strong, .gauge-number span { color: var(--muted); }
+.gauge-art svg line { stroke: var(--ui-stroke-strong); }
+.gauge-art svg line[stroke="var(--accent)"] { stroke: var(--series-attention); }
+.score-meter, .data-bar-track, .track { background: var(--ui-stroke); }
+.score-meter i, .data-bar-track i { background: var(--accent); }
+.mini-scores > div:first-child .score-meter i { background: var(--series-fatigue); }
+.mini-scores > div:last-child .score-meter i, .data-bar:nth-of-type(even) .data-bar-track i { background: var(--series-disengagement); }
+.history-grid line { stroke: var(--line); }
+.history-cursor { stroke: var(--accent); }
+.history-selector input { accent-color: var(--accent); }
+.attention { color: var(--series-attention); }
+.fatigue { color: var(--series-fatigue); }
+.disengagement { color: var(--series-disengagement); }
+.track i { background: var(--accent); box-shadow: none; }
+.disclosure, dl > div { border-bottom: 1px solid var(--line); }
+.disclosure-trigger { font-size: 14px; }
+.disclosure-trigger span { color: var(--accent); background: var(--ui-accent-dim); }
+.data-bars { margin: 20px 0 0; }
+.data-bars figcaption { font-size: 14px; }
+.data-bar > div:first-child { font-size: 14px; }
+.assistant-flow span { border-color: var(--line); }
+.assistant-flow [data-active=true]::before { background: var(--ui-success); box-shadow: none; }
+.density-button[aria-pressed=true] { color: var(--accent); background: var(--ui-accent-dim); }
+.source-select select { background-color: var(--ui-inset); color: var(--text); }
+.app-header { background: var(--ui-surface-2); backdrop-filter: none; border: 1px solid var(--line); border-radius: var(--ui-radius-lg); box-shadow: var(--ui-shadow); scrollbar-width: thin; }
+@supports (backdrop-filter:blur(20px)) { .app-header { background: var(--ui-glass); backdrop-filter: blur(20px); } }
+.page-active { background: var(--ui-accent-dim); border: 1px solid var(--ui-accent-stroke); border-radius: 12px; }
+.page-current .page-link, .page-nav .section-nav button[aria-pressed=true] { color: var(--accent); }
+.page-link, .sections-toggle, .nav-collapse { background: transparent; border-color: transparent; }
+.page-link, .page-nav .section-nav button { font-size: 14px; min-height: 44px; }
+.nav-collapse, .sections-toggle { min-width: 44px; min-height: 44px; }
+.page-nav .section-nav .nav-active { background: var(--ui-surface-2); border-left: 2px solid var(--accent); box-shadow: none; }
+.page-link:hover:not(:disabled), .sections-toggle:hover:not(:disabled), .page-nav .section-nav button:hover:not(:disabled) { background: var(--ui-accent-dim); color: var(--ui-accent-hover); }
+.sidebar-session, .source-select { font-size: 13px; }
+.source-select select { font-size: 14px; }
+.session-dot { background: var(--ui-success); }
+.mobile-toolbar, .mobile-close { display: none; }
+.mobile-drawer { padding: 0; border: 0; background: transparent; color: var(--text); }
+.mobile-drawer::backdrop { background: var(--ui-modal-backdrop); }
+.nav-tooltip { display: none; }
+.camera-home .camera-docked, .content .route-playback, .route-points, .map-layers { background: var(--ui-glass-heavy); border: 1px solid var(--line); backdrop-filter: blur(16px); box-shadow: var(--ui-shadow); }
+.route-heading small, .location-preview pre { color: var(--accent); }
+.route-status { color: var(--ui-success); }
+.route-error { color: var(--ui-danger); }
+.route-points .route-lock-note { color: var(--ui-warning); }
+.route-points { top: 96px; max-height: calc(100% - 120px); width: min(350px,calc(100% - 28px)); scrollbar-width: thin; }
+.route-point-list li { flex-wrap: wrap; }
+.point-description input, .coordinate-form input { background: var(--ui-inset); border: 1px solid var(--ui-stroke-strong); color: var(--text); font-size: 14px; padding: 8px; }
+.point-description > span, .route-points .point-description > span { font-size: 12px; }
+.point-number { background: var(--ui-accent-dim); color: var(--accent); }
+.point-actions { margin-left: auto; }
+.point-actions button, .route-points .point-actions button, .points-toggle { min-width: 44px; min-height: 44px; }
+.point-drag-handle { min-height: 44px; color: var(--muted); }
+.route-map-toolbar button, .route-list-actions button, .route-points .route-list-actions button, .route-playback .simulator-actions button { font-size: 14px; min-height: 44px; }
+.route-playback .simulator-controls label, .coordinate-form label, .map-layers > summary { font-size: 14px; }
+.route-playback .scores > span, .route-playback .simulator-actions > span, .map-layer-content legend, .map-layers summary small { font-size: 12px; }
+.route-playback .simulator-controls select { font-size: 14px; min-height: 44px; }
+.route-playback .scores { grid-template-columns: 1fr; }
+.route-playback .scores > span { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.route-playback .scores b { font-size: 20px; margin: 0; }
+.route-map { background: var(--ui-inset); }
+.route-map[data-view=soft] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) saturate(.22) brightness(.78); }
+.route-map .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; background: var(--ui-surface-1); color: var(--text); }
+.route-map .leaflet-control-scale-line, .route-map .leaflet-control-attribution { background: var(--ui-glass-heavy); color: var(--muted); font-size: 12px; }
+.route-map .leaflet-control-attribution a { color: var(--accent); }
+.route-map .route-waypoint { background: var(--ui-surface-1); color: var(--accent); box-shadow: 0 0 0 3px var(--ui-stroke-strong); }
+.route-map .waypoint-start, .route-map .route-car { background: var(--accent); color: var(--ui-on-accent); }
+.route-map .waypoint-end { background: var(--ui-surface-2); color: var(--text); }
+.route-car svg path:first-child { fill: var(--ui-on-accent); }
+.route-car svg path:nth-child(2) { fill: var(--accent); }
+.route-car svg path:nth-child(3) { stroke: var(--accent); }
+.map-layers > summary, .map-overlay-options label, .map-route-legend { color: var(--text); }
+.map-overlay-options label { min-height: 44px; font-size: 14px; }
+.map-route-legend { background: var(--ui-glass-heavy); font-size: 12px; }
+.map-route-legend i { background: var(--accent); }
+.map-view-options button { font-size: 12px; min-height: 44px; }
+.map-view-options button[aria-pressed=true] { background: var(--ui-accent-dim); color: var(--accent); box-shadow: inset 0 -2px var(--accent); }
+@media(min-width:768px) {
+ .dashboard.sidebar-collapsed { --sidebar-width: 80px; }
+ .app-header { position: fixed; inset: 20px auto 20px 20px; width: var(--sidebar-width); min-height: 0; margin: 0; padding: 20px 12px 16px; display: flex; flex-direction: column; align-items: stretch; gap: 24px; overflow-y: auto; transition: width var(--ui-duration) var(--ui-ease); }
+ main { width: calc(100% - var(--sidebar-width) - 40px); max-width: 1680px; margin-left: calc(var(--sidebar-width) + 40px); margin-right: 0; padding-inline: 0 clamp(20px,2.5vw,48px); transition: width var(--ui-duration) var(--ui-ease),margin-left var(--ui-duration) var(--ui-ease); }
+ .app-header .page-nav { display: flex; flex-direction: column; }
+ .page-nav-group { display: block; }
+ .nav-submenu { grid-column: auto; grid-row: auto; }
+ .app-header .page-nav .nav-submenu .section-nav { display: flex; flex-direction: column; margin: 12px 0 0 20px; padding: 0 0 0 12px; border-left: 1px solid var(--line); }
+ .page-nav .section-nav button { flex-direction: row; white-space: normal; }
+ .nav-collapse { display: grid; }
+ .header-meta { margin-top: auto; display: flex; flex-direction: column; align-items: stretch; gap: 16px; }
+ .app-header .header-meta { grid-column: auto; grid-row: auto; }
+ .header-meta .density-button, .sidebar-session { display: flex; }
+ .source-select { display: grid; gap: 6px; }
+ .source-select > span { display: initial; }
+ .source-select select { width: 100%; font-size: 14px; }
+ .sidebar-collapsed .brand-label, .sidebar-collapsed .sidebar-session > span:last-child, .sidebar-collapsed .source-select, .sidebar-collapsed .density-button > span, .sidebar-collapsed .page-link > span, .sidebar-collapsed .sections-toggle { display: none; }
+ .sidebar-collapsed .sidebar-brand { flex-direction: column; gap: 12px; }
+ .sidebar-collapsed .app-header { overflow: visible; }
+ .sidebar-collapsed .page-link, .sidebar-collapsed .density-button, .sidebar-collapsed .sidebar-session { justify-content: center; padding-inline: 0; }
+ .sidebar-collapsed .page-link:focus-visible::after, .sidebar-collapsed .density-button:focus-visible::after { content: attr(aria-label); position: fixed; left: 106px; z-index: 30; padding: 6px 12px; border-radius: 8px; color: var(--text); background: var(--ui-surface-2); border: 1px solid var(--line); font-size: 14px; white-space: nowrap; }
+ .sidebar-collapsed .page-link:hover::after, .sidebar-collapsed .density-button:hover::after { content: attr(aria-label); position: fixed; left: 106px; z-index: 30; padding: 6px 12px; border-radius: 8px; color: var(--text); background: var(--ui-surface-2); border: 1px solid var(--line); font-size: 14px; white-space: nowrap; }
+ .has-camera-dock .app-header { bottom: 20px; }
+}
+@media(max-width:1100px) and (min-width:768px) { .camera-home .camera-docked { width: calc(100% - var(--sidebar-width) - 64px); } }
+@media(max-width:767px) {
+ main { width: 100%; margin: 0; padding-inline: 16px; }
+ .desktop-sidebar { display: none; }
+ .mobile-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; }
+ .mobile-toolbar > span { font-size: 18px; font-weight: 600; }
+ .mobile-menu-button { display: flex; align-items: center; gap: 8px; }
+ .mobile-drawer[open] { display: block; position: fixed; inset: 12px auto 12px 12px; margin: 0; width: min(300px,calc(100vw - 24px)); max-width: none; height: calc(100dvh - 24px); max-height: none; overflow: visible; }
+ .mobile-drawer .app-header { position: static; display: flex; flex-direction: column; align-items: stretch; gap: 24px; width: 100%; height: 100%; padding: 20px 12px 16px; margin: 0; overflow-y: auto; }
+ .mobile-drawer .sidebar-brand { display: flex; flex-direction: row; }
+ .mobile-drawer .nav-collapse { display: none; }
+ .mobile-drawer .mobile-close { display: grid; place-items: center; min-width: 44px; }
+ .mobile-drawer .page-nav { display: flex; flex-direction: column; }
+ .mobile-drawer .page-nav-group { display: block; }
+ .mobile-drawer .app-header .page-nav .nav-submenu .section-nav { display: flex; flex-direction: column; margin: 12px 0 0 20px; padding-left: 12px; }
+ .mobile-drawer .page-nav .section-nav button { flex-direction: row; }
+ .mobile-drawer .header-meta { margin-top: auto; display: flex; flex-direction: column; align-items: stretch; }
+ .mobile-drawer .sidebar-session, .mobile-drawer .density-button { display: flex; }
+ .mobile-drawer .source-select { display: grid; font-size: 13px; }
+ .mobile-drawer .source-select > span { display: initial; }
+ .mobile-drawer .page-link > span { display: inline; }
+ .mobile-drawer .sections-toggle { display: grid; }
+ .mobile-drawer .brand-label, .mobile-drawer .density-button > span, .mobile-drawer .sidebar-session > span:last-child { display: initial; }
+ .mobile-drawer .page-link, .mobile-drawer .sidebar-session, .mobile-drawer .density-button { justify-content: start; padding-inline: 8px; }
+ .content section { padding: 16px; }
+ .perf { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+ .perf-reading { min-width: 0; }
+ .perf-reading > span, .alarm-reading small { font-size: 12px; }
+ .alarm-reading small { display: block; }
+ .status-pill { font-size: 13px; }
+ .title { padding-top: 8px; }
+ .route-points { top: 96px; width: calc(100% - 20px); right: 10px; max-height: 310px; }
+ .route-map { height: 700px; min-height: 700px; }
+ .map-layers { width: min(240px,calc(100% - 20px)); bottom: 64px; }
+ .map-layer-content { max-height: 260px; overflow-y: auto; }
+ .route-playback .scores { grid-template-columns: 1fr; }
+}
+@media(max-width:400px) {
+ .overview { grid-template-columns: 1fr; }
+ .gauge-art { width: 160px; }
+ .assistant-flow { grid-template-columns: 1fr; }
+ .response { grid-template-columns: auto minmax(0,1fr); }
+ .response output { grid-column: 1/-1; }
+}
+@media(prefers-reduced-motion:reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } .dashboard { scroll-behavior: auto; } }

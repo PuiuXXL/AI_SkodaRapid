@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Obsidian Orange — Two-mode Sidebar Demo</title>
+  <link rel="stylesheet" href="./theme.css" />
+  <style>
+    body { margin: 0; }
+    .demo-heading { margin: 0; font-size: clamp(26px, 3vw, 40px); font-weight: 600; letter-spacing: -.035em; }
+    .demo-top { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin: 12px 0 24px; }
+    .demo-sub { color: var(--ui-muted); max-width: 62ch; line-height: 1.6; }
+    .demo-panel { grid-column: span 4; min-height: 164px; }
+    .demo-panel-wide { grid-column: span 8; }
+    .demo-panel h2 { margin: 0 0 14px; font-size: 15px; font-weight: 550; }
+    .demo-panel strong { font-size: 30px; font-variant-numeric: tabular-nums; }
+    .demo-orange { color: var(--ui-accent); }
+    .ui-side-icon svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .ui-side-link[title] { cursor: pointer; }
+    .demo-hint { font-size: 13px; margin-top: 24px; color: var(--ui-muted); }
+    @media (max-width: 1000px) { .demo-panel, .demo-panel-wide { grid-column: span 6; } }
+    @media (max-width: 767px) { .demo-panel, .demo-panel-wide { grid-column: 1/-1; } .demo-top { display: block; } }
+  </style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+  <symbol id="ico-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10H3z"/><path d="M9 20v-7h6v7"/></symbol>
+  <symbol id="ico-chart" viewBox="0 0 24 24"><path d="M4 20V4M4 20h16M8 16l4-5 4 2 4-7"/></symbol>
+  <symbol id="ico-box" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="ico-shield" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 8.8 8 11 4.6-2.2 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="ico-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9 7 7m10 10 2.1 2.1m0-14.2L17 7M7 17l-2.1 2.1"/></symbol>
+</svg>
+<div class="obsidian-ui">
+  <div class="ui-shell" id="app-shell">
+    <div class="ui-sidebar-backdrop" id="menu-backdrop" aria-hidden="true"></div>
+    <aside class="ui-sidebar" id="primary-side-menu" aria-label="Application sidebar">
+      <div class="ui-side-header">
+        <span class="ui-side-mark" aria-hidden="true">O</span>
+        <span class="ui-side-brand">OBSIDIAN</span>
+        <button type="button" class="ui-collapse-trigger" id="collapse-toggle" aria-controls="primary-side-menu" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar">«</button>
+        <button type="button" class="ui-drawer-close" id="menu-close" aria-label="Close menu">✕</button>
+      </div>
+      <nav class="ui-side-links" aria-label="Primary navigation">
+        <span class="ui-side-group-title">Workspace</span>
+        <a class="ui-side-link" href="#overview" aria-label="Overview"><span class="ui-side-icon"><svg><use href="#ico-home" /></svg></span><span class="ui-side-label">Overview</span></a>
+        <a class="ui-side-link" href="#analytics" aria-label="Analytics"><span class="ui-side-icon"><svg><use href="#ico-chart" /></svg></span><span class="ui-side-label">Analytics</span></a>
+        <a class="ui-side-link" href="#projects" aria-label="Projects"><span class="ui-side-icon"><svg><use href="#ico-box" /></svg></span><span class="ui-side-label">Projects</span></a>
+        <a class="ui-side-link" href="#security" aria-label="Security"><span class="ui-side-icon"><svg><use href="#ico-shield" /></svg></span><span class="ui-side-label">Security</span></a>
+      </nav>
+      <div class="ui-side-footer">
+        <a class="ui-side-link" href="#settings" aria-label="Settings"><span class="ui-side-icon"><svg><use href="#ico-settings" /></svg></span><span class="ui-side-label">Settings</span></a>
+      </div>
+    </aside>
+    <main class="ui-main" id="content">
+      <div class="ui-utility-header"><button class="ui-menu-trigger" id="menu-open" aria-controls="primary-side-menu" aria-expanded="false" aria-label="Open menu">☰</button><strong>OBSIDIAN</strong></div>
+      <div class="demo-top"><div><div class="ui-eyebrow">EXAMPLE / TWO-MODE SIDEBAR</div><h1 class="demo-heading" id="page-title">Overview</h1><p class="demo-sub">Switch the floating side menu between <strong>Expanded</strong> and <strong>Collapsed</strong>. Desktop layout adjusts with it; mobile uses an accessible full-label drawer.</p></div></div>
+      <div class="ui-grid">
+        <article class="ui-glass-card demo-panel"><h2>Sidebar mode</h2><strong class="demo-orange" id="mode-indicator">Expanded</strong><p class="demo-sub">Use the control at the top of the side menu.</p></article>
+        <article class="ui-glass-card demo-panel"><h2>Expanded width</h2><strong>268px</strong><p class="demo-sub">Icons and labels.</p></article>
+        <article class="ui-glass-card demo-panel"><h2>Collapsed width</h2><strong>80px</strong><p class="demo-sub">Icons only + tooltips.</p></article>
+        <article class="ui-solid-card demo-panel demo-panel-wide"><h2>Content area</h2><p class="demo-sub">This content automatically reflows. The demo remembers your sidebar preference in localStorage when available.</p></article>
+        <article class="ui-solid-card demo-panel"><h2>Navigation</h2><p class="demo-sub">Select a real demo section on the left. The orange active marker changes accordingly.</p></article>
+      </div>
+      <p class="demo-hint">For a production app, connect active navigation to the actual router and permissions. This demo intentionally uses URL hashes.</p>
+    </main>
+  </div>
+</div>
+<script>
+(() => {
+  const shell = document.getElementById('app-shell');
+  const side = document.getElementById('primary-side-menu');
+  const toggle = document.getElementById('collapse-toggle');
+  const modeIndicator = document.getElementById('mode-indicator');
+  const openBtn = document.getElementById('menu-open');
+  const closeBtn = document.getElementById('menu-close');
+  const backdrop = document.getElementById('menu-backdrop');
+  const mobile = window.matchMedia('(max-width: 767px)');
+  const storageKey = 'obsidian-orange-sidebar-mode';
+  let restoreFocus = null;
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(storageKey) === 'collapsed'; } catch (_) { /* storage optional */ }
+
+  function setCollapsed(value) {
+    collapsed = Boolean(value);
+    shell.classList.toggle('is-collapsed', collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('title', label);
+    toggle.textContent = collapsed ? '»' : '«';
+    modeIndicator.textContent = mobile.matches ? 'Mobile drawer' : (collapsed ? 'Collapsed' : 'Expanded');
+    document.querySelectorAll('.ui-side-link').forEach(link => {
+      link.title = collapsed && !mobile.matches ? link.getAttribute('aria-label') : '';
+    });
+    try { localStorage.setItem(storageKey, collapsed ? 'collapsed' : 'expanded'); } catch (_) { /* storage optional */ }
+  }
+
+  function setDrawerOpen(open) {
+    if (open && !mobile.matches) return;
+    if (open) restoreFocus = document.activeElement;
+    shell.classList.toggle('is-mobile-open', open);
+    openBtn.setAttribute('aria-expanded', String(open));
+    side.setAttribute('aria-hidden', String(mobile.matches && !open));
+    if (mobile.matches) {
+      if (open) { side.setAttribute('role','dialog'); side.setAttribute('aria-modal','true'); }
+      else { side.removeAttribute('aria-modal'); side.removeAttribute('role'); }
+    }
+    document.body.style.overflow = open ? 'hidden' : '';
+    if (open) closeBtn.focus();
+    else if (restoreFocus?.focus) restoreFocus.focus();
+  }
+
+  function syncViewport() {
+    if (shell.classList.contains('is-mobile-open')) setDrawerOpen(false);
+    side.setAttribute('aria-hidden', String(mobile.matches));
+    if (!mobile.matches) { side.removeAttribute('role'); side.removeAttribute('aria-modal'); }
+    setCollapsed(collapsed);
+  }
+
+  toggle.addEventListener('click', () => setCollapsed(!collapsed));
+  openBtn.addEventListener('click', () => setDrawerOpen(true));
+  closeBtn.addEventListener('click', () => setDrawerOpen(false));
+  backdrop.addEventListener('click', () => setDrawerOpen(false));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && shell.classList.contains('is-mobile-open')) setDrawerOpen(false);
+    if (e.key !== 'Tab' || !shell.classList.contains('is-mobile-open')) return;
+    const focusable = [...side.querySelectorAll('a[href],button:not([disabled])')].filter(el => getComputedStyle(el).display !== 'none');
+    const first = focusable[0], last = focusable[focusable.length-1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+  function updateRoute() {
+    const route = location.hash.replace('#', '') || 'overview';
+    const sections = { overview:'Overview', analytics:'Analytics', projects:'Projects', security:'Security', settings:'Settings' };
+    document.getElementById('page-title').textContent = sections[route] || 'Overview';
+    for (const link of document.querySelectorAll('.ui-side-link')) {
+      const active = link.hash === '#' + route;
+      link.classList.toggle('is-active', active);
+      if (active) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
+    }
+    if (mobile.matches && shell.classList.contains('is-mobile-open')) setDrawerOpen(false);
+  }
+  window.addEventListener('hashchange', updateRoute);
+  if (mobile.addEventListener) mobile.addEventListener('change', syncViewport);
+  syncViewport();
+  updateRoute();
+})();
+</script>
+</body>
+</html>

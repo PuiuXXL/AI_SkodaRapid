@@ -15,6 +15,8 @@ perception/models/
 # Biometric data and calibration (generated at runtime)
 profiles/*/face*.npy
 profiles/*/calibration.json
+profiles/andrei/profile.json
+profiles/andrei/profile.json.*.tmp
 
 # Perception recordings and diagnostics: FeatureFrames (landmarks), labels, plots. Local only, never committed
 # (docs/perception.md §5, data policy)
