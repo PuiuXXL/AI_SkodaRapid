@@ -180,7 +180,7 @@ class FakeRecognizer:
         self.calls: list[tuple[tuple[int, ...], int]] = []
 
     def recognize_for_video(self, image: Any, ts: int) -> Any:
-        self.calls.append((image.numpy_view().shape, ts))
+        self.calls.append((image.shape, ts))
         pts = [SimpleNamespace(x=0.5, y=self.y, z=0.0) for _ in range(21)]
         return SimpleNamespace(
             hand_landmarks=[pts],

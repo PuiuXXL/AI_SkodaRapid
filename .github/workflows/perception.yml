@@ -42,11 +42,16 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: |
             requirements/p1-perception.txt
             requirements/p1-dev.txt
+
+      - name: Install MediaPipe system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgles2 libgl1
 
       - name: Install dependencies (CPU-only torch, no models, no camera)
         run: |

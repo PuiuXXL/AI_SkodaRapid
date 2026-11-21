@@ -148,6 +148,7 @@ def test_default_pipeline_satisfies_the_interface() -> None:
             "phone",
             "head_answer",
             "identity",
+            "posture",
         ]
         assert {"enroll", "load_profile"} <= pipeline.commands
         assert pipeline.handle({"cmd": "debug", "on": True}) and pipeline.debug
