@@ -14,6 +14,11 @@ const short = (s, max = 300) => {
 const categories = {fuel:"benzinărie", cafe:"cafenea", pharmacy:"farmacie", supermarket:"supermarket", auto_parts:"magazin de piese"};
 export const demoCommands = ["start_trip","resume_trip","stop_at_poi","end_trip","scene","set_llm","set_child","inject_message","apply_route","play_youtube","play_catalog","stop_media","create_reminder","complete_reminder","defer_reminder","read_message","reply_message","answer","request","set_rate","set_speed","reset","replay"];
 
+// shared/contracts.py: Poi.category is a required string, and interaction.addressed_to is an occupants[].id
+// (core/dialog_window.py: driver 1, passenger 2). The final destination has no category in the route data.
+const DRIVER_ID = 1;
+const contractPoi = poi => poi ? {...poi, category: poi.category ?? "destination"} : null;
+
 export class DemoDrive {
   constructor({profile = defaultProfile, now = () => Date.now()/1000, emit = () => {}} = {}) {
     this.profile = profile; this.now = now; this.emit = emit;
@@ -296,14 +301,14 @@ export class DemoDrive {
     s.ts=this.now();s.seq=this.seq;s.assessment=scores;
     s.trip={id:this.tripId,phase:this.phase,speed_kmh:speed,elapsed_min:this.elapsed/60,distance_km:this.distance,
       eta_min:this.speed>0?(this.route.total-this.distance)/this.speed*60:null,road:this.distance>10?"highway":"city",scene:this.scene,
-      stopped:this.phase==="parked",pos,at_poi:this.atPoi,next_poi:next?{...next,dist_km:Math.max(0,next.km-this.distance)}:null};
+      stopped:this.phase==="parked",pos,at_poi:contractPoi(this.atPoi),next_poi:next?contractPoi({...next,dist_km:Math.max(0,next.km-this.distance)}):null};
     s.occupants[0].profile="andrei";if(this.child)s.occupants.push({id:3,profile:"Ioana",seat:"rear",role:"child",source:"declared"});
     s.driver.gaze.zone=this.scene===4?"passenger":this.elapsedTicks%120>=95?"mirror_left":"road";
     s.driver.eyes.reliable=this.monitoring;s.passenger.awake=this.scene!==6;s.passenger.holding_phone=this.scene===4;
     s.cause=this.scene===4?{label:"passenger_showing_phone",target:"passenger",glances_30s:3,sources:["cam_driver","cam_passenger"]}:seed.cause;
     s.safety={...s.safety,monitoring_ok:this.monitoring,llm_enabled:this.llm,llm_allowed:!this.alert,alert:this.alert,level:this.notice?.type==="sos"?"P0":this.alert?"P1":"P4",alarm_ms_last:null};
     s.assistant={muted_until:this.mutedUntil||null,mute_reason:this.mutedUntil>this.now()?"driver_refused":null};
-    s.interaction={state:this.pending?"awaiting_answer":"idle",dialog_window_open:!!this.pending,addressed_to:"driver"};
+    s.interaction={state:this.pending?"awaiting_answer":"idle",dialog_window_open:!!this.pending,addressed_to:this.pending?DRIVER_ID:null};
     s.safe_contact={name:this.profile.safe_contact.name,consent:this.profile.consent.safe_contact_notify,notified_ts:this.contactAt};
     s.media=this.media;s.messages=this.messages;s.reminders=this.reminders;
     s.ab={naive_alerts:this.scene>=2?2:0,our_alerts:this.alert?1:0};s.blind_m={trip:Math.round(this.blindMetres)};

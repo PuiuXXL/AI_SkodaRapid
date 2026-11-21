@@ -2,10 +2,11 @@ import {useEffect,useRef,useState} from "react";
 import type {SessionSocket} from "../types";
 import {VoicePlayer} from "../voice/player.js";
 import {SpeechInput} from "../voice/stt.js";
+import {OnsetDetector} from "../voice/onset.js";
 
 export function useDriverAudio(socket:SessionSocket|null) {
   const [audio,setAudio]=useState(false),[microphone,setMicrophone]=useState("Oprit"),[speaking,setSpeaking]=useState(false),[transcript,setTranscript]=useState(""),[error,setError]=useState("");
-  const player=useRef<VoicePlayer|null>(null),recognition=useRef<SpeechInput|null>(null),transport=useRef(socket),dialogOpen=useRef(false);
+  const player=useRef<VoicePlayer|null>(null),recognition=useRef<SpeechInput|null>(null),onset=useRef<OnsetDetector|null>(null),transport=useRef(socket),dialogOpen=useRef(false);
   const releaseAudio=useRef<(()=>void)|null>(null),acquiring=useRef(false),generation=useRef(0);
   transport.current=socket;
   const send=(message:Record<string,unknown>)=>{if(transport.current?.readyState===1)transport.current.send(JSON.stringify({ts:Date.now()/1000,...message}));};
@@ -32,12 +33,12 @@ export function useDriverAudio(socket:SessionSocket|null) {
       }
     }
     socket?.addEventListener("message",receive);
-    return ()=>{generation.current++;releaseAudio.current?.();releaseAudio.current=null;socket?.removeEventListener("message",receive);player.current?.stop();player.current?.stopMusic();recognition.current?.stop();recognition.current=null;player.current=null;setAudio(false);setSpeaking(false);setMicrophone("Oprit");};
+    return ()=>{generation.current++;releaseAudio.current?.();releaseAudio.current=null;socket?.removeEventListener("message",receive);player.current?.stop();player.current?.stopMusic();recognition.current?.stop();recognition.current=null;stopOnset();player.current=null;setAudio(false);setSpeaking(false);setMicrophone("Oprit");};
   },[socket]);
   function createPlayer(){
     const output=new VoicePlayer({
-      onSpeakStart:()=>{setSpeaking(true);if(recognition.current){recognition.current.pause();setMicrophone("În pauză");}},
-      onSpeakDone:(utterance:any,info:any)=>{setSpeaking(false);send({type:"speak_done",id:utterance.id,is_question:!!utterance.is_question,interrupted:info.interrupted});recognition.current?.resume();},
+      onSpeakStart:()=>{setSpeaking(true);onset.current?.setSuppressed(true);if(recognition.current){recognition.current.pause();setMicrophone("În pauză");}},
+      onSpeakDone:(utterance:any,info:any)=>{setSpeaking(false);send({type:"speak_done",id:utterance.id,is_question:!!utterance.is_question,interrupted:info.interrupted});onset.current?.setSuppressed(false);recognition.current?.resume();},
       onAlarmPlayed:(alarm:any,ts:number)=>send({type:"alarm_played",id:alarm.id,ts})
     });
     output.unlock();player.current=output;setAudio(true);setError("");
@@ -72,9 +73,21 @@ export function useDriverAudio(socket:SessionSocket|null) {
       });
       const paused=player.current.isSpeaking();
       recognition.current=input;setError("");setMicrophone(paused?"În pauză":"Se activează");input.start(paused);
+      void startOnset(paused);
     }catch{setMicrophone("Indisponibil");setError("Acest browser nu oferă recunoaștere vocală compatibilă.");}
   }
-  function stopMicrophone(){recognition.current?.stop();recognition.current=null;setMicrophone("Oprit");}
-  function silence(){generation.current++;player.current?.stop();player.current?.stopMusic();recognition.current?.stop();recognition.current=null;player.current=null;releaseAudio.current?.();releaseAudio.current=null;setAudio(false);setSpeaking(false);setMicrophone("Oprit");}
+  // Exact start of the driver's voice (WebAudio), sent as speech_onset: core measures the verbal reaction time from the
+  // end of a question (speak_done) to this moment (core/scoring/reaction.py). Optional: speech recognition works
+  // without it, so a refused or missing second microphone stream only disables the measurement.
+  async function startOnset(paused:boolean){
+    if(onset.current)return;
+    const detector=new OnsetDetector({onOnset:(ts:number)=>send({type:"speech_onset",ts})});
+    onset.current=detector;
+    try{await detector.start();if(onset.current!==detector){detector.stop();return;}detector.setSuppressed(paused);}
+    catch{if(onset.current===detector)onset.current=null;}
+  }
+  function stopOnset(){onset.current?.stop();onset.current=null;}
+  function stopMicrophone(){recognition.current?.stop();recognition.current=null;stopOnset();setMicrophone("Oprit");}
+  function silence(){generation.current++;player.current?.stop();player.current?.stopMusic();recognition.current?.stop();recognition.current=null;stopOnset();player.current=null;releaseAudio.current?.();releaseAudio.current=null;setAudio(false);setSpeaking(false);setMicrophone("Oprit");}
   return {audio,microphone,speaking,transcript,error,activateAudio,activateMicrophone,stopMicrophone,silence};
 }
