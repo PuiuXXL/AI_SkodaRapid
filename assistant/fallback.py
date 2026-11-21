@@ -260,10 +260,14 @@ def _speech(event: Event, state: State) -> list[dict]:
     volume = volume_request(text, state)
     if volume is not None:
         return [{"type": "set_preference", "key": "volume", "value": volume}, ok]
-    found = media_search.media_request(str(event.data.get("text", "")))
+    found = media_search.media_request(text)
     if found is not None and cfg("youtube", "enabled", default=True):
         query, kind = found
         return [{"type": "search_media", "query": query, "kind": kind}]
+    if media_search.wants_music(text):  # plain "pune muzică": a track from the catalog, after a "yes"
+        track = music.pick_track(state, "request")
+        if track is not None:
+            return [_ask(_t("music_offer")), {"type": "suggest_media", "track_id": track.id, "reason": "driver_request"}]
     return _not_understood(event, state)
 
 

@@ -18,6 +18,7 @@ Recognizer: ``Thumb_Up``, ``Thumb_Down``, ``Open_Palm``.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Iterable, Literal, Optional
 
@@ -127,6 +128,34 @@ def parse_kss(text: str) -> Optional[int]:
         if word in KSS_WORDS:
             return KSS_WORDS[word]
     return None
+
+
+#: Leading answer words removed before looking for a new request ("nu, mersi, dar ..." -> "...").
+_ANSWER_LEAD = re.compile(
+    r"^[\s…,.;:!?-]*(?:(?:da|nu|ok|okay|bine|sigur|nu\s+mul[tț]umesc|mul[tț]umesc|mersi|merci|dar|ci|[sș]i"
+    r"|mai\s+bine|deloc|nu\s+acum)(?:[\s…,.;:!?-]+|$))+",
+    re.IGNORECASE,
+)
+#: Words that alone do not make a request ("nu, nu acum", "da, te rog", "da, dar mai târziu").
+_NOT_A_REQUEST = frozenset({"nu", "da", "acum", "te", "rog", "multumesc", "mersi", "merci", "bine", "ok", "deloc",
+                            "nimic", "gata", "asa", "chiar", "frumos", "sigur", "poate", "lasa", "mai", "tarziu",
+                            "incolo", "apoi", "dupa", "putin", "stiu"})
+
+
+def request_after_answer(text: str) -> Optional[str]:
+    """The new request that follows a yes / no: "nu, vreau să pui muzică" -> "vreau să pui muzică".
+
+    Returns:
+        The rest of the utterance when it is a request of its own (at least two words, one of them
+        meaningful), else None ("nu", "nu, mersi", "da, te rog", "nu, nu acum").
+    """
+    rest = _ANSWER_LEAD.sub("", text or "", count=1).strip(" ,.;:!?-")
+    words = normalize(rest).split()
+    if rest == (text or "").strip() or len(words) < 2:
+        return None
+    if not any(len(w) >= 3 and w not in _NOT_A_REQUEST for w in words):
+        return None
+    return rest
 
 
 def interpret(event: InputEvent, fatigue_dialog: bool = False) -> Optional[AnswerValue]:
