@@ -64,6 +64,8 @@ tuning:
 # --- State understanding (B) -----------------------------------------------------------------------------------------
 # norm: [a, b] = term 0 at a, 1 at b, linear and clipped in between: term = clip((x - a) / (b - a), 0, 1).
 # b < a is an inverted range (a low value is the bad one).
+# A term without data yet (no reaction measured, no answer given) is left out and the weights of the others are
+# rescaled to sum to 1: a missing measurement neither raises nor hides a score.
 
 reaction:                       # B1: reaction on 3 channels vs. the driver's own baseline
   baseline_min_samples: 3       # baseline = median of the first 3-5 reactions per channel
@@ -77,6 +79,7 @@ reaction:                       # B1: reaction on 3 channels vs. the driver's ow
     verbal: 6000                # speak_done of a question -> speech_onset
     gesture: 6000               # proposal -> gesture / head answer
   response_window_min: 10       # reaction.response_rate_10min
+  recent: 5                     # slow_reaction = mean r of the last 5 reactions (r = latency / baseline)
 
 fatigue:                        # B2: F = sum(weight * term), plan formula
   weights:
@@ -107,7 +110,8 @@ disengagement:                  # B2: D = sum(weight * term), plan formula
     monotony: 0.10              # monotonous context (below)
   norm:
     slow_reaction: [1.0, 2.5]
-    low_entropy: [1.8, 0.5]     # inverted range: term 0 at >= 1.8 bits, 1 at <= 0.5 bits
+    low_entropy: [1.0, 0.3]     # inverted, bits: a normal scan (road + mirrors + cluster) is ~1.0 bit, a fixed stare
+                                # falls to 0 within P1's 60 s window. TODO Sunday: calibrate on P1's real entropy.
     low_response_rate: [0.9, 0.4]  # inverted range: term 0 at >= 0.9, 1 at <= 0.4
     short_answers: [4, 1]       # inverted range, mean words per answer: term 0 at >= 4, 1 at <= 1
   monotony:                     # the context is monotonous when all of these hold

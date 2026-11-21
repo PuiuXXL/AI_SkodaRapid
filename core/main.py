@@ -29,6 +29,7 @@ from core.assistant_link import AssistantLink
 from core.engine import Engine
 from core.hub import Hub, Peer
 from core.safety import Safety
+from core.scoring import Scores
 from core.settings import th
 from core.simulation import load_simulator
 
@@ -103,6 +104,8 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         contact_router = None
     if engine.safety is None:
         Safety(engine)  # C: alarm, SOS, "Nu te mai văd", distractions, arbiter, A/B
+    if engine.scores is None:
+        Scores(engine)  # B: reaction, F, D, attention, risk, conversation, blind meters
     if engine.assistant is None:
         AssistantLink(engine)  # the slow path: P3's assistant, after the safety rules
     assistant_router = _optional_router("assistant.router")
