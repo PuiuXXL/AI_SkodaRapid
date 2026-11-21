@@ -15,8 +15,10 @@ def test_unknown_action_type_is_rejected():
     assert not accepted and reasons[0].startswith("schema:")
 
 
-def test_speak_to_driver_over_15_words_is_rejected():
-    text = "unu doi trei patru cinci sase sapte opt noua zece unsprezece doisprezece treisprezece paisprezece cincisprezece saisprezece"
+def test_speak_to_driver_over_the_word_limit_is_rejected():
+    from assistant.settings import cfg
+
+    text = " ".join(["cuvânt"] * (int(cfg("speech", "max_words_to_driver")) + 1))
     accepted, reasons = _one({"type": "speak", "to": "driver", "text": text})
     assert reasons == ["too_many_words"]
 
@@ -24,6 +26,28 @@ def test_speak_to_driver_over_15_words_is_rejected():
 def test_short_speak_is_accepted_and_marked_llm():
     accepted, _ = _one({"type": "speak", "to": "driver", "text": "Andrei, ochii pe drum."})
     assert accepted[0].source == "LLM" and accepted[0].needs_confirmation is False
+    assert accepted[0].type == "speak"  # no question mark: stays a speak
+
+
+def test_speak_question_to_driver_becomes_free_ask():
+    for to in ("driver", "all", None):
+        raw = {"type": "speak", "text": "Sunt bine. Cu ce te pot ajuta? "}
+        if to:
+            raw["to"] = to
+        accepted, _ = _one(raw)
+        assert (accepted[0].type, accepted[0].expects) == ("ask", "free")
+        assert accepted[0].question == "Sunt bine. Cu ce te pot ajuta?" and accepted[0].text is None
+
+
+def test_speak_question_to_passenger_stays_speak():
+    """The dialog window is for the driver's answer: a question to a passenger is left as is."""
+    accepted, _ = _one({"type": "speak", "to": "passenger", "text": "Maria, poți să-i povestești tu?"})
+    assert accepted[0].type == "speak"
+
+
+def test_question_inside_text_but_not_at_the_end_stays_speak():
+    accepted, _ = _one({"type": "speak", "to": "driver", "text": "Știi ce? Mai avem 20 de minute."})
+    assert accepted[0].type == "speak"
 
 
 def test_media_not_allowed_at_p3():

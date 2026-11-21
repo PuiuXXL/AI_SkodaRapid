@@ -144,7 +144,7 @@ def _reply_dictated(event: Event, state: State) -> list[dict]:
     text = (event.data.get("text") or "").strip().rstrip(".!?… ")
     sender = _message_sender(state, msg_id)
     question = fill(_t("reply_confirm"), text=text)
-    if word_count(question) > 15:
+    if word_count(question) > int(cfg("speech", "max_words_to_driver", default=30)):
         question = fill(_t("reply_confirm_long"), sender=sender)
     return [_ask(question), {"type": "reply_message", "msg_id": msg_id, "text": text}]
 

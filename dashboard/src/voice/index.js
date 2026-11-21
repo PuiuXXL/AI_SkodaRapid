@@ -22,7 +22,21 @@
 
 import { OnsetDetector } from "./onset.js";
 import { VoicePlayer } from "./player.js";
-import { SpeechInput } from "./stt.js";
+import { SpeechInput, normalizeText } from "./stt.js";
+
+/**
+ * Answers that end the conversation ("Te mai ajut cu ceva?" -> "nu" / "nimic" / "gata"),
+ * normalised. After one of them the dialog window is closed at once: speech without the
+ * wake word is ignored again until the next question. Mirrors `FOLLOW_UP_DONE` and the
+ * plain "no" answers of assistant/dialog.py and assistant/answers.py.
+ */
+export const NO_MORE_ANSWERS = new Set([
+  "nu", "nu nu", "nu mersi", "nu multumesc", "nu e nevoie", "deloc", "no", "nope",
+  "nimic", "nimic mersi", "nimic multumesc", "gata", "gata mersi", "atat", "atat mersi", "atat multumesc",
+  "asta e tot", "asta a fost tot", "mersi", "multumesc", "merci", "e ok", "e bine", "sunt ok", "ma descurc",
+  "nu mai am nevoie", "nu am nevoie", "n am nevoie", "nu mai vreau nimic", "nu mai vreau", "nu vreau nimic",
+  "nu nimic", "nu mersi nimic",
+]);
 
 const nowSeconds = () => (performance.timeOrigin + performance.now()) / 1000;
 
@@ -162,6 +176,12 @@ class VoiceController {
 
   _transcript(result) {
     for (const listener of this.transcriptListeners) listener(result);
+    if (result.final && result.addressed && NO_MORE_ANSWERS.has(normalizeText(result.text))) {
+      // "Nu" / "nimic" / "gata": the conversation is over, stop listening without the wake word.
+      // The next question of the assistant opens a new window (speak_done).
+      this.localDialogUntil = 0;
+      this.dialogFromState = false;
+    }
     if (result.final) {
       // early: null (Chrome's final), "quick" (short answer) or "stable" (unchanged text);
       // wait_ms: how long after the last change the result was sent (latency diagnostics).

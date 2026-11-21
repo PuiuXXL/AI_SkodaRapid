@@ -7,7 +7,7 @@
 #   clips:     sentences pre-generated as mp3 by integrations/audio_clips.py so that
 #              critical audio never waits for the network (plan C3, E7).
 #
-# Rules (plan 4.D "Regula de formă"): max ~15 words to the driver, nothing to read.
+# Rules (plan 4.D "Regula de formă"): short (speech.max_words_to_driver, now 30), nothing to read.
 # Placeholders in {braces} are filled at runtime:
 #   {driver} {passenger} {child} {contact} {sender} {text} {poi} {km} {task} {name}
 #   {explanation}
@@ -71,11 +71,16 @@ fallback:
   # D10: the driver refused the assistant ("lasă-mă în pace").
   refusal_ack: "Ok, te las în pace."
 
+  # Added after a statement that answers the driver (speech.follow_up), so the dialog
+  # window opens; "da" alone gets follow_up_yes (asked again), "nu" / "nimic" gets silence.
+  follow_up: "Te mai ajut cu ceva?"
+  follow_up_yes: "Spune."
+
   # Plain "pune muzică" without the LLM: a catalog track, after a "yes".
   music_offer: "Pun ceva din ce-ți place?"
 
   # YouTube music / podcasts on request (assistant/media_search.py). {o1} {o2} {o3} {title} are
-  # short spoken titles (2-4 words each); the whole question must stay within 15 words.
+  # short spoken titles (2-4 words each); the whole question must stay within speech.max_words_to_driver.
   youtube_searching: "Caut."
   youtube_choice_3: "Am găsit: {o1}, {o2} sau {o3}. Care?"
   youtube_choice_2: "Am găsit: {o1} sau {o2}. Care?"

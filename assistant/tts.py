@@ -43,7 +43,7 @@ CLIP_URL_PREFIX = "/sounds/clips"
 def default_voice() -> str:
     """Neural voice for the configured language (``tts.voices`` in assistant.yaml)."""
     language = cfg("language", default="ro")
-    return cfg("tts", "voices", language, default="ro-RO-AlinaNeural")
+    return cfg("tts", "voices", language, default="ro-RO-EmilNeural")
 
 
 async def audio_chunks(text: str, voice: Optional[str] = None, rate: Optional[str] = None) -> AsyncIterator[bytes]:

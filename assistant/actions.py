@@ -9,7 +9,9 @@ table before anything reaches core (core validates again, plan C: "validate de C
   current candidate, POI was proposed by P2's rule, category exists, ...);
 * anything said to the driver is at most ``speech.max_words_to_driver`` words;
 * at most ``llm.max_actions`` actions per answer (the rest are dropped);
-* ``needs_confirmation`` is filled from the "Cere confirmare" column.
+* ``needs_confirmation`` is filled from the "Cere confirmare" column;
+* a ``speak`` to the driver that ends with "?" becomes an ``ask`` (``expects="free"``),
+  so core opens the dialog window and the driver can answer without the wake word.
 
 Rejected actions are returned with the reason so the client can log them (plan:
 "Orice altceva primit de la LLM e respins și trecut în jurnal").
@@ -114,8 +116,8 @@ def needs_confirmation(action: Action, state: State) -> bool:
 def _word_limit(addressee: Optional[str]) -> int:
     """Max words for an utterance to this addressee (driver = strict rule)."""
     if addressee in (None, "driver", "all"):
-        return int(cfg("speech", "max_words_to_driver", default=15))
-    return int(cfg("speech", "max_words_to_passenger", default=25))
+        return int(cfg("speech", "max_words_to_driver", default=30))
+    return int(cfg("speech", "max_words_to_passenger", default=30))
 
 
 def _allowed_poi_ids(state: State, event: Optional[Event]) -> set[str]:
@@ -241,6 +243,28 @@ def check_action(action: Action, state: State, event: Optional[Event] = None) ->
     return None
 
 
+def question_as_ask(action: Action) -> Action:
+    """Turn a ``speak`` to the driver that ends with a question mark into an ``ask``.
+
+    Core opens the dialog window (no wake word needed for the answer, plan E1) only
+    after an ``ask``. The LLM often asks with a plain ``speak`` ("Sunt bine. Cu ce te
+    pot ajuta?"), and the driver's answer was then ignored or slow. The text is kept;
+    ``expects="free"`` changes nothing in the dialog manager (no confirmation held).
+
+    Args:
+        action: Any parsed action.
+
+    Returns:
+        The ``ask`` version, or ``action`` unchanged.
+    """
+    if action.type != "speak" or action.to not in (None, "driver", "all"):
+        return action
+    text = (action.text or "").rstrip()
+    if not text.endswith("?"):
+        return action
+    return action.model_copy(update={"type": "ask", "question": text, "text": None, "expects": "free"})
+
+
 def _is_numeric_range(limits: Any) -> bool:
     """True for ``[min, max]`` numeric limits (vs. a list of allowed values)."""
     return (
@@ -275,6 +299,7 @@ def validate_actions(
         except ValidationError as exc:
             result.rejected.append(Rejected(raw, f"schema:{exc.errors()[0].get('msg', 'invalid')}"))
             continue
+        action = question_as_ask(action)
         reason = check_action(action, state, event)
         if reason is not None:
             result.rejected.append(Rejected(raw, reason))

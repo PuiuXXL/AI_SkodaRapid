@@ -11,6 +11,11 @@ Uses the official Google Gen AI SDK (``google-genai``):
 
 Key and model come from ``.env`` (``LLM_API_KEY``, ``LLM_MODEL``). The key is
 created for free at https://aistudio.google.com ("Get API key").
+
+Temporary errors (503 overloaded, 429 rate limit, 500/502/504) raise a *transient*
+:class:`LLMError`; the client then calls :meth:`GeminiProvider.generate_retry`, which
+uses the backup model (``llm.backup_model`` / ``LLM_BACKUP_MODEL``). Overload is
+usually per model, so another Flash model often answers at once.
 """
 
 from __future__ import annotations
@@ -67,6 +72,9 @@ ACTION_FIELDS: dict[str, dict[str, Any]] = {
 }
 assert list(ACTION_FIELDS) == _ACTION_TYPES  # keep both lists in sync with plan section 6
 
+#: HTTP codes worth one retry: rate limit and temporary server-side failures.
+TRANSIENT_CODES = frozenset({429, 500, 502, 503, 504})
+
 
 def _branch(action_type: str) -> dict[str, Any]:
     """Schema of one action type: ``type`` first (lets streamed speech be checked early)."""
@@ -97,16 +105,19 @@ class GeminiProvider(LLMProvider):
 
     name = "gemini"
 
-    def __init__(self, api_key: str, model: str) -> None:
+    def __init__(self, api_key: str, model: str, backup_model: Optional[str] = None) -> None:
         """Create the SDK client.
 
         Args:
             api_key: Google AI Studio API key (``LLM_API_KEY``).
             model: Model name, e.g. a Gemini Flash model (``LLM_MODEL``).
+            backup_model: Model for the one retry after a transient error
+                (``LLM_BACKUP_MODEL`` / ``llm.backup_model``); None retries on ``model``.
         """
         self.model = model
-        # No SDK-level retries: a retry would blow the 2.5 s budget; the client
-        # falls back to fixed texts instead. The HTTP timeout is a safety net only.
+        self.backup_model = backup_model or None
+        # No SDK-level retries: they ignore the 2.5 s budget. The client decides
+        # whether one retry still fits (generate_retry). The HTTP timeout is a safety net only.
         self._client = genai.Client(
             api_key=api_key,
             http_options=types.HttpOptions(
@@ -116,28 +127,39 @@ class GeminiProvider(LLMProvider):
         )
 
     @staticmethod
-    def _build_config_kwargs() -> dict[str, Any]:
-        """Generation settings from ``assistant.yaml`` (temperature, tokens, thinking)."""
+    def _build_config_kwargs(backup: bool = False) -> dict[str, Any]:
+        """Generation settings from ``assistant.yaml`` (temperature, tokens, thinking).
+
+        Args:
+            backup: Use ``llm.backup_thinking_budget`` / ``llm.backup_thinking_level``
+                (thinking support differs between model generations).
+        """
         kwargs: dict[str, Any] = {
             "response_mime_type": "application/json",
             "response_json_schema": RESPONSE_SCHEMA,
             "temperature": float(cfg("llm", "temperature", default=0.4)),
             "max_output_tokens": int(cfg("llm", "max_output_tokens", default=400)),
         }
-        budget = cfg("llm", "thinking_budget", default=None)
-        level = cfg("llm", "thinking_level", default=None)
+        prefix = "backup_" if backup else ""
+        budget = cfg("llm", f"{prefix}thinking_budget", default=None)
+        level = cfg("llm", f"{prefix}thinking_level", default=None)
         if level is not None:
             kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=level)
         elif budget is not None:
             kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=int(budget))
         return kwargs
 
-    def _build_config(self, system: str | None = None) -> types.GenerateContentConfig:
-        """Full request config, optionally with the system prompt."""
-        return types.GenerateContentConfig(system_instruction=system, **self._build_config_kwargs())
+    def _build_config(self, system: str | None = None, backup: bool = False) -> types.GenerateContentConfig:
+        """Full request config, optionally with the system prompt (``backup``: see above)."""
+        return types.GenerateContentConfig(system_instruction=system, **self._build_config_kwargs(backup))
+
+    @property
+    def retry_label(self) -> str:
+        """The model used by :meth:`generate_retry` (for logs)."""
+        return self.backup_model or self.model
 
     async def generate(self, system: str, user: str, on_text: Optional[TextCallback] = None) -> LLMResult:
-        """Stream one answer from Gemini.
+        """Stream one answer from the main model.
 
         Args:
             system: System prompt.
@@ -148,14 +170,27 @@ class GeminiProvider(LLMProvider):
             The complete JSON text with timing information.
 
         Raises:
-            LLMError: Wrapped SDK / network error (auth, quota, invalid model...).
+            LLMError: Wrapped SDK / network error (auth, quota, invalid model...);
+                ``transient`` is set for the codes in :data:`TRANSIENT_CODES`.
         """
+        return await self._stream(self.model, self._build_config(system), user, on_text)
+
+    async def generate_retry(self, system: str, user: str, on_text: Optional[TextCallback] = None) -> LLMResult:
+        """Retry after a transient error: the backup model if configured, else the main model."""
+        if self.backup_model:
+            return await self._stream(self.backup_model, self._build_config(system, backup=True), user, on_text)
+        return await self.generate(system, user, on_text)
+
+    async def _stream(
+        self, model: str, config: types.GenerateContentConfig, user: str, on_text: Optional[TextCallback]
+    ) -> LLMResult:
+        """Stream one answer from ``model`` (shared by :meth:`generate` and :meth:`generate_retry`)."""
         started = time.perf_counter()
         ttft_ms: Optional[float] = None
         parts: list[str] = []
         try:
             stream = await self._client.aio.models.generate_content_stream(
-                model=self.model, contents=user, config=self._build_config(system),
+                model=model, contents=user, config=config,
             )
             async for chunk in stream:
                 piece = chunk.text or ""
@@ -167,7 +202,9 @@ class GeminiProvider(LLMProvider):
                 if on_text is not None:
                     on_text("".join(parts))
         except genai_errors.APIError as exc:
-            raise LLMError(f"Gemini API error {getattr(exc, 'code', '?')}: {exc}") from exc
+            code = getattr(exc, "code", None)
+            raise LLMError(f"Gemini API error {code if code is not None else '?'} ({model}): {exc}",
+                           transient=code in TRANSIENT_CODES) from exc
         except Exception as exc:  # noqa: BLE001 - network/HTTP library errors vary; all mean "fall back"
             raise LLMError(f"Gemini call failed: {type(exc).__name__}: {exc}") from exc
         total_ms = (time.perf_counter() - started) * 1000

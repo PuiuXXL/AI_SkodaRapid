@@ -12,7 +12,9 @@
  * - **Alarms interrupt everything (plan C1).** `alarm()` stops speech and music and
  *   plays a pre-generated, pre-loaded clip immediately (target < 300 ms end to end).
  * - **Fallback voice (plan C9).** If a TTS file cannot be loaded (no internet), the
- *   browser's local `speechSynthesis` says the sentence instead.
+ *   browser's local `speechSynthesis` says the sentence instead. It prefers a male
+ *   voice (`fallbackVoiceNames`), matching edge-tts `ro-RO-EmilNeural`, so the voice
+ *   does not switch between male and female from one sentence to the next.
  *
  * Browsers block audio until the user interacts with the page: create the player
  * (or call `unlock()`) from a click handler.
@@ -24,6 +26,9 @@ export class VoicePlayer {
   /**
    * @param {object} options
    * @param {string} [options.lang="ro-RO"] Language for the speechSynthesis fallback.
+   * @param {string[]} [options.fallbackVoiceNames=["Andrei", "Emil"]] Preferred (male) local
+   *        voices for the fallback, matched case-insensitively against the voice name; if none
+   *        is installed, any voice of `lang` is used.
    * @param {string} [options.resumeClipUrl="/sounds/clips/resume.mp3"] "...cum ziceam," clip.
    * @param {number} [options.duckFactor=0.3] Music volume multiplier while speaking.
    * @param {(utterance: object) => void} [options.onSpeakStart] First sentence starts playing.
@@ -33,6 +38,7 @@ export class VoicePlayer {
    */
   constructor({
     lang = "ro-RO",
+    fallbackVoiceNames = ["Andrei", "Emil"],
     resumeClipUrl = "/sounds/clips/resume.mp3",
     duckFactor = 0.3,
     onSpeakStart = () => {},
@@ -40,6 +46,7 @@ export class VoicePlayer {
     onAlarmPlayed = () => {},
   } = {}) {
     this.lang = lang;
+    this.fallbackVoiceNames = fallbackVoiceNames.map((name) => name.toLowerCase());
     this.resumeClipUrl = resumeClipUrl;
     this.duckFactor = duckFactor;
     this.onSpeakStart = onSpeakStart;
@@ -217,9 +224,27 @@ export class VoicePlayer {
     }
     const speech = new SpeechSynthesisUtterance(text);
     speech.lang = this.lang;
+    const voice = this._fallbackVoice();
+    if (voice) speech.voice = voice;
     speech.onend = onEnded;
     speech.onerror = onEnded;
     window.speechSynthesis.speak(speech);
+  }
+
+  /**
+   * Local voice for the speechSynthesis fallback: the first installed voice of `lang`
+   * whose name contains one of `fallbackVoiceNames`, else any voice of `lang`, else
+   * null (the browser then picks its default for `speech.lang`).
+   * @returns {SpeechSynthesisVoice | null}
+   */
+  _fallbackVoice() {
+    const prefix = this.lang.slice(0, 2).toLowerCase();
+    const voices = window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith(prefix));
+    for (const name of this.fallbackVoiceNames) {
+      const match = voices.find((v) => v.name.toLowerCase().includes(name));
+      if (match) return match;
+    }
+    return voices[0] || null;
   }
 
   _finish() {

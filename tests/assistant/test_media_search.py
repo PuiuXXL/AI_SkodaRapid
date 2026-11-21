@@ -295,7 +295,9 @@ async def test_stop_is_deterministic_and_never_asks_the_llm():
     client = AssistantClient(provider)
     event = Event(type="driver_speech", data={"text": "oprește ce dă play acum"})
     actions = await client.handle_event(event, city_state(media=PLAYING), now=NOW)
-    assert [(a.type, a.clip_id) for a in actions] == [("stop_media", None), ("speak", "confirm_ok")]
+    # "Ok." is a statement answering the driver: "Te mai ajut cu ceva?" follows (speech.follow_up).
+    assert [(a.type, a.clip_id, a.reason) for a in actions] == [
+        ("stop_media", None, None), ("speak", "confirm_ok", None), ("ask", None, "follow_up")]
     assert client.last_result.reason == "deterministic" and provider.calls == []
 
 
@@ -304,7 +306,8 @@ async def test_llm_action_without_sentence_gets_ok_instead_of_not_understood():
     client = AssistantClient(FakeProvider({"actions": [{"type": "stop_media"}]}))
     event = Event(type="driver_speech", data={"text": "las-o mai încet, de fapt închide tot"})
     actions = await client.handle_event(event, city_state(media=PLAYING), now=NOW)
-    assert [a.type for a in actions] == ["stop_media", "speak"] and actions[1].clip_id == "confirm_ok"
+    assert [a.type for a in actions] == ["stop_media", "speak", "ask"] and actions[1].clip_id == "confirm_ok"
+    assert actions[2].reason == "follow_up"
     assert client.last_result.reason == "ok"
 
 

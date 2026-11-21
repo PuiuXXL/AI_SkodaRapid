@@ -35,6 +35,7 @@ export function normalizeText(text) {
 export const QUICK_ANSWER_WORDS = new Set([
   "da", "nu", "ok", "okay", "sigur", "bine", "desigur", "hai", "te", "rog", "multumesc", "corect", "exact",
   "gata", "stop", "ajunge", "quiz", "chiz", "podcast",
+  "nimic", "atat", "mersi", "merci", "spune",
   "1", "2", "3", "4", "5", "6", "7", "8", "9",
   "unu", "una", "doi", "doua", "trei", "patru", "cinci", "sase", "sapte", "opt", "noua",
 ]);

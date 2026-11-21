@@ -54,7 +54,7 @@ Privacy note for the slide (plan section 3): the LLM receives only the ~10-line 
 | `assistant/router.py` | **Mounted by core.** `GET /tts/{id}.mp3`, `GET /media/{track_id}.mp3`, `GET /media/yt/{video_id}.m4a` (YouTube audio proxy), `GET /assistant/health`. |
 | `assistant/media_search.py` | YouTube music / podcasts on request (section 6.1): search (Data API or yt-dlp), spoken titles, choice question, answer parsing, audio stream resolution. |
 | `assistant/tts.py` | edge-tts synthesis, sentence cache, and `speak_message(action)`, which builds the `speak` message for the browser. |
-| `assistant/actions.py` | Validation of actions against plan section 6: types, levels, parameters, 15 words, max 3, confirmation. |
+| `assistant/actions.py` | Validation of actions against plan section 6: types, levels, parameters, word limit (`speech.max_words_to_driver`, 30, whole text), max 3, confirmation. |
 | `assistant/policies.py` | When the assistant may answer: P0–P2 veto, muted after refusal, conversation, 1 proactive answer / 30 s. |
 | `assistant/fallback.py` | Fixed answers per event type (no LLM, timeout, error, director switch). |
 | `assistant/summary.py` | State → ~10 lines of text for the LLM. |
@@ -185,6 +185,8 @@ else:
 | | "lasă", "stop", ✋ | cancelled quietly |
 | | anything else ("pune ceva jazz") | not an answer (`handled=False`): treat it as a new `driver_speech` |
 
+**"Te mai ajut cu ceva?" (`speech.follow_up`).** When the assistant answers the driver (`driver_speech`) with a statement and no question, `AssistantClient` adds `ask("Te mai ajut cu ceva?", expects="free", reason="follow_up")`. It never does so after proactive events (cause, fatigue, message), after a question, a held action or a refusal. A `speak` to the driver that ends with "?" is already turned into an `ask` by validation (`actions.question_as_ask`), so it opens the dialog window too. The answer is handled by `DialogManager`: "nu" / "nimic" / "gata" → nothing is said, and the browser closes its dialog window at once (`NO_MORE_ANSWERS` in `dashboard/src/voice/index.js`), so speech without the wake word is ignored again. "da" alone → "Spune." (a new question, a new window). "nu, pune muzică" → the request is passed on. Any other request → normal speech for the LLM. Note: the real core keeps its own window open until it expires (`core/dialog_window.py`); closing it on "nu" there is P2's choice.
+
 An unanswered question expires after `speech.pending_timeout_s` (20 s). Its held actions are cancelled and never executed. A new utterance of the assistant (e.g. a cause or message interrupting a quiz) replaces the pending question.
 
 To read a message after `read_message` is confirmed, core says the message text as is (no 15-word rule): `speak_message(Action(type="speak", to="driver", text=message.text, source="RULE"))`.
@@ -310,14 +312,14 @@ The driver asks for something specific ("dă-mi ceva muzică metal energică", "
 LLM:      search_media {query: "energetic metal", kind: "music"}      (fallback without LLM: media_search.media_request)
 Asistent: „Caut.”                                                      (early speech while searching)
           search (Data API ~0.5 s / yt-dlp ~1.3-2.5 s) -> ask expects="choice", options = the results
-Asistent: „Am găsit: Metallica, Hardwired, Slipknot, Duality sau Nu Metal Mix. Care?”     (<= 15 words)
+Asistent: „Am găsit: Metallica, Hardwired, Slipknot, Duality sau Nu Metal Mix. Care?”     (<= speech.max_words_to_driver)
 Șofer:    „A doua.” / „Cel cu Slipknot.” / „Altceva.” / 👍 (one option)
           DialogManager -> play_media {track_id: "yt:6fVE8kSM43I", title: "Slipknot, Duality"} + „Pornesc Slipknot, Duality.”
 Core:     media play, url = music.track_url(track_id) = /media/yt/6fVE8kSM43I.m4a, loop = false
 ```
 
 - **One option at speed.** At `speed_kmh >= youtube.single_option_speed_kmh` (90) or `risk >= youtube.single_option_risk` (1) only one option is offered ("Pun Metallica, Hardwired?"); "altceva" gives the next one. Three titles are too much to keep in mind at highway speed.
-- **Spoken titles** are cleaned deterministically (`clean_title`): brackets, hashtags, emoji, `| extra parts` and noise words (`youtube.title_noise`) are removed, "Artist - Title" becomes "Artist, Title", and words are cut (4 down to 2) until the question fits 15 words. No second LLM call.
+- **Spoken titles** are cleaned deterministically (`clean_title`): brackets, hashtags, emoji, `| extra parts` and noise words (`youtube.title_noise`) are removed, "Artist - Title" becomes "Artist, Title", and words are cut (4 down to 2) until the question fits `speech.max_words_to_driver`. No second LLM call.
 - **Search:** YouTube Data API v3 when `YOUTUBE_API_KEY` is set in `.env` (free quota: 10,000 units/day, one search costs ~101, so ~100 searches/day; SafeSearch). Otherwise yt-dlp, no key. Measured on this laptop with yt-dlp: 2.2–2.4 s for the first search, 1.25 s after that.
 - **Playback (variant B):** yt-dlp resolves the audio-only stream (m4a), prefetched while the question is spoken. `GET /media/yt/<id>.m4a` proxies it: same origin, `Range` supported (seeking), fetched upstream in 4 MB chunks, URL refreshed once on 403. Measured: audio starts **0.16 s** after the choice when the prefetch is done. Same `<audio>` element as the catalog, so alarms stop it, speech ducks it, and there are no ads.
 - **Safety:** `search_media` and `play_media` are P4 (comfort), so they are rejected at P0–P3. Only video ids found by a search in this process can be played or proxied (`media_search.known`). A child on board means SafeSearch strict, which needs the Data API key. Without it, the assistant offers a kid_safe catalog track instead.
@@ -331,11 +333,13 @@ Core:     media play, url = music.track_url(track_id) = /media/yt/6fVE8kSM43I.m4
 
 ## 7. Configuration (`assistant/config/assistant.yaml`)
 
-Main keys: `language`, `llm.*` (timeout 2.5 s, max 3 actions, temperature, thinking), `speech.*` (15 words, 6 s window), `policies.*`, `memory.turns`, `tts.*` (voices, rates), `clips.*`, `music.*`, `youtube.*` (section 6.1), `reminders.poi_categories` (**temporary**: replaced by the categories in `simulator/stops.json` once P4 creates it), `preferences.*`, `phone.*`.
+Main keys: `language`, `llm.*` (timeout 2.5 s, max 3 actions, temperature, thinking), `speech.*` (30 words per text, raised from the plan's 15 on 2026-11-21; 6 s window), `policies.*`, `memory.turns`, `tts.*` (voices, rates), `clips.*`, `music.*`, `youtube.*` (section 6.1), `reminders.poi_categories` (**temporary**: replaced by the categories in `simulator/stops.json` once P4 creates it), `preferences.*`, `phone.*`.
 
-Secrets are only in `.env`: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `YOUTUBE_API_KEY` (optional, section 6.1), `SAFE_CONTACT_NUMBER`, `EMERGENCY_NUMBER`, `KDECONNECT_DEVICE_ID`, `CORE_URL`.
+Secrets are only in `.env`: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BACKUP_MODEL` (optional, overrides `llm.backup_model`), `YOUTUBE_API_KEY` (optional, section 6.1), `SAFE_CONTACT_NUMBER`, `EMERGENCY_NUMBER`, `KDECONNECT_DEVICE_ID`, `CORE_URL`.
 
-`llm.thinking_budget` and `llm.thinking_level` are both `null` by default: Gemini 3.x models reject `thinking_budget` (HTTP 400), and some also reject level `minimal`. A rejected value makes every call fail with `llm_error`.
+`llm.thinking_level` is `low` and `llm.thinking_budget` is `null`: Gemini 3.x models reject `thinking_budget` (HTTP 400), and some also reject level `minimal`. A rejected value makes every call fail with `llm_error`. Tested on 2026-11-21 with the real prompt: `gemini-3.5-flash-lite` with the default thinking (`null`) timed out or took ~8 s; with `low` it answered in 0.7–1.6 s.
+
+**Retry on a temporary Gemini error.** A `503 UNAVAILABLE` (Google overloaded), `429` (rate limit) or `500/502/504` gets **one** retry on `llm.backup_model` (default `gemini-3.1-flash-lite` with its default thinking, 0.8–1.2 s in tests; `gemini-2.5-flash` answered 404 although it is still listed, `gemini-3.5-flash` / `gemini-3.6-flash` took 2–3.5 s). The retry happens inside the **same** `llm.timeout_s` deadline (2.5 s), only if nothing was spoken yet and at least `llm.retry.min_remaining_s` (1 s) is left. Otherwise, or if the retry also fails, the fixed texts are used as before. A retried answer has `AnswerInfo.retry` set (e.g. `"503 UNAVAILABLE -> gemini-3.1-flash-lite"`) and a warning in the log. Safety never depends on it: alarms and the P0–P2 rules do not use the LLM.
 
 The Gemini answer schema has one branch per action type, with all of its fields required (`assistant/llm/gemini.py` → `ACTION_FIELDS`). Without it, small models sometimes put a value in the wrong field (e.g. `value` instead of `text`).
 

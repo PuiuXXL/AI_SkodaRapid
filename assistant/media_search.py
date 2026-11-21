@@ -250,7 +250,7 @@ def choice_question(options: list[dict[str, Any]], start: int, size: int) -> tup
         ``(question, spoken titles)``.
     """
     batch = options[start:start + size]
-    limit = int(cfg("speech", "max_words_to_driver", default=15))
+    limit = int(cfg("speech", "max_words_to_driver", default=30))
     most = int(cfg("youtube", "option_max_words", default=4))
     least = int(cfg("youtube", "option_min_words", default=2))
     question, titles = "", []

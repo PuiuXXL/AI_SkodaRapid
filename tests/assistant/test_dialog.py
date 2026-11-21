@@ -206,3 +206,98 @@ def test_quiz_questions_are_short_and_answerable():
 def test_quiz_session_kid_safe_and_length():
     quiz = QuizSession(kid_safe_only=True, length=3, seed=1)
     assert quiz.total == 3 and all(q.kid_safe for q in quiz.questions)
+
+
+# ----------------------------------------------------------------- "Te mai ajut cu ceva?" (speech.follow_up)
+
+FOLLOW_UP = Action(type="ask", to="driver", question="Te mai ajut cu ceva?", expects="free",
+                   reason="follow_up", source="RULE")
+STATEMENT = Action(type="speak", to="driver", text="Mai avem 20 de minute.", source="LLM")
+
+
+def _follow_up_dialog():
+    """A dialog manager right after "Mai avem 20 de minute. Te mai ajut cu ceva?"."""
+    dialog = DialogManager()
+    dialog.register([STATEMENT, FOLLOW_UP], NOW)
+    assert dialog.pending is not None and dialog.pending.kind == "follow_up"
+    return dialog
+
+
+@pytest.mark.parametrize("text", ["Nu", "nu, mersi", "Nimic.", "gata", "Atât, mersi", "nu mai am nevoie", "Mersi"])
+def test_follow_up_no_is_silent(text):
+    dialog = _follow_up_dialog()
+    result = dialog.handle([voice(text)], NOW + 1)
+    assert result.handled and result.answer == "no"
+    assert not result.speak and not result.events and not result.execute
+    assert dialog.pending is None
+
+
+@pytest.mark.parametrize("inputs", [[voice("da")], [voice("Da, te rog")], [InputEvent("gesture", "Thumb_Up", NOW + 1)]])
+def test_follow_up_yes_alone_asks_again(inputs):
+    dialog = _follow_up_dialog()
+    result = dialog.handle(inputs, NOW + 1)
+    assert result.handled and result.answer == "yes"
+    assert [(a.type, a.question, a.expects) for a in result.speak] == [("ask", "Spune.", "free")]
+
+
+def test_follow_up_no_then_request_passes_the_request_on():
+    dialog = _follow_up_dialog()
+    result = dialog.handle([voice("Nu, pune niște muzică")], NOW + 1)
+    assert result.handled and not result.speak
+    assert [(e.type, e.data["text"]) for e in result.events] == [("driver_speech", "pune niște muzică")]
+
+
+@pytest.mark.parametrize("text", ["pune muzică", "Cât mai e până ajungem?", "nu, mersi, dar pune muzică"])
+def test_follow_up_request_is_normal_speech(text):
+    """A request without a plain yes / no goes to the LLM as usual (handled=False or passed on)."""
+    dialog = _follow_up_dialog()
+    result = dialog.handle([voice(text)], NOW + 1)
+    assert not result.speak
+    assert not result.handled or [e.type for e in result.events] == ["driver_speech"]
+    assert dialog.pending is None
+
+
+@pytest.mark.asyncio
+async def test_client_adds_follow_up_after_a_statement_to_the_driver():
+    from p3_helpers import FakeProvider
+
+    _, state = load_scene("scene3_message")
+    client = AssistantClient(FakeProvider({"actions": [{"type": "speak", "to": "driver", "text": "Mai avem 20 de minute."}]}))
+    actions = await client.handle_event({"type": "driver_speech", "data": {"text": "cât mai e?"}}, state, now=NOW)
+    assert [(a.type, a.reason) for a in actions] == [("speak", None), ("ask", "follow_up")]
+    assert actions[1].question == "Te mai ajut cu ceva?" and actions[1].expects == "free"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("answer", [
+    {"actions": [{"type": "ask", "to": "driver", "question": "Pun ceva rock?", "expects": "yes_no"}]},  # already a question
+    {"actions": [{"type": "speak", "to": "driver", "text": "Sunt bine. Cu ce te pot ajuta?"}]},     # becomes an ask
+    {"actions": [{"type": "stay_silent", "reason": "driver_refused"}]},                              # refusal
+])
+async def test_client_no_follow_up_after_questions_or_refusals(answer):
+    from p3_helpers import FakeProvider
+
+    _, state = load_scene("scene3_message")
+    client = AssistantClient(FakeProvider(answer))
+    actions = await client.handle_event({"type": "driver_speech", "data": {"text": "salut"}}, state, now=NOW)
+    assert not any(a.reason == "follow_up" for a in actions)
+
+
+@pytest.mark.asyncio
+async def test_client_no_follow_up_after_proactive_events():
+    """Only answers to the driver get it: never "Andrei, ochii pe drum. Te mai ajut cu ceva?"."""
+    event, state = load_scene("scene4_passenger_phone")
+    actions = await AssistantClient(OfflineProvider()).handle_event(event, state, now=NOW)
+    assert actions and not any(a.reason == "follow_up" for a in actions)
+
+
+@pytest.mark.asyncio
+async def test_client_follow_up_can_be_disabled(monkeypatch):
+    from assistant.settings import get_config
+    from p3_helpers import FakeProvider
+
+    monkeypatch.setitem(get_config()["speech"], "follow_up", {"enabled": False})
+    _, state = load_scene("scene3_message")
+    client = AssistantClient(FakeProvider({"actions": [{"type": "speak", "to": "driver", "text": "Mai avem 20 de minute."}]}))
+    actions = await client.handle_event({"type": "driver_speech", "data": {"text": "cât mai e?"}}, state, now=NOW)
+    assert [a.type for a in actions] == ["speak"]

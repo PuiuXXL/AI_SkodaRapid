@@ -34,7 +34,8 @@ def make_provider(settings: LLMSettings | None = None) -> LLMProvider:
     if settings.provider == "gemini" and settings.usable:
         from assistant.llm.gemini import GeminiProvider  # imported lazily: heavy SDK
 
-        return GeminiProvider(api_key=settings.api_key, model=settings.model)
+        return GeminiProvider(api_key=settings.api_key, model=settings.model,
+                              backup_model=settings.backup_model or None)
     if settings.provider not in ("gemini", "offline"):
         log.warning("LLM_PROVIDER=%r is not supported (only 'gemini'); running offline.", settings.provider)
     elif settings.provider == "gemini":

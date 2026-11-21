@@ -46,7 +46,7 @@ def word_count(text: str) -> int:
         text: The sentence.
 
     Returns:
-        Number of words, used for the "max 15 words to the driver" rule.
+        Number of words, used for the ``speech.max_words_to_driver`` rule.
     """
     return len(normalize(text).split()) if text else 0
 

@@ -16,6 +16,9 @@ Pipeline for one event:
    ``llm.timeout_s`` (2.5 s). Each complete ``speak`` / ``ask`` action that arrives
    while streaming is validated and handed to ``on_early_speech`` so TTS can start
    before the answer is finished (plan D1, section 8 rule 7).
+   A *transient* error (503 overloaded, 429 rate limit) gets **one retry** through
+   ``provider.generate_retry`` (Gemini: the backup model), only if nothing was spoken
+   yet and at least ``llm.retry.min_remaining_s`` of the same deadline is left.
 5. **Validation** (``assistant/actions.py``). If nothing valid survives, or on
    timeout / error -> fixed fallback texts (plan C9).
 6. **YouTube search** (``assistant/media_search.py``, docs/assistant.md 6.1): a
@@ -76,7 +79,7 @@ def system_prompt() -> str:
     language = cfg("language", default="ro")
     return (
         text.replace("{language_name}", _LANGUAGE_NAMES.get(language, language))
-        .replace("{max_words}", str(cfg("speech", "max_words_to_driver", default=15)))
+        .replace("{max_words}", str(cfg("speech", "max_words_to_driver", default=30)))
     )
 
 
@@ -97,6 +100,8 @@ class AnswerInfo:
         error: Short description of the LLM failure when ``reason`` is ``llm_error``
             (e.g. ``"429 RESOURCE_EXHAUSTED"`` = free-tier rate limit, ``"503 UNAVAILABLE"``
             = Google overloaded), so it can be shown in the event log.
+        retry: Set when a transient error was retried, e.g.
+            ``"503 UNAVAILABLE -> gemini-3.1-flash-lite"`` (the answer may still be ``"ok"``).
     """
 
     event_type: str = ""
@@ -107,6 +112,7 @@ class AnswerInfo:
     llm_total_ms: Optional[float] = None
     rejected: list[tuple[Any, str]] = field(default_factory=list)
     error: Optional[str] = None
+    retry: Optional[str] = None
 
 
 def _short_error(exc: Exception) -> str:
@@ -233,6 +239,7 @@ class AssistantClient:
 
         if any(a.type == "search_media" for a in result):
             result = await self._resolve_media_search(result, event, state, info, on_early_speech)
+        result = self._with_follow_up(event, result)
 
         if any(a.type != "stay_silent" for a in result):
             self.policies.record(event, now)
@@ -250,10 +257,11 @@ class AssistantClient:
     async def _ask_llm(
         self, event: Event, state: State, info: AnswerInfo, on_early_speech: Optional[EarlySpeechCallback]
     ) -> list[Action]:
-        """Call the LLM under the deadline, validate, fall back when needed."""
+        """Call the LLM under the deadline (one retry on a transient error), validate, fall back when needed."""
         watcher = _StreamWatcher(state, event, on_early_speech) if on_early_speech else None
         user = summarize(state, event, self.memory.recent())
         timeout = float(cfg("llm", "timeout_s", default=2.5))
+        started = time.perf_counter()
         try:
             llm = await asyncio.wait_for(
                 self.provider.generate(system_prompt(), user, watcher.feed if watcher else None),
@@ -264,10 +272,31 @@ class AssistantClient:
             log.warning("LLM timeout after %.1fs on %s; using fallback.", timeout, event.type)
             return self._fallback(event, state, info, skip_speech=bool(watcher and watcher.streamed))
         except LLMError as exc:
-            info.reason = "llm_error"
-            info.error = _short_error(exc)
-            log.warning("LLM error on %s: %s; using fallback.", event.type, exc)
-            return self._fallback(event, state, info)
+            remaining = timeout - (time.perf_counter() - started)
+            if not self._can_retry(exc, watcher, remaining):
+                info.reason = "llm_error"
+                info.error = _short_error(exc)
+                log.warning("LLM error on %s: %s; using fallback.", event.type, exc)
+                return self._fallback(event, state, info)
+            info.retry = f"{_short_error(exc)} -> {self.provider.retry_label}"
+            log.warning("LLM error on %s: %s; retrying with %s (%.1fs left).",
+                        event.type, exc, self.provider.retry_label, remaining)
+            # Fresh watcher: the retry streams its answer from the start.
+            watcher = _StreamWatcher(state, event, on_early_speech) if on_early_speech else None
+            try:
+                llm = await asyncio.wait_for(
+                    self.provider.generate_retry(system_prompt(), user, watcher.feed if watcher else None),
+                    timeout=remaining,
+                )
+            except asyncio.TimeoutError:
+                info.reason = "timeout"
+                log.warning("LLM retry timeout on %s; using fallback.", event.type)
+                return self._fallback(event, state, info, skip_speech=bool(watcher and watcher.streamed))
+            except LLMError as retry_exc:
+                info.reason = "llm_error"
+                info.error = _short_error(retry_exc)
+                log.warning("LLM retry failed on %s: %s; using fallback.", event.type, retry_exc)
+                return self._fallback(event, state, info)
 
         info.llm_ttft_ms, info.llm_total_ms = llm.ttft_ms, llm.total_ms
         try:
@@ -312,6 +341,40 @@ class AssistantClient:
                 for action, index in zip(checked.accepted, checked.accepted_indexes)
             ]
         return checked.accepted
+
+    @staticmethod
+    def _with_follow_up(event: Event, result: list[Action]) -> list[Action]:
+        """Add "Te mai ajut cu ceva?" after a statement that answers the driver (``speech.follow_up``).
+
+        Only for ``driver_speech`` (never after proactive interventions such as a cause or
+        fatigue), only when the answer contains a ``speak`` to the driver and no question,
+        no held action and no ``stay_silent`` (refusal, policy). The question is an ``ask``
+        with ``reason="follow_up"``: core opens the dialog window, and
+        :class:`assistant.dialog.DialogManager` handles the "da" / "nu" that follows.
+        """
+        if event.type != "driver_speech" or not cfg("speech", "follow_up", "enabled", default=True):
+            return result
+        if not any(a.type == "speak" and a.to in (None, "driver", "all") for a in result):
+            return result
+        if any(a.type in ("ask", "stay_silent") or a.needs_confirmation for a in result):
+            return result
+        question = get_texts().get("fallback", {}).get("follow_up") or "Te mai ajut cu ceva?"
+        return [*result, Action(type="ask", to="driver", question=question, expects="free",
+                                reason="follow_up", source="RULE")]
+
+    @staticmethod
+    def _can_retry(exc: LLMError, watcher: Optional[_StreamWatcher], remaining: float) -> bool:
+        """True when a failed LLM call deserves its one retry.
+
+        Only transient errors (overload, rate limit), only if nothing was handed to TTS
+        yet (the driver must never hear an answer twice), and only if at least
+        ``llm.retry.min_remaining_s`` of the deadline is left.
+        """
+        if not cfg("llm", "retry", "enabled", default=True) or not exc.transient:
+            return False
+        if watcher is not None and watcher.streamed:
+            return False
+        return remaining >= float(cfg("llm", "retry", "min_remaining_s", default=1.0))
 
     async def _resolve_media_search(
         self, result: list[Action], event: Event, state: State, info: AnswerInfo,

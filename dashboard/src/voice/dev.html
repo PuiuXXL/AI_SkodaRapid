@@ -95,7 +95,15 @@
     import { initVoice, onTranscript, isSpeaking } from "/voice/index.js";
 
     const $ = (id) => document.getElementById(id);
-    const log = (text) => { $("log").textContent += text + "\n"; $("log").scrollTop = 1e9; };
+    /** True when the panel is scrolled to (or within a few px of) its bottom. */
+    const atBottom = (el) => el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+    /** Run `change` on a panel; follow new lines only if the user was already at the bottom. */
+    const appendFollowing = (el, change) => {
+      const follow = atBottom(el);
+      change();
+      if (follow) el.scrollTop = el.scrollHeight;
+    };
+    const log = (text) => appendFollowing($("log"), () => { $("log").textContent += text + "\n"; });
     let ws;
 
     function connect() {
@@ -127,7 +135,7 @@
         log(`[voce] EROARE la pornire: ${err}`);
         return;
       }
-      onTranscript((r) => {
+      onTranscript((r) => appendFollowing($("transcript"), () => {
         const css = r.final ? (r.addressed ? "addressed" : "") : "interim";
         if (r.final || !$("transcript").lastChild?.classList?.contains("interim")) {
           $("transcript").insertAdjacentHTML("beforeend", "<div></div>");
@@ -136,8 +144,7 @@
         line.className = css;
         const speed = r.final ? (r.early ? ` ⚡${r.waitMs} ms` : ` (${r.waitMs} ms)`) : "";
         line.textContent = `${r.final ? "✓" : "…"} ${r.text}${r.final ? (r.addressed ? "  [adresat]" : "  [ignorat]") : ""}${speed}`;
-        $("transcript").scrollTop = 1e9;
-      });
+      }));
       setInterval(() => $("speaking").classList.toggle("on", isSpeaking()), 150);
       $("start").disabled = true;
       log("voce pornită");

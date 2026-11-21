@@ -158,6 +158,16 @@ def request_after_answer(text: str) -> Optional[str]:
     return rest
 
 
+def is_plain_answer(text: str) -> bool:
+    """True when ``text`` is only a yes / no with polite words ("da", "da, te rog", "nu, mersi").
+
+    False when it carries a request of its own, even one that starts like a yes:
+    "pune muzică" ("pune" counts as yes for a music offer), "ok, cât mai e?".
+    """
+    rest = _ANSWER_LEAD.sub("", text or "", count=1).strip(" ,.;:!?-")
+    return not any(len(w) >= 3 and w not in _NOT_A_REQUEST for w in normalize(rest).split())
+
+
 def interpret(event: InputEvent, fatigue_dialog: bool = False) -> Optional[AnswerValue]:
     """Interpret one input on any channel (see module docstring for the mapping)."""
     if event.channel == "voice":

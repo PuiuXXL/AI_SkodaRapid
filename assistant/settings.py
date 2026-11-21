@@ -108,11 +108,14 @@ class LLMSettings:
         provider: ``"gemini"`` or ``"offline"`` (fixed texts only).
         api_key: The Gemini API key from ``.env``, or ``""`` when missing.
         model: The model name (e.g. a Gemini Flash model), or ``""`` when missing.
+        backup_model: Model used for the one retry after a temporary error (503, 429),
+            or ``""`` to retry on ``model``.
     """
 
     provider: str
     api_key: str
     model: str
+    backup_model: str = ""
 
     @property
     def usable(self) -> bool:
@@ -123,8 +126,9 @@ class LLMSettings:
 def llm_settings() -> LLMSettings:
     """Resolve the LLM settings from ``.env`` first, then ``assistant.yaml``.
 
-    ``.env`` variables: ``LLM_PROVIDER`` (``gemini``), ``LLM_API_KEY``, ``LLM_MODEL``.
-    Empty variables fall back to ``llm.default_provider`` / ``llm.default_model``.
+    ``.env`` variables: ``LLM_PROVIDER`` (``gemini``), ``LLM_API_KEY``, ``LLM_MODEL``,
+    optional ``LLM_BACKUP_MODEL``. Empty variables fall back to ``llm.default_provider`` /
+    ``llm.default_model`` / ``llm.backup_model``.
 
     Returns:
         The :class:`LLMSettings` (never raises; missing values are empty strings).
@@ -132,7 +136,8 @@ def llm_settings() -> LLMSettings:
     provider = (os.getenv("LLM_PROVIDER") or cfg("llm", "default_provider", default="gemini")).strip().lower()
     api_key = (os.getenv("LLM_API_KEY") or "").strip()
     model = (os.getenv("LLM_MODEL") or cfg("llm", "default_model", default="") or "").strip()
-    return LLMSettings(provider=provider, api_key=api_key, model=model)
+    backup_model = (os.getenv("LLM_BACKUP_MODEL") or cfg("llm", "backup_model", default="") or "").strip()
+    return LLMSettings(provider=provider, api_key=api_key, model=model, backup_model=backup_model)
 
 
 def poi_categories() -> list[str]:

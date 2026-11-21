@@ -34,22 +34,52 @@ llm:
   temperature: 0.2
   # Upper bound for the generated JSON. Answers are tiny (<= 3 short actions).
   max_output_tokens: 400
-  # Gemini "thinking" control. Leave BOTH null to use the model's default (tested:
-  # gemini-3.5-flash-lite answers in ~1.4 s with both null). Gemini 3.x models
+  # Gemini "thinking" control for the main model (LLM_MODEL). Gemini 3.x models
   # reject thinking_budget (HTTP 400) and some reject level "minimal"; set at most
-  # one of them only if a model needs it. A rejected value makes every call fail
-  # fast with "llm_error" and the fixed fallback texts are used - check the log.
+  # one of them. A rejected value makes every call fail fast with "llm_error" and
+  # the fixed fallback texts are used - check the log.
+  # Tested 2026-11-21 with the real prompt (paid tier): gemini-3.5-flash-lite with
+  # the default (null) timed out or took ~8 s; with level "low" it answered in
+  # 0.7-1.6 s, all answers correct.
   thinking_budget: null
-  thinking_level: null
+  thinking_level: low
+  # One retry on a temporary Gemini error (503 = Google overloaded, 429 = rate limit,
+  # 500/502/504), inside the SAME timeout_s deadline: only if nothing was spoken yet
+  # and at least min_remaining_s is left; otherwise the fixed texts are used as before.
+  retry:
+    enabled: true
+    min_remaining_s: 1.0
+  # Model used for that retry (LLM_BACKUP_MODEL in .env overrides it). Overload is
+  # usually per model, so a different Flash model often answers at once. Empty or
+  # null = retry on the main model.
+  # Tested 2026-11-21: gemini-3.1-flash-lite answered in 0.8-1.2 s with its default
+  # thinking, the most consistent (the retry only has what is left of timeout_s).
+  # Rejected: gemini-2.5-flash (404 NOT_FOUND although listed), gemini-3.5-flash and
+  # gemini-3.6-flash (2-3.5 s, too slow for a retry).
+  backup_model: gemini-3.1-flash-lite
+  # Thinking settings for the backup model only (same rules as above). null = the
+  # model's default, which is fast for 3.1-flash-lite. For a 2.5 model use
+  # thinking_budget 0 instead.
+  backup_thinking_budget: null
+  backup_thinking_level: null
 
 # -----------------------------------------------------------------------------
 # Speaking rules (plan 4.D "Regula de formă", section 5)
 # -----------------------------------------------------------------------------
 speech:
-  # Maximum words in anything said to the driver (speak.text / ask.question).
-  max_words_to_driver: 15
-  # Maximum words for anything said to a passenger (looser, still short).
-  max_words_to_passenger: 25
+  # Maximum words in anything said to the driver (speak.text / ask.question), all
+  # sentences of one text counted together. Raised from 15 (plan 4.D) to 30 on
+  # 2026-11-21: 15 rejected normal conversational answers. The LLM prompt gets the
+  # same number ({max_words} in prompts/system.md).
+  max_words_to_driver: 30
+  # Maximum words for anything said to a passenger (never stricter than the driver's).
+  max_words_to_passenger: 30
+  # After a STATEMENT that answers the driver (driver_speech, no question in the answer),
+  # the assistant adds "Te mai ajut cu ceva?" (texts: fallback.follow_up) so the dialog
+  # window opens and the driver can go on without the wake word. "Nu" / "nimic" / "gata"
+  # -> silence and the browser stops listening without the wake word. Every time for now.
+  follow_up:
+    enabled: true
   # Dialog window after a question, in seconds: voice is accepted without the
   # assistant's name while it is open (plan E1). Core opens it on speak_done.
   dialog_window_s: 6
@@ -89,7 +119,11 @@ memory:
 # -----------------------------------------------------------------------------
 tts:
   voices:
-    ro: ro-RO-AlinaNeural      # alternative: ro-RO-EmilNeural
+    # Male voice on purpose: the browser's offline fallback on Windows is also male
+    # ("Microsoft Andrei"), so the voice does not switch between sentences when one
+    # edge-tts sentence fails. After changing it, regenerate the clips:
+    # .venv/Scripts/python integrations/audio_clips.py --force
+    ro: ro-RO-EmilNeural       # alternative: ro-RO-AlinaNeural (female)
     en: en-US-AvaMultilingualNeural
   rate: "+5%"                  # slightly faster than default, keeps sentences short
   alarm_rate: "+15%"           # alarm clips are urgent
