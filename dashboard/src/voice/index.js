@@ -35,6 +35,8 @@ export const DEFAULT_OPTIONS = {
   preloadClips: [],              // e.g. ["/sounds/clips/alarm_andrei.mp3", ...]
   clipsManifestUrl: "/sounds/clips/clips.json",
   enableOnset: true,
+  quickAnswerMs: 300,            // short answers ("da", "nu", "7") sent after 300 ms of stable text
+  earlyFinalMs: 800,             // other addressed requests sent after 800 ms of stable text (0 = off)
   onStatus: () => {},            // diagnostics callback (string), e.g. log it in a dev panel
 };
 
@@ -58,6 +60,8 @@ class VoiceController {
       lang: this.options.lang,
       wakeWords: this.options.wakeWords,
       isDialogOpen: () => this.isDialogOpen(),
+      quickAnswerMs: this.options.quickAnswerMs,
+      earlyFinalMs: this.options.earlyFinalMs,
       onResult: (result) => this._transcript(result),
       onError: (error) => {
         console.warn("speech recognition error:", error);
@@ -159,7 +163,10 @@ class VoiceController {
   _transcript(result) {
     for (const listener of this.transcriptListeners) listener(result);
     if (result.final) {
-      this._send({ type: "speech", text: result.text, raw: result.raw, final: true, addressed: result.addressed, confidence: result.confidence, ts: result.ts });
+      // early: null (Chrome's final), "quick" (short answer) or "stable" (unchanged text);
+      // wait_ms: how long after the last change the result was sent (latency diagnostics).
+      this._send({ type: "speech", text: result.text, raw: result.raw, final: true, addressed: result.addressed,
+                   early: result.early, wait_ms: result.waitMs, confidence: result.confidence, ts: result.ts });
     }
   }
 

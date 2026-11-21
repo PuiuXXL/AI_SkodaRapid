@@ -8,7 +8,10 @@ How speech reaches the speakers:
    an id and a URL ``/tts/<id>.mp3``. Synthesis of every sentence starts
    immediately in the background (prefetch).
 3. The browser voice player (``dashboard/src/voice/player.js``) plays the sentences
-   one by one, fetching ``/tts/<id>.mp3`` from :mod:`assistant.router`.
+   one by one, fetching ``/tts/<id>.mp3`` from :mod:`assistant.router`. The audio is
+   **streamed**: the browser starts playing the first chunk while edge-tts is still
+   generating the rest (measured: first chunk after ~0.9-1.5 s, full sentence
+   ~0.4 s later).
 
 Playing sentence by sentence is what lets the assistant stop mid-phrase when the
 driver looks in the mirror and resume with "...cum ziceam" (plan D4).
@@ -23,7 +26,7 @@ import asyncio
 import hashlib
 import logging
 from collections import OrderedDict
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 
 import edge_tts
 
@@ -43,35 +46,97 @@ def default_voice() -> str:
     return cfg("tts", "voices", language, default="ro-RO-AlinaNeural")
 
 
-async def synthesize(text: str, voice: Optional[str] = None, rate: Optional[str] = None) -> bytes:
-    """Synthesize ``text`` to mp3 bytes with edge-tts (needs internet).
+async def audio_chunks(text: str, voice: Optional[str] = None, rate: Optional[str] = None) -> AsyncIterator[bytes]:
+    """Stream mp3 chunks for ``text`` from edge-tts as they are generated (needs internet).
 
     Args:
         text: The sentence to say.
         voice: edge-tts voice name; defaults to :func:`default_voice`.
         rate: Speed such as ``"+5%"``; defaults to ``tts.rate``.
 
-    Returns:
-        The mp3 audio.
+    Yields:
+        Raw mp3 bytes, in order.
+    """
+    communicate = edge_tts.Communicate(text, voice or default_voice(), rate=rate or cfg("tts", "rate", default="+0%"))
+    async for chunk in communicate.stream():
+        if chunk.get("type") == "audio" and chunk.get("data"):
+            yield chunk["data"]
+
+
+async def synthesize(text: str, voice: Optional[str] = None, rate: Optional[str] = None) -> bytes:
+    """Synthesize ``text`` to complete mp3 bytes (used for the pre-generated clips).
 
     Raises:
         RuntimeError: When edge-tts returns no audio.
     """
-    communicate = edge_tts.Communicate(text, voice or default_voice(), rate=rate or cfg("tts", "rate", default="+0%"))
     audio = bytearray()
-    async for chunk in communicate.stream():
-        if chunk.get("type") == "audio":
-            audio.extend(chunk["data"])
+    async for chunk in audio_chunks(text, voice, rate):
+        audio.extend(chunk)
     if not audio:
         raise RuntimeError(f"edge-tts returned no audio for {text!r}")
     return bytes(audio)
+
+
+class _Synthesis:
+    """One sentence being synthesized: a growing buffer that several readers can follow.
+
+    The producer task appends chunks; readers (HTTP responses) yield what is already
+    there and wait for more until ``done``. This lets the prefetch started by
+    :func:`speak_message` and the browser's request share one edge-tts call.
+    """
+
+    def __init__(self) -> None:
+        """Empty buffer, not started."""
+        self.buffer = bytearray()
+        self.done = False
+        self.error: Optional[BaseException] = None
+        self.changed = asyncio.Condition()
+        self.task: Optional[asyncio.Task] = None
+
+    async def run(self, text: str, voice: str, rate: str) -> None:
+        """Produce the audio (runs as a task); errors are kept for the readers."""
+        try:
+            async for chunk in audio_chunks(text, voice, rate):
+                async with self.changed:
+                    self.buffer.extend(chunk)
+                    self.changed.notify_all()
+            if not self.buffer:
+                raise RuntimeError(f"edge-tts returned no audio for {text!r}")
+        except Exception as exc:  # noqa: BLE001 - reported to every reader
+            self.error = exc
+        finally:
+            async with self.changed:
+                self.done = True
+                self.changed.notify_all()
+
+    async def read(self) -> AsyncIterator[bytes]:
+        """Yield the audio from the start, following the producer until it finishes.
+
+        Raises:
+            RuntimeError: If synthesis failed before any audio was produced.
+        """
+        sent = 0
+        while True:
+            async with self.changed:
+                while sent >= len(self.buffer) and not self.done:
+                    await self.changed.wait()
+                chunk = bytes(self.buffer[sent:])
+                finished = self.done
+            if chunk:
+                sent += len(chunk)
+                yield chunk
+            elif finished:
+                if self.error is not None and sent == 0:
+                    raise RuntimeError(str(self.error)) from self.error
+                return
 
 
 class SpeechCache:
     """Registry of sentences to say, with an in-memory LRU cache of their audio.
 
     A sentence is identified by a short hash of (voice, rate, text), so the same
-    sentence is synthesized only once ("Ok." is cached forever in practice).
+    sentence is synthesized only once ("Ok." is cached forever in practice). Audio
+    can be read while it is still being generated (:meth:`stream`).
     """
 
     def __init__(self, size: Optional[int] = None) -> None:
@@ -79,7 +144,7 @@ class SpeechCache:
         self._size = size or int(cfg("tts", "cache_size", default=256))
         self._texts: dict[str, tuple[str, str, str]] = {}
         self._audio: OrderedDict[str, bytes] = OrderedDict()
-        self._pending: dict[str, asyncio.Task] = {}
+        self._jobs: dict[str, _Synthesis] = {}
 
     @staticmethod
     def make_id(text: str, voice: str, rate: str) -> str:
@@ -110,44 +175,63 @@ class SpeechCache:
     def prefetch(self, speech_id: str) -> None:
         """Start synthesizing in the background (needs a running event loop)."""
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
             return  # no loop (e.g. called from sync code): audio is made on first request
-        if speech_id in self._audio or speech_id in self._pending or speech_id not in self._texts:
+        if speech_id in self._audio or speech_id not in self._texts:
             return
-        self._pending[speech_id] = loop.create_task(self._synthesize(speech_id))
+        self._job(speech_id)
+
+    def _job(self, speech_id: str) -> _Synthesis:
+        """The running synthesis for ``speech_id`` in the current event loop (started if needed)."""
+        job = self._jobs.get(speech_id)
+        loop = asyncio.get_running_loop()
+        if job is None or job.task is None or job.task.get_loop() is not loop:
+            # No synthesis yet, or one started on another event loop (test clients,
+            # core and router in different loops): start a fresh one here.
+            job = _Synthesis()
+            text, voice, rate = self._texts[speech_id]
+            job.task = loop.create_task(job.run(text, voice, rate))
+            job.task.add_done_callback(lambda _task, sid=speech_id, j=job: self._finished(sid, j))
+            self._jobs[speech_id] = job
+        return job
+
+    def _finished(self, speech_id: str, job: _Synthesis) -> None:
+        """Move a completed synthesis into the LRU cache (failures are not cached)."""
+        if self._jobs.get(speech_id) is job:
+            del self._jobs[speech_id]
+        if job.error is None and job.buffer:
+            self._audio[speech_id] = bytes(job.buffer)
+            while len(self._audio) > self._size:
+                self._audio.popitem(last=False)
+
+    async def stream(self, speech_id: str) -> AsyncIterator[bytes]:
+        """Yield the mp3 of a registered sentence, starting before synthesis has finished.
+
+        Raises:
+            KeyError: Unknown id.
+            RuntimeError: Synthesis failed before any audio was produced.
+        """
+        if speech_id in self._audio:
+            self._audio.move_to_end(speech_id)
+            yield self._audio[speech_id]
+            return
+        if speech_id not in self._texts:
+            raise KeyError(speech_id)
+        async for chunk in self._job(speech_id).read():
+            yield chunk
 
     async def get(self, speech_id: str) -> bytes:
-        """Return the mp3 for a registered sentence, synthesizing it if needed.
+        """Return the complete mp3 of a registered sentence (waits for the whole synthesis).
 
         Raises:
             KeyError: Unknown id.
             RuntimeError: Synthesis failed (no internet, invalid voice...).
         """
-        if speech_id in self._audio:
-            self._audio.move_to_end(speech_id)
-            return self._audio[speech_id]
-        if speech_id not in self._texts:
-            raise KeyError(speech_id)
-        task = self._pending.get(speech_id)
-        if task is None or task.get_loop() is not asyncio.get_running_loop():
-            # No prefetch running, or it was started on another event loop (can happen
-            # when core and the router run in different loops / test clients).
-            task = asyncio.ensure_future(self._synthesize(speech_id))
-            self._pending[speech_id] = task
-        return await asyncio.shield(task)
-
-    async def _synthesize(self, speech_id: str) -> bytes:
-        """Synthesize one registered sentence and store it in the LRU cache."""
-        text, voice, rate = self._texts[speech_id]
-        try:
-            audio = await synthesize(text, voice, rate)
-        finally:
-            self._pending.pop(speech_id, None)
-        self._audio[speech_id] = audio
-        while len(self._audio) > self._size:
-            self._audio.popitem(last=False)
-        return audio
+        audio = bytearray()
+        async for chunk in self.stream(speech_id):
+            audio.extend(chunk)
+        return bytes(audio)
 
 
 #: Process-wide cache shared by core (registration) and the router (serving).

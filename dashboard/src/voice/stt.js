@@ -28,6 +28,17 @@ export function normalizeText(text) {
     .trim();
 }
 
+/**
+ * Words that make up a short answer (normalised): yes / no, KSS numbers, quiz control.
+ * Matches assistant/answers.py (YES_WORDS, NO_WORDS, KSS_WORDS) and assistant/dialog.py.
+ */
+export const QUICK_ANSWER_WORDS = new Set([
+  "da", "nu", "ok", "okay", "sigur", "bine", "desigur", "hai", "te", "rog", "multumesc", "corect", "exact",
+  "gata", "stop", "ajunge", "quiz", "chiz", "podcast",
+  "1", "2", "3", "4", "5", "6", "7", "8", "9",
+  "unu", "una", "doi", "doua", "trei", "patru", "cinci", "sase", "sapte", "opt", "noua",
+]);
+
 export class SpeechInput {
   /**
    * @param {object} options
@@ -39,8 +50,12 @@ export class SpeechInput {
    * @param {(error: string) => void} [options.onError] Called on errors (e.g. "not-allowed", "network", "audio-capture").
    * @param {(status: string) => void} [options.onStatus] Diagnostics: "listening", "microphone audio received",
    *        "voice detected", "stopped" (shown in the dev page log).
+   * @param {number} [options.quickAnswerMs=300] A short answer ("da", "nu", "7") that stays unchanged this
+   *        long while the dialog window is open is sent immediately (0 = wait for Chrome's final result).
+   * @param {number} [options.earlyFinalMs=800] Any other addressed utterance that stays unchanged this long
+   *        is sent as final (0 = disabled). Lower = faster, but a long pause mid-sentence may cut the request.
    */
-  constructor({ lang = "ro-RO", wakeWords = ["drivemate", "drive mate", "copilot"], isDialogOpen = () => false, onResult, onError = () => {}, onStatus = () => {} }) {
+  constructor({ lang = "ro-RO", wakeWords = ["drivemate", "drive mate", "copilot"], isDialogOpen = () => false, onResult, onError = () => {}, onStatus = () => {}, quickAnswerMs = 300, earlyFinalMs = 800 }) {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Recognition) {
       throw new Error("Web Speech API not available: use Google Chrome.");
@@ -53,6 +68,12 @@ export class SpeechInput {
     this.onStatus = onStatus;
     this.running = false; // start() called and stop() not called
     this.paused = false;  // temporarily muted while the assistant speaks
+    this.quickAnswerMs = quickAnswerMs;
+    this.earlyFinalMs = earlyFinalMs;
+    this._early = new Map();      // result index -> text already sent early
+    this._dialogAtStart = new Map(); // result index -> dialog window open when it started
+    this._earlyTimer = null;
+    this._lastChange = performance.now(); // last time an interim result changed
 
     this.recognition = new Recognition();
     this.recognition.lang = lang;
@@ -66,7 +87,13 @@ export class SpeechInput {
     };
     this.recognition.onerror = (event) => this._handleError(event);
     // Diagnostics: these tell whether the microphone and the recogniser really work.
-    this.recognition.onstart = () => this.onStatus(`listening (${lang})`);
+    this.recognition.onstart = () => {
+      // Result indexes restart with every recognition session.
+      this._early.clear();
+      this._dialogAtStart.clear();
+      this._cancelEarly();
+      this.onStatus(`listening (${lang})`);
+    };
     this.recognition.onaudiostart = () => this.onStatus("microphone audio received");
     this.recognition.onspeechstart = () => this.onStatus("voice detected");
   }
@@ -103,13 +130,20 @@ export class SpeechInput {
    * @param {string} text
    * @returns {{addressed: boolean, text: string}}
    */
-  addressing(text) {
+  addressing(text, startedInDialog = false) {
     const norm = normalizeText(text);
     const wake = this.wakeWords.find((word) => norm.includes(word));
     if (wake) {
-      return { addressed: true, text: norm.replace(wake, "").trim() || norm };
+      // Remove only the wake word (and the comma after it) from the ORIGINAL text, so the
+      // LLM gets the request exactly as recognised, diacritics included:
+      // "Copilot, amintește-mi..." -> "amintește-mi...".
+      const pattern = new RegExp(`\\b${wake.split(" ").join("[\\s-]*")}\\b[\\s,.!?:;-]*`, "i");
+      const stripped = text.replace(pattern, "").trim();
+      return { addressed: true, text: stripped || text };
     }
-    return { addressed: this.isDialogOpen(), text };
+    // In the dialog window (or started while it was open, even if Chrome finalised the
+    // text after it closed): no wake word needed.
+    return { addressed: this.isDialogOpen() || startedInDialog, text };
   }
 
   _safeStart() {
@@ -126,22 +160,78 @@ export class SpeechInput {
     }
   }
 
+  /**
+   * True for a short answer to a question ("da", "nu", "șapte", "gata"...), which can be
+   * acted upon as soon as it is stable instead of waiting for Chrome's final result.
+   * @param {string} text
+   */
+  isQuickAnswer(text) {
+    const words = normalizeText(text).split(" ").filter(Boolean);
+    return words.length > 0 && words.length <= 3 && words.every((word) => QUICK_ANSWER_WORDS.has(word));
+  }
+
   _handleResult(event) {
     if (this.paused) return;
+    const now = performance.now();
     for (let i = event.resultIndex; i < event.results.length; i += 1) {
       const result = event.results[i];
       const raw = result[0].transcript.trim();
       if (!raw) continue;
-      const { addressed, text } = this.addressing(raw);
-      this.onResult({
-        text: result.isFinal ? text : raw,
-        raw,
-        final: result.isFinal,
-        addressed,
-        confidence: result[0].confidence || 0,
-        ts: (performance.timeOrigin + performance.now()) / 1000,
-      });
+      // Remember whether the dialog window was open when this utterance STARTED: Chrome
+      // may publish the final text 1-3 s later, after the 6 s window has closed.
+      if (!this._dialogAtStart.has(i)) this._dialogAtStart.set(i, this.isDialogOpen());
+      const startedInDialog = this._dialogAtStart.get(i);
+      const { addressed, text } = this.addressing(raw, startedInDialog);
+      if (result.isFinal) {
+        this._dialogAtStart.delete(i);
+        this._cancelEarly();
+        if (this._early.has(i)) {
+          const sent = normalizeText(this._early.get(i));
+          this._early.delete(i);
+          const extra = normalizeText(raw).replace(sent, "").trim().split(" ").filter(Boolean);
+          // Same text (or one extra word) as already sent early: do not send it twice.
+          if (extra.length <= 1) continue;
+          // The driver kept talking after a long pause: send the full sentence as well.
+        }
+        this._emit({ text, raw, final: true, addressed, early: null, waitMs: Math.round(now - this._lastChange), confidence: result[0].confidence });
+      } else {
+        this._lastChange = now;
+        this._emit({ text: raw, raw, final: false, addressed, early: null, waitMs: 0, confidence: result[0].confidence });
+        this._scheduleEarly(i, raw, startedInDialog);
+      }
     }
+  }
+
+  /**
+   * Early finalisation. Chrome publishes the final result only after it hears enough
+   * silence (~0.5-1 s after the last word). If an ADDRESSED interim result stays unchanged
+   * for `quickAnswerMs` (short answer while the dialog window is open) or `earlyFinalMs`
+   * (any other addressed request), it is sent as final right away; Chrome's real final
+   * for the same result is then ignored. Set either delay to 0 to disable that path.
+   */
+  _scheduleEarly(index, raw, startedInDialog = false) {
+    this._cancelEarly();
+    const { addressed, text } = this.addressing(raw, startedInDialog);
+    if (!addressed || this._early.has(index)) return;
+    const quick = (this.isDialogOpen() || startedInDialog) && this.isQuickAnswer(raw);
+    // "Copilot..." followed by a pause: only the name so far, wait for the request itself.
+    if (!quick && normalizeText(text).split(" ").filter(Boolean).length < 2) return;
+    const delay = quick ? this.quickAnswerMs : this.earlyFinalMs;
+    if (!delay) return;
+    this._earlyTimer = setTimeout(() => {
+      if (this.paused || this._early.has(index)) return;
+      this._early.set(index, raw);
+      this._emit({ text, raw, final: true, addressed: true, early: quick ? "quick" : "stable", waitMs: delay });
+    }, delay);
+  }
+
+  _cancelEarly() {
+    clearTimeout(this._earlyTimer);
+    this._earlyTimer = null;
+  }
+
+  _emit({ text, raw, final, addressed, early, waitMs, confidence = 0 }) {
+    this.onResult({ text, raw, final, addressed, early, waitMs, confidence: confidence || 0, ts: (performance.timeOrigin + performance.now()) / 1000 });
   }
 
   _handleError(event) {

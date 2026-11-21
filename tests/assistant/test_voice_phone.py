@@ -62,24 +62,42 @@ def test_speak_message_uses_clip_instead_of_tts():
     assert message["clip_url"] == "/sounds/clips/refusal_ack.mp3" and message["sentences"] == []
 
 
-def test_speech_cache_synthesizes_once(monkeypatch):
+def test_speech_cache_streams_one_synthesis_to_all_readers(monkeypatch):
     calls = []
 
-    async def fake_synthesize(text, voice=None, rate=None):
+    async def fake_chunks(text, voice=None, rate=None):
         calls.append(text)
-        return b"mp3"
+        for part in (b"mp", b"3"):
+            await asyncio.sleep(0.01)
+            yield part
 
-    monkeypatch.setattr("assistant.tts.synthesize", fake_synthesize)
+    monkeypatch.setattr("assistant.tts.audio_chunks", fake_chunks)
     cache = SpeechCache(size=2)
     speech_id = cache.register("Salut.")
 
-    async def twice():
-        return await asyncio.gather(cache.get(speech_id), cache.get(speech_id))
+    async def scenario():
+        cache.prefetch(speech_id)                       # started by speak_message
+        both = await asyncio.gather(cache.get(speech_id), cache.get(speech_id))
+        streamed = [chunk async for chunk in cache.stream(speech_id)]   # now from the LRU cache
+        return both, streamed
 
-    assert asyncio.run(twice()) == [b"mp3", b"mp3"]
-    assert calls == ["Salut."]
+    both, streamed = asyncio.run(scenario())
+    assert both == [b"mp3", b"mp3"] and streamed == [b"mp3"]
+    assert calls == ["Salut."]                          # one edge-tts call for everyone
     with pytest.raises(KeyError):
         asyncio.run(cache.get("unknown"))
+
+
+def test_speech_cache_reports_failure(monkeypatch):
+    async def broken(text, voice=None, rate=None):
+        raise OSError("no internet")
+        yield b""  # pragma: no cover - makes this an async generator
+
+    monkeypatch.setattr("assistant.tts.audio_chunks", broken)
+    cache = SpeechCache()
+    speech_id = cache.register("Salut.")
+    with pytest.raises(RuntimeError):
+        asyncio.run(cache.get(speech_id))
 
 
 # ----------------------------------------------------------------- router

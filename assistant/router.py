@@ -18,9 +18,10 @@ Routes:
 from __future__ import annotations
 
 import logging
+from typing import AsyncIterator
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from assistant import music
 from assistant.tts import speech_cache
@@ -32,20 +33,33 @@ router = APIRouter(tags=["assistant"])
 
 @router.get("/tts/{speech_id}.mp3")
 async def get_tts(speech_id: str) -> Response:
-    """Return the mp3 of a registered sentence.
+    """Stream the mp3 of a registered sentence while it is being synthesized.
+
+    The first chunk is awaited before the response starts, so a failure that happens
+    before any audio still becomes a proper HTTP error.
 
     Raises:
         HTTPException: 404 for an unknown id, 502 if synthesis failed (e.g. no
             internet; the browser player then falls back to ``speechSynthesis``).
     """
+    if not speech_cache.known(speech_id):
+        raise HTTPException(status_code=404, detail="unknown speech id")
+    chunks = speech_cache.stream(speech_id)
     try:
-        audio = await speech_cache.get(speech_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="unknown speech id") from None
+        first = await chunks.__anext__()
+    except StopAsyncIteration:
+        raise HTTPException(status_code=502, detail="tts returned no audio") from None
     except Exception as exc:  # noqa: BLE001 - any synthesis failure = 502
         log.warning("TTS failed for %s: %s", speech_id, exc)
         raise HTTPException(status_code=502, detail="tts failed") from exc
-    return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "max-age=3600"})
+
+    async def body() -> AsyncIterator[bytes]:
+        """The first chunk, then the rest as it arrives."""
+        yield first
+        async for chunk in chunks:
+            yield chunk
+
+    return StreamingResponse(body(), media_type="audio/mpeg", headers={"Cache-Control": "max-age=3600"})
 
 
 @router.get("/media/{track_id}.mp3")
