@@ -33,8 +33,13 @@ def test_default_config_loads() -> None:
     assert cfg.output.mjpeg_port == 8001
 
 
-def test_passenger_camera_disabled_by_default() -> None:
-    assert load_config().cameras.passenger.enabled is False
+def test_both_cameras_on_by_usb_id() -> None:
+    """Both webcams run on one laptop (docs/benchmark/cameras-*.md); each is named by its USB id, never an index."""
+    cams = load_config().cameras
+    assert cams.driver.enabled and cams.passenger.enabled
+    assert str(cams.driver.device).startswith("usb:") and str(cams.passenger.device).startswith("usb:")
+    assert cams.driver.device != cams.passenger.device
+    assert cams.driver.fourcc == cams.passenger.fourcc == "MJPG"  # two streams on one root hub need MJPG
 
 
 def test_key_decisions_are_in_yaml() -> None:

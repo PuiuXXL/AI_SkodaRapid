@@ -9,8 +9,8 @@ the embedding is the normalised mean of ``identity.enroll_frames`` (10) good fra
 Enroll each person **once per camera**: the two cameras see the face differently.
 
 The embedding is biometric data: it stays on this laptop (``profiles/*/face*.npy`` is gitignored), is never committed
-and never sent anywhere. No image is stored. Settings: ``perception/config/pending/modules.yaml`` (section
-``identity``) until it moves into ``perception.yaml``; the camera comes from ``perception.yaml``.
+and never sent anywhere. No image is stored. Settings: ``perception/config/perception.yaml`` (section
+``identity``, built by ``perception/module_config.py``) and the camera from the same file.
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import cv2
-import yaml
 
 from perception.capture import LatestFrameCamera
 from perception.config import REPO_ROOT, load_config
@@ -34,22 +33,14 @@ from perception.identity import (
     EnrollResult,
     FaceGallery,
     FaceIdentifier,
-    IdentityConfig,
     embedding_path,
     safe_name,
 )
 from perception.log import configure_logging
+from perception.module_config import identity_config
 
-PENDING = REPO_ROOT / "perception" / "config" / "pending" / "modules.yaml"
 PROFILES = REPO_ROOT / "profiles"
 WINDOW = "DriveMate enroll (q to abort)"
-
-
-def identity_config(path: Path) -> IdentityConfig:
-    if not path.exists():
-        return IdentityConfig()
-    section = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("identity") or {}
-    return IdentityConfig.from_mapping(section)
 
 
 def _device(value: str) -> int | str:
@@ -73,7 +64,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--force", action="store_true", help="overwrite an existing embedding for this camera")
     p.add_argument("--no-preview", action="store_true", help="no OpenCV window (status on stdout only)")
     p.add_argument("--config", type=Path, default=None, help="perception.yaml (camera settings)")
-    p.add_argument("--modules-config", type=Path, default=PENDING, help="pending modules.yaml (identity settings)")
     args = p.parse_args(argv)
 
     configure_logging("WARNING", json=False)
@@ -82,7 +72,8 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return 1
-    icfg = identity_config(args.modules_config)
+    cfg = load_config(args.config)
+    icfg = identity_config(cfg)
     if args.frames is not None:
         icfg = dataclasses.replace(icfg, enroll_frames=args.frames)
     out = embedding_path(PROFILES, name, args.camera)
@@ -90,7 +81,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{out} exists; use --force to replace it", file=sys.stderr)
         return 1
 
-    cfg = load_config(args.config)
     cam_cfg = getattr(cfg.cameras, args.camera)
     if args.device is not None:
         cam_cfg = cam_cfg.model_copy(update={"device": _device(args.device)})
@@ -141,8 +131,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"saved {path.relative_to(REPO_ROOT)} ({result.frames} frames, consistency {result.consistency:.2f})")
     clash = similar_profiles(result, name, args.camera, icfg.cosine_threshold)
     for other, sim in clash:
-        print(f"warning: similar to profile '{other}' (cosine {sim:.2f} >= {icfg.cosine_threshold}): re-enroll "
-              "both with better light, or they may be confused", file=sys.stderr)
+        print(
+            f"warning: similar to profile '{other}' (cosine {sim:.2f} >= {icfg.cosine_threshold}): re-enroll "
+            "both with better light, or they may be confused",
+            file=sys.stderr,
+        )
     return 0
 
 

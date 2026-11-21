@@ -8,7 +8,6 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 import pytest
-import yaml
 
 from perception.identity import (
     Enroller,
@@ -20,7 +19,6 @@ from perception.identity import (
     safe_name,
 )
 
-PENDING = Path(__file__).resolve().parents[2] / "perception" / "config" / "pending" / "modules.yaml"
 H, W = 360, 640
 _BASE = {k: normalize(np.random.default_rng(k).normal(size=128)) for k in range(1, 5)}
 
@@ -69,12 +67,6 @@ class FakeRecognizer:
 def identifier(gallery: FaceGallery | None = None, rows: list[list[float]] | None = None) -> FaceIdentifier:
     gallery = gallery if gallery is not None else FaceGallery("driver", {"andrei": _BASE[1], "maria": _BASE[2]})
     return FaceIdentifier(gallery=gallery, detector=FakeDetector(rows), recognizer=FakeRecognizer())
-
-
-def test_pending_yaml_matches_defaults() -> None:
-    section = yaml.safe_load(PENDING.read_text(encoding="utf-8"))["identity"]
-    assert IdentityConfig.from_mapping(section) == IdentityConfig()
-    assert IdentityConfig().cosine_threshold == pytest.approx(0.363)
 
 
 def test_gallery_loads_per_camera_with_fallback(tmp_path: Path) -> None:

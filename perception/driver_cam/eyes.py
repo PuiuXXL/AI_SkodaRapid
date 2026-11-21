@@ -193,6 +193,11 @@ class EarReference:
         local = percentile([e for _, e in window], self.cfg.local_ref_percentile)
         return max(local, self.cfg.ref_floor_ratio * g)
 
+    def reset_local(self) -> None:
+        """Day <-> IR switch: the local references were learned on the other image; the global one stays."""
+        for window in self._local.values():
+            window.clear()
+
     def lose(self) -> None:
         """Face lost: the provisional baseline clock pauses; the local window ages out by time on its own."""
         self._last_valid_t = None
@@ -327,7 +332,8 @@ class EyeTracker:
         )
         threshold = self.cfg.drop_ratio_relaxed if out.relaxed else self.cfg.drop_ratio
         low, high = self.cfg.squint_ear_band
-        cnn = self._cnn_closed(face.eye_closed_p, reliable)
+        # eyes.cnn.enabled false: ignore p(closed) even when a frame carries it (recordings made with the CNN on)
+        cnn = self._cnn_closed(face.eye_closed_p, reliable) if self.cfg.cnn.enabled else None
         out.cnn_closed = None if cnn is None else round(cnn, 4)
         cnn_open = cnn is not None and cnn < self.cfg.cnn.open_max
         cnn_closed = cnn is not None and cnn >= self.cfg.cnn.closed_min
