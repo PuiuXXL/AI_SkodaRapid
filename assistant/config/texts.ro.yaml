@@ -64,6 +64,8 @@ fallback:
   # K3 / D3: the stop chosen by P2's rule, phrased as a question.
   stop_suggest: "Oprim la {poi} peste {km} km?"
   stop_suggest_with_task: "Oprim la {poi} peste {km} km? Iei și {task}."
+  # K4: a tourist sight near the map route, proposed as a break.
+  stop_suggest_attraction: "Peste {km} km e {poi}. Facem o pauză acolo?"
 
   # D5: one-sentence explanation of an alert (the explanation comes from P2).
   alert_explain: "Te-am atenționat: {explanation}."

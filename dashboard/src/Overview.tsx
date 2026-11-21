@@ -1,8 +1,7 @@
-import type { Reading, Trip, DashboardEvent } from "./types";
+import type { Reading, Trip } from "./types";
 import React from "react";
-import {Optic} from "./Optic";
 import {MeasureIcon} from "./MeasureIcon";
-import {fmt,time,words} from "./Panels";
+import {fmt} from "./Panels";
 
 export function AttentionGauge({value}: {value: Reading | undefined}){
   // Adapted from Vision UI Dashboard React's SatisfactionRate (MIT).
@@ -12,16 +11,6 @@ export function AttentionGauge({value}: {value: Reading | undefined}){
     <circle cx="60" cy="60" r="49" fill="none" stroke="var(--line)" strokeWidth="9"/>
     {progress!==null&&progress>0&&<circle cx="60" cy="60" r="49" pathLength="100" strokeDasharray={progress+" 100"} transform="rotate(-90 60 60)" fill="none" stroke="var(--accent)" strokeWidth="9" strokeLinecap="round"/>}
     </svg><div><strong>{fmt(value,"",100,0)}</strong><small>Atenție / 100</small></div></div>;
-}
-
-export function CameraStandby({onLive}: {onLive: () => void}){
-  return <div className="camera-standby">
-    <div className="viewfinder" aria-hidden="true"><i/><i/><i/><i/></div>
-    <div className="standby-info">
-      <div className="optical-field" aria-hidden="true"><Optic/></div>
-      <strong>Camera în așteptare</strong><button onClick={onLive}>Treci în Live</button>
-    </div>
-  </div>;
 }
 
 export function ScoreReading({label, icon, value}: {
@@ -46,12 +35,4 @@ export function TripStrip({trip}: {trip: Trip | undefined}){
   return <dl className="trip-strip">{readings.map(([label,icon,value]) =>
     <div key={label}><dt><MeasureIcon name={icon}/>{label}</dt><dd>{value}</dd></div>
   )}</dl>;
-}
-
-export function RecentEvents({events}: {events: DashboardEvent[]}){
-  return <section id="recent-events" className="recent-events"><div className="event-heading"><h2>Evenimente recente</h2><a href="#assistant">Asistent și jurnal</a></div>
-    {events.length?<ul>{events.slice(0,3).map((e,i)=><li key={e.ts+"-"+i} className={e.type==="alarm"?"alarm-event":""}>
-      <time>{time(e.ts)}</time><strong>{words(e.explanation??e.text??e.type)}</strong>{e.source&&<small>{words(e.source)}</small>}</li>)}</ul>:
-      <p>În așteptarea primului eveniment.</p>}
-  </section>;
 }

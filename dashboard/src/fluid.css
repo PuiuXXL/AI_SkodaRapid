@@ -53,8 +53,8 @@
 .driver-app button:hover:not(:disabled) { background:var(--fx-inset-strong); }
 .driver-app button:active:not(:disabled) { transform:scale(.985); }
 .driver-app button[aria-pressed=true] { background:var(--ui-accent); color:var(--ui-on-accent); }
-.driver-app .primary-action, .driver-app .fx-primary, .driver-app .standby-info button, .driver-app .history-selector button[aria-pressed=true] { background:var(--fx-hero); color:var(--fx-on-hero); font-weight:600; }
-.driver-app .primary-action:hover:not(:disabled), .driver-app .fx-primary:hover:not(:disabled), .driver-app .standby-info button:hover:not(:disabled) { background:var(--fx-hero); filter:brightness(1.08); }
+.driver-app .primary-action, .driver-app .fx-primary, .driver-app .history-selector button[aria-pressed=true] { background:var(--fx-hero); color:var(--fx-on-hero); font-weight:600; }
+.driver-app .primary-action:hover:not(:disabled), .driver-app .fx-primary:hover:not(:disabled) { background:var(--fx-hero); filter:brightness(1.08); }
 .driver-main input:not([type=checkbox]):not([type=range]), .driver-main textarea, .driver-main select, .driver-app select { background-color:var(--fx-inset); border-radius:12px; }
 .driver-app .app-header.desktop-sidebar, .driver-app .mobile-drawer .app-header { background:var(--ui-glass); backdrop-filter:blur(22px) saturate(1.1); -webkit-backdrop-filter:blur(22px) saturate(1.1); border:0; box-shadow:var(--fx-shadow); border-radius:26px; }
 .driver-app .page-link { border-radius:14px; }
@@ -63,7 +63,7 @@
 .workspace-topline { border-bottom:0; padding-bottom:8px; }
 .driver-heading { padding:18px 0 18px; }
 .driver-heading > small, .driver-main section > small, .fx-overview small { letter-spacing:.14em; color:var(--ui-subtle); font-size:11px; }
-.driver-main section, .contact-page section { border:0; background:var(--fx-card); box-shadow:var(--fx-shadow); border-radius:var(--ui-radius-lg); }
+.driver-main section { border:0; background:var(--fx-card); box-shadow:var(--fx-shadow); border-radius:var(--ui-radius-lg); }
 .driver-main .form-feedback, .connection-warning, .driving-notice { border:0; background:var(--fx-inset); border-radius:16px; }
 .driver-main .form-feedback[role=alert] { background:var(--ui-danger-dim); }
 .driver-app .safety-banner { border:0; border-radius:18px; background:linear-gradient(120deg,var(--ui-danger-dim),transparent 80%),var(--fx-card-solid); box-shadow:var(--fx-shadow); }
@@ -168,8 +168,6 @@
 .seat-feed figcaption { border-bottom:0; padding:12px 16px 8px; }
 .seat-feed figcaption small { padding:3px 9px; border-radius:999px; background:var(--fx-inset); letter-spacing:.08em; }
 .seat-feed .camera-stage { border-radius:16px; margin:0 8px 8px; background:var(--fx-inset); }
-.camera-standby { background:radial-gradient(ellipse at 50% 40%,var(--fx-inset-strong),transparent 70%); }
-.viewfinder i { border-color:var(--fx-ink-soft); opacity:.55; }
 .optical-field::before, .optical-field::after { border-color:var(--fx-track); }
 .trip-strip { gap:12px; margin:14px 0 0; }
 .trip-strip > div { border:0; border-radius:18px; background:var(--fx-card); box-shadow:var(--fx-shadow); padding:14px 16px; }
@@ -185,8 +183,7 @@
 .is-docked .seat-feed figcaption { padding:7px 12px 5px; font-size:12px; }
 .is-docked .seat-feed:last-of-type figcaption { padding-right:42px; }
 .is-docked .seat-feed .camera-stage { margin:0 5px 5px; border-radius:11px; }
-.is-docked .standby-info { display:grid; } .is-docked .standby-info strong { font-size:11px; color:var(--ui-subtle); font-weight:500; }
-.is-docked .standby-info button, .is-docked .optical-field { display:none; }
+.is-docked .optical-field { display:none; }
 .camera-pair .camera-return { border:0; width:28px; height:28px; min-height:28px; padding:0; top:6px; bottom:auto; right:6px; border-radius:9px; font-size:12px; background:var(--fx-hero); color:var(--fx-on-hero); }
 .monitor-page.has-camera-dock { padding-bottom:0; }
 
@@ -365,6 +362,43 @@
 
 .driver-app .theme-toggle[aria-pressed=true] { background:var(--fx-inset); color:var(--ui-text); }
 
-/* --- route map: neutral tiles that follow the theme (the older rule inverted them in both themes) ------------------ */
+/* --- account block (sidebar): connected profile + exit to the start page ----------------------------------------- */
+.account-block { display:flex; align-items:center; gap:10px; padding:8px; border-radius:16px; background:var(--fx-inset); min-width:0; }
+.account-avatar { display:grid; place-items:center; width:36px; height:36px; flex:none; border-radius:12px; background:var(--fx-hero); color:var(--fx-on-hero); font-weight:600; font-size:14px; }
+.account-caption { display:grid; min-width:0; flex:1; line-height:1.25; }
+.account-caption strong { font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.account-caption small { font-size:11px; color:var(--ui-subtle); }
+.driver-app .account-exit { display:inline-flex; align-items:center; gap:6px; flex:none; min-height:36px; padding:6px 10px; border-radius:12px; background:var(--fx-inset-strong); font-size:12px; }
+.driver-app .account-exit b { font-weight:500; }
+.sidebar-collapsed .account-block { flex-direction:column; padding:6px; gap:6px; }
+.sidebar-collapsed .account-caption, .sidebar-collapsed .account-exit b { display:none; }
+.sidebar-collapsed .account-exit { width:36px; padding:0; justify-content:center; }
+
+/* --- location simulator (#/simulator): map tiles per theme, stop types, the route file and the trip core reports -- */
 [data-workspace-theme=light] .route-map[data-view=soft] .leaflet-tile-pane { filter:grayscale(1) contrast(.94) brightness(1.03); }
 [data-workspace-theme=dark] .route-map[data-view=soft] .leaflet-tile-pane { filter:invert(1) grayscale(1) brightness(.82) contrast(.92); }
+.route-map .route-waypoint.waypoint-pass { opacity:.62; transform-origin:center; scale:.82; }
+.point-description .point-category { margin-top:4px; min-height:30px; padding:4px 8px; border:0; border-radius:10px; background:var(--fx-inset); color:inherit; font:inherit; font-size:12px; }
+.route-sync { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:12px 0 0; font-size:13px; color:var(--ui-subtle); }
+.route-sync.is-error { color:var(--fx-danger); }
+.route-file { margin-top:12px; } .route-file summary { cursor:pointer; font-size:13px; color:var(--ui-subtle); }
+.route-file pre { max-height:280px; }
+.route-trip { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:8px; margin:14px 0 0; }
+.route-trip div { display:grid; align-content:start; gap:2px; padding:10px 12px; border-radius:14px; background:var(--fx-inset); min-width:0; }
+.route-trip dd { text-align:left; }
+.route-trip dt { font-size:11px; color:var(--ui-subtle); } .route-trip dd { margin:2px 0 0; font-size:14px; font-weight:600; overflow-wrap:anywhere; }
+.route-playback .fx-segment { margin:4px 0 10px; }
+
+/* --- tourist sights on the map route ------------------------------------------------------------------------------ */
+.route-map .route-attraction { display:grid; place-items:center; border-radius:50%; background:var(--fx-hero); color:var(--fx-on-hero); box-shadow:var(--fx-shadow); }
+.route-map .route-attraction.is-off { background:var(--fx-card-solid); color:var(--ui-subtle); opacity:.8; }
+.route-map-canvas[data-placing] .route-map { cursor:crosshair; }
+.sight-list { list-style:none; display:grid; gap:8px; margin:14px 0 0; padding:0; }
+.sight-list li { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:start; padding:10px 12px; border-radius:14px; background:var(--fx-inset); }
+.sight-list li[data-selected=false] { opacity:.7; }
+.sight-pick { padding-top:2px; } .sight-pick input { width:18px; height:18px; }
+.sight-body { display:grid; gap:4px; min-width:0; }
+.sight-body strong { font-size:14px; overflow-wrap:anywhere; } .sight-body > span { font-size:12px; color:var(--ui-subtle); }
+.sight-body input, .sight-body textarea { width:100%; border:0; border-radius:10px; padding:6px 8px; background:var(--fx-card-solid); color:inherit; font:inherit; font-size:13px; resize:vertical; }
+.sight-warn { color:var(--fx-warn); font-size:12px; }
+.route-trip .route-trip-wide { grid-column:1 / -1; }

@@ -45,3 +45,12 @@ def test_core_engine_takes_every_dashboard_message() -> None:
     assert engine.invalid_messages == 0
     assert engine.state.safety.llm_enabled is True  # the fixture's last "llm" command switches it back on
     assert [o.role for o in engine.declared] == []  # the child declared by set_child was removed again (id 3)
+
+
+def test_the_stop_music_button_uses_words_the_assistant_stops_playback_on() -> None:
+    """There is no "stop media" command in the contract: the button sends speech that P3 treats as a stop request."""
+    fallback = pytest.importorskip("assistant.fallback")
+    text = next(case["message"]["text"] for case in CASES if case["name"] == "stop_media")
+    state = c.State()
+    state.media.playing = True
+    assert fallback.stop_media_request(text, state)

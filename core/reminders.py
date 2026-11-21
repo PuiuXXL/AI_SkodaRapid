@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from core import clips
+from core.attractions import attraction_stop, attractions_ahead
 from core.safety.answers import Answer, parse_gesture, parse_voice
 from core.settings import render, template, th
 from shared.contracts import LLM_VETO_LEVELS, PerceptionFrame, State, UiSpeech
@@ -25,8 +26,17 @@ if TYPE_CHECKING:
 
 
 def pick_stop(state: State) -> dict[str, Any] | None:
-    """The ``stop_suggested`` event data for a break, or None when there is no stop ahead in range."""
+    """The ``stop_suggested`` event data for a break, or None when there is no stop ahead in range.
+
+    A tourist sight on the map route (K4, ``core/attractions.py``) wins over the next stop, unless an open reminder
+    needs that stop: a break at Salina Turda rather than at a fuel station, but the windscreen fluid first.
+    """
+    sights = [s for s in attractions_ahead(state) if float(s["dist_km"]) <= float(th("reminders", "stop_search_km"))]
     poi = state.trip.next_poi
+    needed = poi is not None and any(r.state == "active" and r.trigger.category == poi.category
+                                     for r in state.reminders)
+    if sights and not needed:
+        return attraction_stop(sights[0])
     if poi is None or (poi.dist_km is not None and poi.dist_km > float(th("reminders", "stop_search_km"))):
         return None
     task = next((r.task for r in state.reminders

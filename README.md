@@ -22,7 +22,7 @@ Interfețele web folosesc [DriveMate Graphite](.agents/skills/obsidian-orange-we
 | `core/` | Context engine, safety rules, SOS |
 | `assistant/` | LLM copilot and voice |
 | `integrations/` | Phone bridge, emergency call, contact page |
-| `simulator/` | Simulated route, director panel, replay |
+| `simulator/` | Trip source for core: follows the route file drawn on the dashboard map (`#/simulator`) |
 | `dashboard/` | Live web dashboard |
 | `profiles/` | Driver and passenger profiles |
 | `scripts/` | Utilities: model download, benchmark, fake data |

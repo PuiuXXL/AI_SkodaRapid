@@ -40,64 +40,39 @@ TypeScript, cele șase teste existente și buildul de producție au trecut după
 
 Proba pe hardware urmărește pierderea camerei, întreruperea și reluarea stării, apoi o sesiune vocală în timpul navigării. Rezultatele pe hardware se consemnează după rularea cu serviciile reale.
 
-## Contract de integrare simulator → P2 · 21 noiembrie 2026
+## Simulatorul de locație → core · implementat 21 noiembrie 2026
 
-**Stare: propunere pentru P2, bazată pe implementarea P4 din `1e2758b`; nu este contract backend implementat sau aprobat.** `shared/contracts.py` lipsește în acest checkout. P2 rămâne proprietarul schemei canonice, al versiunii și al fixture-ului din `tests/core/fixtures/state_example.json`.
+Harta (`#/simulator`) este simularea live a locației pentru demo. Utilizatorul construiește un traseu rutier (OSRM): primul punct este plecarea, ultimul destinația, iar punctele dintre ele sunt opriri cu tip (`fuel`, `cafe`, `pharmacy`, `supermarket`, `auto_parts`) sau puncte de trecere (`waypoint`, folosite doar pentru forma drumului). Pagina scoate **fișierul de traseu** `drivemate-route.json`, care se poate descărca, și îl trimite la core.
 
-### Ce există acum în P4
+**Fluxul.** Dashboard → `PUT /simulator/route` (Vite face proxy către core) → `simulator.Simulator` (P4, încărcat de `core.simulation.load_simulator`) → `State.trip` la 10 Hz → engine (siguranță, scoruri, mementouri la oprire, SOS, contactul de încredere) și LLM (`assistant/summary.py`: drum, viteză, ETA, următoarea oprire cu tipul și distanța). Contractul (`shared/contracts.py`) nu se schimbă.
 
-Pagina `#/simulator` permite puncte pe hartă, aliniere la drum la maximum 500 m, calcul OSRM, reordonare, pornire/pauză, resetare, salt pe traseu, viteză 0–160 km/h și timp ×1/×5/×20/×100. Poziția se actualizează local aproximativ la 10 Hz. Harta și rutarea necesită internet.
-
-`dashboard/src/Simulator.tsx` afișează și copiază următorul obiect; **nu trimite locația pe WebSocket, nu salvează un fișier JSON și nu alimentează core-ul**:
-
-```json
-{
-  "source": "frontend_simulator",
-  "timestamp": 1795258800.0,
-  "latitude": 46.769,
-  "longitude": 23.589,
-  "heading_deg": 180.0,
-  "speed_kmh": 118,
-  "distance_km": 1.25,
-  "elapsed_s": 38.14,
-  "status": "moving"
-}
-```
-
-| Câmp existent | Semnificație și validare pentru receptor |
+| Fișierul de traseu (`simulator/route.py`, `drivemate_route` v1) | |
 | --- | --- |
-| `source` | Valoare fixă `frontend_simulator`; origine sintetică, nu GPS real. |
-| `timestamp` | Secunde Unix de la ceasul browserului, generate la randarea preview-ului; nu timp simulat. |
-| `latitude`, `longitude` | Numere finite, grade WGS84; intervale [−90, 90], respectiv [−180, 180]. |
-| `heading_deg` | Direcția segmentului curent, [0, 360), 0 = nord. Fără traseu, preview-ul folosește 0 ca valoare provizorie. |
-| `speed_kmh` | Viteza configurată în deplasare; 0 în pauză, la sosire sau fără traseu. Poate fi 0 și cu `status=moving`. |
-| `distance_km` | Distanța cumulată parcursă pe geometria traseului, în kilometri; resetarea/recalcularea o aduce la 0, iar saltul pe traseu o poate micșora. |
-| `elapsed_s` | Secunde simulate; pauza le oprește, multiplicatorul le accelerează. La salt sunt recalculate din distanță și viteza curentă; nu reprezintă un ceas monoton. |
-| `status` | `moving`, `paused` sau `arrived`. `paused` poate desemna și un singur punct fără traseu calculat. |
+| `origin` | plecarea, `category: "origin"` |
+| `stops[]` | în ordine; ultima are `category: "destination"` (numai ea) |
+| `geometry[]` | drumul OSRM, `{lat, lon}`, maximum 20 000 de puncte |
+| `distance_km`, `speed_kmh`, `name`, `id`, `created_ts` | informative; `speed_kmh` setează viteza inițială |
 
-Fără niciun punct, preview-ul este `null`. Payload-ul nu conține geometria, distanța totală, POI-urile, multiplicatorul sau un identificator al traseului. Nu se pot deduce ETA, tipul drumului și sosirea la un POI doar din acest obiect.
+Core respinge cu 422 și motivul: câmpuri necunoscute, coordonate în afara intervalelor sau nefinite, o oprire la peste 500 m de drum, fără destinație, id-uri duplicate. Pragurile sunt în `simulator/simulator.yaml`.
 
-### Ce are de implementat P2
+**Mișcarea** rămâne pe `/ws/ui`, cu comenzile existente: `start` (pleacă și de la o oprire), `pause`, `speed`, `time_scale`, `stop_at_next_poi` (mașina merge până la oprire și se oprește acolo; `trip.at_poi` este oprirea) și `reset` (înapoi la plecare, traseul rămâne). La destinație mașina se oprește cu `at_poi` = destinația și `eta_min` = 0. `POST /simulator/seek {"fraction"}` mută mașina pe drum, în pauză. `DELETE /simulator/route` revine la drumul demonstrativ al core-ului. `GET /simulator/route` dă traseul urmat, așa că pagina îl reîncarcă după refresh. Încărcarea și scoaterea traseului apar în jurnal (`route_loaded`, `route_cleared`).
 
-1. Publică modelul de intrare pentru locația simulată în `shared/contracts.py`, cu validările de mai sus. Păstrează compatibilitatea contractului existent; câmpurile noi din starea publicată sunt opționale, cu valori implicite. Actualizează împreună versiunea și fixture-ul canonic.
-2. Convenție propusă, de confirmat cu P4: mesaj browser → core pe `/ws/ui`, `{"type":"simulator_location","data":{...obiectul de mai sus...}}`. Acest tip nu este recunoscut sau transmis încă de implementarea curentă. Validează mesajul înainte de a-l folosi și acceptă intrarea sintetică numai în modul de simulare configurat explicit în core; selectarea sursei UI nu este suficientă.
-3. Mapează în `State.trip` câmpurile deja prevăzute în plan: `pos.lat ← latitude`, `pos.lon ← longitude`, `speed_kmh ← speed_kmh`, `elapsed_min ← elapsed_s / 60`. Nu transforma automat `paused` în `stopped` sau `arrived` în `at_poi`: pauza redării și sosirea la capătul traseului nu confirmă o oprire la un POI.
-4. Decide explicit sursa activă între simulatorul Python `Simulator.tick()` și intrarea din browser; o singură sursă produce `trip` la un moment dat. Definește comportamentul la deconectare/date vechi și la resetare/salt, fără a continua să folosești viteza veche ca informație proaspătă.
-5. Returnează starea canonică spre UI în formatul deja consumat, `{"type":"state","state":{...}}`, la 10 Hz, cu `ts` și `seq` generate de core. Regulile de siguranță, riscul, cauza, alarmele și SOS rămân în P2; payload-ul browserului nu le stabilește.
-6. Pentru ETA, POI-uri și tipul drumului, stabilește separat cu P4 transferul metadatelor traseului sau calculul lor în simulatorul Python. Păstrează valorile necunoscute explicite până când există o sursă.
+Mașina de pe hartă este întotdeauna `State.trip.pos`, adică poziția calculată de core. Browserul nu mai simulează nimic.
 
-### Ce rămâne de implementat P4 după stabilirea interfeței
+**Unde e mașina, pentru LLM.** Simulatorul adaugă în `State.trip` două câmpuri suplimentare. Contractul păstrează câmpurile necunoscute (`ContractModel`), deci `shared/contracts.py` nu se schimbă:
+- `trip.place`: ultimul loc trecut și următorul, cu distanțele, plus destinația, toate cu nume din fișierul de traseu. În rezumatul pentru LLM (`assistant/summary.py`) apare ca „Location: after Cluj-Napoca (12 km behind), before Turda (40 km ahead); destination Turda in 40 km”. LLM-ul nu primește coordonate, deci nu poate plasa greșit mașina. Pentru o rută cu mai multe orașe, adaugă fiecare oraș ca punct de trecere.
+- `trip.attractions_ahead`: cel mult 3 obiective în următorii 40 km, cu distanța, ocolul și descrierea.
 
-- Trimiterea mesajelor de locație pe socketul existent, limitată la 10 Hz, plus actualizări explicite la pauză, resetare, salt și sosire; timestamp nou la expediere. Oprește transmiterea când sursa sintetică este dezactivată.
-- Separarea comenzilor locale de conexiunea Live: resetarea traseului nu trebuie să reconecteze WebSocketul sau să șteargă istoricul Live; editarea traseului nu trebuie să blocheze datele demo fără posibilitate de reluare.
-- Detectarea trecerii peste pragurile evenimentelor demo la ×20/×100; egalitatea exactă actuală sare peste ele.
-- Trimiterea geometriei/metadatelor numai după convenirea unei extensii, dacă P2 are nevoie de ele. Modificările de navigare, graficele și straturile hărții nu cer câmpuri backend noi.
+**Obiective turistice (K4).**
+- **Căutare:** pagina caută automat articole Wikipedia cu coordonate la cel mult 2 km de drum (geosearch, câte o cerere pe rând). Elimină localitățile, păstrează cel mult 3 obiective la 15 km și preselectează câte unul pe porțiune, niciunul în primii 5 km.
+- **Descrierea** vine din rezumatul aceluiași articol și poate fi editată.
+- **Manual:** se pot bifa sau debifa obiective, sau adăuga direct pe hartă.
+- **Fișierul de traseu** le duce în lista `attractions`. Core le acceptă la cel mult 5 km de drum.
+- **Propunerea:** `core/attractions.py` propune obiectivul prin evenimentul obișnuit `stop_suggested`, cu `kind: "attraction"`. Condițiile sunt în `core/config/thresholds.yaml`, secțiunea `attractions`: după 5 minute de condus, mașina în mers, fără alertă, dialog sau vorbire în curs. Fiecare obiectiv se propune o singură dată, cu cel mult o propunere la 15 minute de drum, iar ținta e la 1–15 km în față.
+- **Pauza de oboseală** (`pick_stop`) alege un obiectiv în locul opririi următoare, dacă niciun memento nu are nevoie de acea oprire.
+- **Asistentul** întreabă „Peste 13 km e Castelul de la Gilău. Facem o pauză acolo?”. Promptul îi permite cel mult un fapt, luat din descriere.
+- **„Da”** face simulatorul să conducă până în punctul de drum cel mai apropiat de obiectiv și să oprească acolo (`stop_at`). Asta se aplică acum oricărei opriri acceptate, nu doar obiectivelor.
 
-### Criterii de acceptare P2 + P4
+**Limite.** `State.trip` are doar următoarea oprire și `trip.place`, nu lista completă a opririlor. Harta, rutarea și Wikipedia au nevoie de internet. Serverul public OpenStreetMap Overpass nu a răspuns din rețeaua echipei, de aceea sursa obiectivelor e Wikipedia.
 
-- Un mesaj valid actualizează `trip.pos`, viteza și timpul în următorul `state`; un mesaj invalid nu închide fluxul de stare și nu modifică datele valide precedente.
-- Pornirea, pauza, viteza 0, sosirea, saltul înapoi și resetarea au comportament verificat; absența sau întreruperea sursei este tratată explicit.
-- Resetarea în UI păstrează conexiunea și istoricul Live; sursa de locație nu schimbă datele P1 sau autoritatea regulilor P2.
-- Teste pentru coordonate-limită, valori nefinite, statut invalid, date vechi, schimbarea sursei și mesaje vechi după resetare. Înainte de streaming trebuie convenit un identificator de sesiune/revizie sau alt mecanism pentru respingerea mesajelor vechi; preview-ul actual nu îl conține.
-- Proba cap-coadă și confirmarea P2/P4 sunt încă restante. Cele 8 teste frontend și buildul trec, dar nu validează această interfață propusă.
-
+**Teste.** `tests/simulator` (traseu, mișcare, opriri, destinație, seek, loc, obiective), `tests/core/test_route_api.py` (API și starea), `tests/core/test_attractions.py` (propunere, „da” → oprire, pauză), `tests/assistant/test_route_context.py` (ce vede LLM-ul), `tests/contract/test_dashboard_route.py` cu fixture-ul comun `tests/contract/fixtures/dashboard_route_file.json`, pe care testul dashboardului îl compară exact cu `routeFile(...)`.

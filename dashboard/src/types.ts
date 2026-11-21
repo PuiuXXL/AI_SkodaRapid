@@ -1,12 +1,16 @@
 import type { ReactNode } from "react";
-import type {DriverUI, Phase, Point, Poi} from "./driver/contracts";
+import type {Point, Poi} from "./driver/contracts";
 
 export type Reading = number | null;
 export interface Assessment { ts?:number; attention?: Reading; fatigue?: Reading; disengagement?: Reading; risk?: Reading }
 export interface Trip {
   speed_kmh?: Reading; elapsed_min?: Reading; eta_min?: Reading; road?: string;
-  id?: string|null; phase?: Phase; distance_km?: Reading; scene?:number;pos?:Point;at_poi?:Poi|null;
+  scene?:number|null;pos?:Point;at_poi?:Poi|null;
   stopped?: boolean; next_poi?: {id?:string;name?:string;category?:string|null;dist_km?:Reading}|null;
+  /** P4 map route (simulator/sim.py): where the car is, in names from the route file. */
+  place?: {after?: string; after_km?: Reading; before?: string; before_km?: Reading; destination?: string; destination_km?: Reading} | null;
+  /** P4 map route: tourist sights ahead (core/attractions.py proposes them as breaks). */
+  attractions_ahead?: {id: string; name: string; kind?: string; dist_km?: Reading; detour_km?: Reading; description?: string}[];
 }
 /** P1 posture flags (proposed contract field, docs/perception.md §9). */
 export interface Posture { leaning_forward?: boolean; leaning_side?: boolean; slumped?: boolean; out_of_position?: boolean }
@@ -45,7 +49,6 @@ export interface DashboardState {
   call?: Record<string, unknown> | null;
   integrations?: {phone_bridge?: string; twilio?: string; contact_app?: string; llm?: string};
   media?: {playing?: boolean; title?: string | null; track_id?:string|null;artist?:string;volume?: Reading; reason?: string | null; kid_safe?: boolean; source?: string | null};
-  driver_ui?: DriverUI;
   scorecard?: {longest_focus_min?: Reading; hands_free_messages?: Reading; phone_touches?: Reading; suggestions_accepted?: Reading; suggestions_rejected?: Reading; reminders_done?: Reading};
   ab?: {naive_alerts?: Reading; our_alerts?: Reading}; blind_m?: {last?: Reading; trip?: Reading};
   intervention?: {last?: string | null; effect_pct?: Reading; stats?: Record<string, number>};

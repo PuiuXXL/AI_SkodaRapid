@@ -116,18 +116,6 @@ dd { overflow-wrap:anywhere; }
 .camera-stage { position:relative; display:grid; place-items:stretch; aspect-ratio:16/9; background:#182421; }
 .camera .camera-stage img { width:100%; height:100%; min-height:0; position:absolute; inset:0; object-fit:contain; }
 .camera-stage .feed-error { align-self:center; justify-self:center; color:#fff; }
-.camera-standby { display:grid; place-items:center; position:relative; background:
- radial-gradient(ellipse at 48% 42%,#f8faf6 0%,transparent 65%),
- radial-gradient(circle,#bdc9c0 .75px,transparent .95px) 0 0/13px 13px,#e9ede7; }
-.viewfinder { pointer-events:none; position:absolute; inset:10%; }
-.viewfinder i { width:17px; height:17px; position:absolute; border:solid #718a7e; border-width:0; }
-.viewfinder i:nth-child(1) { left:0; top:0; border-width:1.5px 0 0 1.5px; }
-.viewfinder i:nth-child(2) { right:0; top:0; border-width:1.5px 1.5px 0 0; }
-.viewfinder i:nth-child(3) { right:0; bottom:0; border-width:0 1.5px 1.5px 0; }
-.viewfinder i:nth-child(4) { left:0; bottom:0; border-width:0 0 1.5px 1.5px; }
-.standby-info { display:grid; justify-items:center; gap:9px; color:#31483e; }
-.standby-info strong { font-weight:500; }
-.standby-info button { font-size:14px; padding:5px 14px; }
 .camera .videoNote { padding:9px 18px; color:#526359; background:#f8faf7; border-top:1px solid #d5ded6; }
 .trip-strip { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:10px 0 0; }
 .trip-strip>div { display:flex; flex-direction:column; gap:4px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
@@ -143,22 +131,16 @@ dd { overflow-wrap:anywhere; }
 .gauge-number span { font-size:12px; margin-left:3px; color:var(--muted); }
 .mini-scores>div,.trend-chart { border:1px solid #e2e7df; border-radius:9px; }
 #recent-events { grid-column:1/-1; }
-.event-heading { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:6px; }
-.event-heading a { color:var(--petrol); font-size:14px; text-underline-offset:3px; }
 .recent-events>p { margin-top:10px; }
 .recent-events ul { display:grid; gap:5px; list-style:none; padding:0; margin-bottom:0; }
 .recent-events li { display:flex; flex-wrap:wrap; align-items:baseline; gap:10px; padding:8px 10px; background:#f1f5f1; border-left:3px solid #93aca0; }
 .recent-events time { font-size:12px; font-variant-numeric:tabular-nums; }.recent-events li strong { font-size:14px; font-weight:550; }
-.recent-events .alarm-event { border-color:#ae343c; background:#fcf0ee; }
 @media(max-width:960px) { .content { grid-template-columns:minmax(0,1fr); } }
 @media(max-width:760px) {
  .columns { grid-template-columns:minmax(0,1fr); }
  .camera .camHead,.camera .videoNote { padding:5px 12px; }
  .camera-stage { min-height:110px; max-height:175px; aspect-ratio:auto; height:40vw; }
  .camera-compact .camera-stage { height:64px; min-height:64px; }
- .camera-compact .standby-info { display:flex; align-items:center; font-size:14px; }
- .camera-compact .standby-info svg { display:none; }
- .camera-compact .viewfinder { inset:10% 4%; }
  .camera-compact .trip-strip { display:none; }
  .trip-strip>div { padding:8px; }
  .overview { grid-template-columns:minmax(88px,.7fr) minmax(0,1.3fr); gap:6px; }

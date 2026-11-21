@@ -155,6 +155,10 @@ def _stop_suggested(event: Event, state: State) -> list[dict]:
     key = "stop_suggest_with_task" if data.get("task") else "stop_suggest"
     km = data.get("dist_km")
     km_text = f"{km:g}" if isinstance(km, (int, float)) else km
+    if data.get("kind") == "attraction":  # K4: a tourist sight on the map route; "peste 13 km" is easier to say
+        key = "stop_suggest_attraction"
+        if isinstance(km, (int, float)) and km >= 2:
+            km_text = f"{round(km)}"
     question = fill(_t(key), poi=data.get("poi_name") or data.get("poi_id"), km=km_text, task=data.get("task"))
     return [_ask(question), {"type": "suggest_stop", "poi_id": data.get("poi_id")}]
 

@@ -11,7 +11,7 @@ import {alerts,causes,drivingZones,integrationNames,integrationStates,label,moni
 import {fmt,words} from "../Panels";
 
 const known=(v: unknown): v is number=>typeof v==="number"&&Number.isFinite(v);
-const levelTone=(level: string | null | undefined): Tone=>level==="P0"||level==="P1"?"danger":level==="P2"?"warn":"ok";
+const levelTone=(level: string | null | undefined): Tone | undefined=>!level?undefined:level==="P0"||level==="P1"?"danger":level==="P2"?"warn":"ok";
 
 function Chip({title,value,tone,detail}: {title: string; value: ReactNode; tone?: Tone; detail?: string}){
   return <div className={"fx-chip"+(tone?" tone-"+tone:"")} title={detail}><i aria-hidden="true"/><span>{title}</span><b>{value}</b></div>;
@@ -20,6 +20,8 @@ function Chip({title,value,tone,detail}: {title: string; value: ReactNode; tone?
 /** One line of health: safety level, SOS, both cameras, degradation and the external integrations. */
 export function StatusStrip({s,connection}: {s: DashboardState; connection: string}){
   const safety=s.safety??{},sos=safety.sos,perf=s.perf??{};
+  // Contract: level null = nothing active (P4). No safety object at all = no data from core.
+  const level=s.safety?safety.level??"P4":undefined;
   const camera=(side: "driver" | "passenger")=>{
     const person=s[side],cam=perf.cameras?.[side];
     if(!person&&!cam)return {value:"—",tone:undefined as Tone | undefined};
@@ -31,7 +33,7 @@ export function StatusStrip({s,connection}: {s: DashboardState; connection: stri
   const driver=camera("driver"),passenger=camera("passenger");
   const alert=typeof safety.alert==="object"?safety.alert?.text:safety.alert;
   return <div className="fx-status" role="status" aria-label="Starea sistemului">
-    <Chip title="Siguranță" value={(safety.level??"P4")+" · "+label(safetyLevels,safety.level??"P4")+(alert?" · "+label(alerts,alert):"")} tone={levelTone(safety.level)}/>
+    <Chip title="Siguranță" value={level?level+" · "+label(safetyLevels,level)+(alert?" · "+label(alerts,alert):""):"—"} tone={levelTone(level)}/>
     {sos?.state&&sos.state!=="normal"&&<Chip title="SOS" value={label(sosStates,sos.state)+(known(sos.countdown_s)?" · "+Math.max(0,Math.ceil(sos.countdown_s))+" s":"")} tone="danger"/>}
     <Chip title="Cameră șofer" value={driver.value} tone={driver.tone}/>
     <Chip title="Cameră pasager" value={passenger.value} tone={passenger.tone}/>
@@ -71,7 +73,7 @@ export function KpiStrip({s,history,samples}: {s: DashboardState; history: Sessi
     <Tile title="Dezinteres" value={fmt(a.disengagement,"",100,0)} unit="/100" note={delta("disengagement")} tone={known(a.disengagement)&&a.disengagement>.7?"warn":undefined}>
       <MiniBars values={series("disengagement")} max={1} label="Dezinteresul în ultimele mostre"/>
     </Tile>
-    <Tile title="Risc" value={fmt(risk,"",1,0)} unit="/3" note={label(safetyLevels,s.safety?.level??"P4")} tone={known(risk)&&risk>=3?"danger":known(risk)&&risk>=2?"warn":undefined}>
+    <Tile title="Risc" value={fmt(risk,"",1,0)} unit="/3" note={s.safety?label(safetyLevels,s.safety.level??"P4"):undefined} tone={known(risk)&&risk>=3?"danger":known(risk)&&risk>=2?"warn":undefined}>
       <div className="fx-kpi-pair"><Ring value={risk} max={3} size={58} label="Risc din 3"/><HeatStrip values={series("risk").slice(-40)} max={3} label="Riscul în ultimele mostre"/></div>
     </Tile>
     <Tile title="PERCLOS · 60 s" value={reliable?fmt(eyes?.perclos_60s,"",100,0):"—"} unit="%" note={reliable?"clipiri "+fmt(eyes?.blink_rate,"/min",1,0):"semnal nesigur"} tone={reliable&&known(eyes?.perclos_60s)&&eyes.perclos_60s>.15?"warn":undefined}>
@@ -106,7 +108,7 @@ export function Overview({s,samples,slot}: {s: DashboardState; samples: Sample[]
       </div>
       <div className="fx-overview-grid">
         <div className="fx-block"><h3>Unde privește · ultimul minut<small>{samples.length?Math.round(samples.length/2)+" s măsurate":"în așteptarea datelor"}</small></h3>
-          <StackBar label="Împărțirea privirii" parts={[{label:"Drum",value:road},{label:"Oglinzi",value:Math.max(0,driving-road)},{label:"În afara drumului",value:Math.max(0,1-driving-unknownShare),tone:"warn"},{label:"Nedeterminat",value:unknownShare,tone:"soft"}]}/>
+          <StackBar label="Împărțirea privirii" parts={[{label:"Drum",value:road},{label:"Oglinzi",value:Math.max(0,driving-road)},{label:"În afara drumului",value:shares.length?Math.max(0,1-driving-unknownShare):0,tone:"warn"},{label:"Nedeterminat",value:unknownShare,tone:"soft"}]}/>
           <RankBars max={1} empty="Zonele apar după primele secunde de date" items={shares.slice(0,5).map(z=>({label:zones[z.zone]??words(z.zone),value:z.share,display:fmt(z.seconds," s",1,0),tone:z.zone==="unknown"?"soft":drivingZones.has(z.zone)?"ink":"warn"}))}/>
         </div>
         <div className="fx-block fx-pose-block"><h3>Poziția capului<small>{g.calibrated===false?"privire necalibrată":"yaw · pitch · roll"}</small></h3>
@@ -123,7 +125,7 @@ export function Overview({s,samples,slot}: {s: DashboardState; samples: Sample[]
           <div><dt>Următoarea oprire</dt><dd>{trip.next_poi?.name??"—"}</dd></div>
           <div><dt>Până la oprire</dt><dd>{fmt(trip.next_poi?.dist_km," km")}</dd></div>
           <div><dt>Până la destinație</dt><dd>{fmt(trip.eta_min," min",1,0)}</dd></div>
-          <div><dt>Telefon</dt><dd>{d.phone?.in_use?label(phoneUsage,d.phone.usage??"visible")+(d.phone.side?" · "+(d.phone.side==="left"?"stânga":"dreapta"):""):d.phone?.foreign_seen?"Al pasagerului":"Nu"}</dd></div>
+          <div><dt>Telefon</dt><dd>{d.phone?.in_use?label(phoneUsage,d.phone.usage??"visible")+(d.phone.side?" · "+(d.phone.side==="left"?"stânga":"dreapta"):""):d.phone?.foreign_seen?"Al pasagerului":d.phone?"Nu":"—"}</dd></div>
           <div><dt>Ultimul răspuns</dt><dd>{words(s.interaction?.last_input?.value)}</dd></div>
           <div><dt>Gest · cap</dt><dd>{words(d.gesture)} · {h.answer==="yes"?"da":h.answer==="no"?"nu":"—"}</dd></div>
         </dl>

@@ -25,7 +25,6 @@ header, main { width: min(100%, 1680px); margin-inline: auto; padding-inline: cl
 .road-mark i { height: 18px; width: 4px; background: var(--ui-surface-2); border-radius: 3px; transform: skew(-14deg); }
 .road-mark i:last-child { height: 12px; margin-top: 6px; }
 .header-meta { display: flex; gap: 10px; align-items: center; font-size: 14px; color: var(--muted); }
-.source-select { display: flex; gap: 12px; align-items: center; }
 select { color: var(--text); background: var(--ui-surface-soft); border: 1px solid var(--ui-stroke-strong); border-radius: 9px; padding: 8px 32px 8px 12px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2391bde7' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; }
 .title { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0 28px; }
 .eyebrow, .content section > small, .module-grid section > small { color: var(--accent); font-size: 11px; font-weight: 650; letter-spacing: .14em; }
@@ -62,23 +61,10 @@ aside { min-width: 0; position: sticky; top: var(--sticky, 90px); }
 .camHead small { font-size: 10px; letter-spacing: .12em; padding: 4px 7px; border: 1px solid var(--ui-stroke-strong); border-radius: 5px; color: var(--muted); background: var(--ui-surface-soft); }
 .camera-stage { position: relative; display: grid; aspect-ratio: 16/10; background: var(--ui-surface-2); }
 .camera-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-.camera-standby { position: relative; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 45%,var(--ui-surface-soft),transparent 75%),radial-gradient(circle,var(--ui-surface-soft) .8px,transparent 1px) 0 0/14px 14px,var(--ui-surface-2); }
-.viewfinder { position: absolute; inset: 13%; pointer-events: none; }
-.viewfinder i { position: absolute; width: 22px; height: 22px; border: solid var(--ui-stroke-strong); border-width: 0; }
-.viewfinder i:nth-child(1) { left: 0; top: 0; border-width: 1.5px 0 0 1.5px; }
-.viewfinder i:nth-child(2) { right: 0; top: 0; border-width: 1.5px 1.5px 0 0; }
-.viewfinder i:nth-child(3) { right: 0; bottom: 0; border-width: 0 1.5px 1.5px 0; }
-.viewfinder i:nth-child(4) { left: 0; bottom: 0; border-width: 0 0 1.5px 1.5px; }
-.standby-info { display: grid; justify-items: center; gap: 8px; color: var(--text); z-index: 1; }
-.standby-info strong { font-size: 17px; font-weight: 500; }
-.standby-info button { border-color: var(--ui-stroke-strong); background: var(--ui-surface-2); color: var(--text); padding-inline: 20px; font-size: 14px; }
-.standby-info button:hover:not(:disabled) { background: var(--ui-surface-2); }
 .optical-field { position: relative; width: clamp(140px,16vw,255px); aspect-ratio: 2/1; display: grid; place-items: center; isolation: isolate; }
 .optical-field::before, .optical-field::after { content: ''; pointer-events: none; position: absolute; z-index: -1; border-radius: 50%; aspect-ratio: 1; }
 .optical-field::before { width: 76%; border: 1px dashed var(--ui-stroke-strong); }
 .optical-field::after { width: 96%; border: 1px solid var(--ui-stroke-strong); }
-.optic-art { width: 100%; height: auto; display: block; }
-.ocular .optic-art { width: clamp(60px,5vw,82px); flex: 0 0 auto; }
 .videoNote { padding: 12px 18px; color: var(--muted); background: transparent; font-size: 12px; border-top: 1px solid var(--line); }
 .videoNote button { margin-left: 8px; }
 .feed-error { align-self: center; justify-self: center; color: var(--text); padding: 20px; text-align: center; }
@@ -150,14 +136,10 @@ dl > div { display: flex; gap: 14px; justify-content: space-between; padding: 8p
 dt { color: var(--muted); }
 dd { margin: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 #recent-events, #scorecard, #performance { grid-column: 1/-1; }
-.event-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 10px; }
-.event-heading h2 { font-size: 22px; }
-.event-heading a { font-size: 12px; }
 .recent-events ul { list-style: none; padding: 0; display: grid; gap: 8px; }
 .recent-events li { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--ui-surface-soft); border-left: 2px solid var(--ui-stroke-strong); border-radius: 0 7px 7px 0; }
 .recent-events time, .recent-events small { font-size: 11px; color: var(--muted); }
 .recent-events li strong { font-size: 13px; font-weight: 550; }
-.recent-events .alarm-event { background: var(--ui-surface-2); border-color: var(--ui-stroke-strong); }
 .utterance { border-left: 2px solid var(--ui-stroke-strong); padding: 4px 0 4px 12px; margin-top: 14px; }
 .voice { margin-block: 12px; font-size: 13px; }
 ol { padding-left: 20px; font-size: 13px; }
@@ -194,13 +176,8 @@ ol li { padding-block: 6px; }
  .camHead { padding: 9px 14px; }
  .videoNote { padding: 7px 14px; }
  .camera-compact .camera-stage { height: 64px; }
- .camera-compact .standby-info { display: flex; font-size: 12px; gap: 10px; }
- .camera-compact .standby-info strong { font-size: 13px; }
  .camera-compact .optical-field { display: none; }
- .camera-stage .standby-info { grid-template-columns: auto auto; align-items: end; column-gap: clamp(16px,5vw,48px); }
  .camera-stage .optical-field { grid-row: span 2; align-self: center; }
- .camera-stage .standby-info button { align-self: start; }
- .camera-compact .standby-info button { min-height: 36px; padding: 6px 10px; font-size: 12px; }
  .camera-compact .trip-strip { display: none; }
  aside > details { padding: 0 14px; margin-top: 6px; }
  aside > details img { max-height: 100px; object-fit: contain; }
@@ -211,7 +188,6 @@ ol li { padding-block: 6px; }
 }
 @media(max-width: 580px) {
  .brand { font-size: 23px; }
- .source-select { gap: 7px; font-size: 12px; }
  select { padding-left: 8px; padding-right: 26px; font-size: 13px; }
  .title { flex-wrap: wrap; gap: 12px; padding: 22px 0 18px; }
  .title p { font-size: 14px; }
@@ -224,7 +200,6 @@ ol li { padding-block: 6px; }
  .section-nav { gap: 0; }
  .section-nav button { min-height: 44px; padding: 8px 10px; font-size: 12px; }
  .section-nav button svg { width: 16px; height: 16px; }
- .source-select { font-size: 0; }
  .module-grid { grid-template-columns: minmax(0,1fr); }
  .overview { gap: 6px; }
  .gauge-card { padding-inline: 4px; }
@@ -248,7 +223,7 @@ ol li { padding-block: 6px; }
  .scores b { font-size: 21px; }
 }
 @media(max-width: 400px) { .section-nav button { flex-direction: column; gap: 4px; padding: 7px 9px; } }
-@media(max-width: 340px) { .source-select { font-size: 0; } .brand { font-size: 21px; } .alarm-reading small { display: none; } }
+@media(max-width: 340px) { .brand { font-size: 21px; } .alarm-reading small { display: none; } }
 @media(max-height: 650px) and (max-width: 820px), (max-height: 540px) { aside { position: static; } }
 @media(prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 .dashboard .title h1 { font-size: clamp(30px, 3.2vw, 48px); }
@@ -268,8 +243,6 @@ ol li { padding-block: 6px; }
  .brand { gap: 5px; }
  .road-mark { width: 28px; height: 28px; }
  .header-meta { gap: 4px; }
- .source-select { gap: 0; }
- .camera-stage .standby-info { column-gap: 8px; }
  .optical-field { width: 100px; }
  .section-nav button { padding-inline: 6px; }
 }
@@ -314,15 +287,6 @@ button:hover:not(:disabled) { background-color: var(--ui-surface-soft); }
 .dashboard .alarm-slow b { color: var(--ui-danger); }
 .camHead small { background: var(--ui-surface-soft); border-color: var(--ui-stroke-strong); color: var(--muted); }
 .camera-stage { background: var(--accent); }
-.camera-standby {
- background: radial-gradient(ellipse at 60% 30%,var(--ui-accent-dim),transparent 75%),
- radial-gradient(circle,var(--ui-surface-soft) .7px,transparent .9px) 0 0/17px 17px, var(--ui-accent-dim);
-}
-.standby-info { color: var(--text); }
-.standby-info strong { font-weight: 450; }
-.standby-info button { color: var(--text); background: var(--ui-surface-soft); border-color: var(--ui-stroke-strong); }
-.standby-info button:hover:not(:disabled) { background: var(--ui-surface-soft); }
-.viewfinder i { border-color: var(--ui-stroke-strong); }
 .optical-field::before { border-color: var(--ui-stroke-strong); }
 .optical-field::after { border-color: var(--ui-stroke-strong); }
 .videoNote, .ocular { border-color: var(--ui-stroke-strong); }
@@ -355,7 +319,6 @@ button:hover:not(:disabled) { background-color: var(--ui-surface-soft); }
 .data-bar-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,var(--accent),var(--accent)); transition: width .25s ease; }
 .data-bar:nth-of-type(even) .data-bar-track i { background: linear-gradient(90deg,var(--accent),var(--accent)); }
 .recent-events li { background: var(--ui-surface-soft); border-color: var(--ui-stroke-strong); border-radius: 0 12px 12px 0; }
-.recent-events .alarm-event { background: var(--ui-danger-dim); }
 .utterance { border-color: var(--ui-stroke-strong); background: var(--ui-surface-soft); padding: 14px; border-radius: 0 12px 12px 0; }
 .disclosure-trigger span { background: var(--ui-surface-soft); color: var(--accent); }
 .voice button { background: var(--ui-surface-soft); }
@@ -382,7 +345,6 @@ button:hover:not(:disabled) { background-color: var(--ui-surface-soft); }
 .camera-placeholder { aspect-ratio: 16/12; scroll-margin-top: 20px; }
 .camera-home .camera { height: 100%; display: flex; flex-direction: column; }
 .camera-home .camera-stage { flex: 1; aspect-ratio: auto; min-height: 0; }
-.camera-home .camera-standby { width: 100%; }
 .columns { align-items: stretch; }
 .columns > .content > section { height: 100%; }
 .expanded-sections { margin-top: clamp(40px,6vw,88px); padding-right: 300px; gap: 24px; }
@@ -400,10 +362,7 @@ button:hover:not(:disabled) { background-color: var(--ui-surface-soft); }
 .camera-docked .camera-label { font-size: 12px; flex: 1; }
 .camera-docked .camHead small { font-size: 8px; padding: 3px; letter-spacing: .03em; }
 .camera-expand { display: grid; place-items: center; padding: 8px; flex-shrink: 0; min-width: 40px; min-height: 40px; }
-.camera-docked .standby-info { gap: 3px; }
 .camera-docked .optical-field { width: 100px; }
-.camera-docked .standby-info strong { font-size: 12px; }
-.camera-docked .standby-info button { font-size: 11px; min-height: 32px; padding: 4px 10px; }
 .camera-docked .videoNote { padding: 5px 10px; font-size: 10px; }
 .camera-docked .videoNote button { padding: 3px 6px; min-height: 30px; font-size: 10px; }
 .dashboard-footer { margin-right: 300px; }
@@ -442,10 +401,7 @@ button:hover:not(:disabled) { background-color: var(--ui-surface-soft); }
  .camera-docked .camera-label { flex: 1 0 100%; }
  .camera-docked .camera-stage { grid-column: 2; grid-row: 1/3; border-radius: 0 18px 18px 0; overflow: hidden; height: auto; }
  .camera-docked .videoNote { grid-column: 1; grid-row: 2; }
- .camera-docked .camera-stage .standby-info { display: grid; grid-template-columns: 1fr; gap: 2px; }
  .camera-docked .camera-stage .optical-field { grid-row: auto; width: 90px; }
- .camera-docked .viewfinder { inset: 8%; }
- .camera-docked .standby-info strong { display: none; }
 }
 @media(max-width:820px) {
  .camera-placeholder { aspect-ratio: auto; height: 290px; }
@@ -493,11 +449,10 @@ button:hover:not(:disabled) { background-color: var(--ui-surface-soft); }
 .videoNote { color: var(--muted); }
 .disclosure { margin-top: 18px; }
 .disclosure-trigger span { background: var(--ui-accent-dim); }
-.standby-info button, .voice button, .history-selector button[aria-pressed=true] {
+.voice button, .history-selector button[aria-pressed=true] {
  color: var(--muted); background: var(--accent); border: 0; font-weight: 550;
 }
-.standby-info button:hover:not(:disabled), .voice button:hover:not(:disabled),
-.history-selector button[aria-pressed=true]:hover:not(:disabled) { background: var(--accent); }
+.voice button:hover:not(:disabled), .history-selector button[aria-pressed=true]:hover:not(:disabled) { background: var(--accent); }
 .camera-expand { background: var(--ui-accent-dim); color: var(--accent); }
 .camera-docked .camHead small { color: var(--accent); }
 .score-meter, .data-bar-track, .track { background-color: var(--ui-surface-soft); }
@@ -510,24 +465,21 @@ button:hover:not(:disabled) { background-color: var(--ui-surface-soft); }
 .legend span:nth-child(2):before { border-color: var(--series-fatigue); }
 .legend span:nth-child(3):before { border-color: var(--series-disengagement); }
 .recent-events li { border: 0; border-radius: 0; background: transparent; padding-inline: 0; }
-.recent-events .alarm-event { color: var(--ui-danger); background: var(--ui-danger-dim); padding-inline: 12px; border-radius: 8px; }
 .utterance { border: 0; background: transparent; padding: 14px 0; }
 .assistant-flow span { border-color: var(--ui-stroke-strong); }
 .content section > small::before, .module-grid section > small::before { box-shadow: none; }
 .history-selector button { background: var(--ui-surface-soft); }
 .camera-home .camera-docked { box-shadow: 0 14px 48px var(--ui-shadow-color); }
 
-
 .dashboard { background: var(--ui-bg); }
 a, .section-heading > small, .content section > small, summary,
 .disclosure-trigger, .trip-strip dt svg, .mini-scores span svg { color: var(--muted); }
 .section-nav button[aria-pressed=true], .camera-expand { color: var(--text); }
 .dashboard .nav-active { background: var(--accent); }
-.standby-info button, .voice button, .history-selector button[aria-pressed=true] {
+.voice button, .history-selector button[aria-pressed=true] {
  background: var(--accent); color: var(--text);
 }
-.standby-info button:hover:not(:disabled), .voice button:hover:not(:disabled),
-.history-selector button[aria-pressed=true]:hover:not(:disabled) { background: var(--accent); }
+.voice button:hover:not(:disabled), .history-selector button[aria-pressed=true]:hover:not(:disabled) { background: var(--accent); }
 .road-mark { background: var(--accent); }
 .road-mark i { background: var(--ui-surface-2); }
 .status-pill { background: var(--accent); color: var(--text); }
@@ -541,7 +493,6 @@ a, .section-heading > small, .content section > small, summary,
 .track i { background: var(--accent); }
 :where(a,button,select,summary):focus-visible { outline-color: var(--ui-stroke-strong); }
 
-
 .dashboard {
  background: radial-gradient(ellipse at 90% 0%,var(--ui-accent-dim),transparent 60%),var(--ui-bg);
  --sidebar-width: 216px;
@@ -553,8 +504,8 @@ a, .section-heading > small, .content section > small, summary,
 .road-mark i { background: var(--accent); }
 .sidebar-session { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 11px; }
 .session-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; flex-shrink: 0; }
-.standby-info button, .voice button, .history-selector button[aria-pressed=true] { background: var(--accent); color: var(--muted); }
-.standby-info button:hover:not(:disabled), .voice button:hover:not(:disabled), .history-selector button[aria-pressed=true]:hover:not(:disabled) { background: var(--accent); }
+.voice button, .history-selector button[aria-pressed=true] { background: var(--accent); color: var(--muted); }
+.voice button:hover:not(:disabled), .history-selector button[aria-pressed=true]:hover:not(:disabled) { background: var(--accent); }
 .status-pill { background: var(--ui-accent-dim); color: var(--accent); }
 .status-pill:before { background: var(--accent); }
 .score-meter i, .data-bar-track i { background: linear-gradient(90deg,var(--accent),var(--accent)); }
@@ -585,12 +536,8 @@ a, .section-heading > small, .content section > small, summary,
  .section-nav button[aria-pressed=true] { color: var(--accent); }
  .header-meta { margin-top: auto; display: flex; flex-direction: column; align-items: stretch; gap: 18px; min-width: 0; }
  .sidebar-session { padding-inline: 10px; line-height: 1.5; }
- .source-select { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding-inline: 8px; font-size: 11px; color: var(--muted); }
- .source-select select { width: 100%; min-width: 0; font-size: 12px; background-color: var(--ui-surface-soft); padding-left: 10px; }
  .density-button { border: 0; padding: 10px; justify-content: start; min-width: 0; font-size: 12px; }
- .sidebar-collapsed .brand-label, .sidebar-collapsed .section-nav button > span:not(.nav-active),
- .sidebar-collapsed .sidebar-session > span:last-child, .sidebar-collapsed .source-select,
- .sidebar-collapsed .density-button > span { display: none; }
+ .sidebar-collapsed .brand-label, .sidebar-collapsed .section-nav button > span:not(.nav-active), .sidebar-collapsed .sidebar-session > span:last-child, .sidebar-collapsed .density-button > span { display: none; }
  .sidebar-collapsed .sidebar-brand { flex-direction: column; gap: 14px; }
  .sidebar-collapsed .section-nav button, .sidebar-collapsed .density-button { justify-content: center; padding-inline: 0; }
  .sidebar-collapsed .sidebar-session { justify-content: center; }
@@ -612,12 +559,10 @@ a, .section-heading > small, .content section > small, summary,
  .sidebar-brand { grid-column: 1; }
  .nav-collapse, .sidebar-session, .header-meta .density-button { display: none; }
  .app-header .header-meta { grid-column: 2; grid-row: 1; }
- .source-select > span { display: none; }
  .app-header .section-nav { grid-column: 1/-1; grid-row: 2; justify-self: stretch; justify-content: space-between; width: 100%; padding: 6px; border-radius: 16px; background: var(--ui-surface-soft); }
  .section-nav button { flex-direction: column; font-size: 11px; padding: 9px 8px; gap: 6px; min-height: 54px; }
  .section-nav button[aria-pressed=true] { color: var(--accent); }
  .dashboard .nav-active { background: var(--ui-accent-dim); }
- .source-select { font-size: 0; }
  .columns { grid-template-columns: 1fr; }
  .camera-placeholder { aspect-ratio: auto; height: 290px; }
  .signal-sections { grid-template-columns: 1fr; }
@@ -696,7 +641,6 @@ button, select { color: var(--text); background-color: var(--ui-surface-soft); }
 button:hover:not(:disabled) { background-color: var(--ui-surface-soft); }
 .density-button { color: var(--muted); }
 .density-button[aria-pressed=true] { color: var(--accent); background: var(--ui-accent-dim); }
-.source-select select { background-color: var(--ui-surface-soft); color: var(--text); }
 .page-nav-row.page-current { background: var(--ui-accent-dim); }
 .page-current .page-link, .page-nav .section-nav button[aria-pressed=true] { color: var(--accent); }
 .page-nav .section-nav .nav-active { background: var(--ui-surface-soft); }
@@ -706,13 +650,6 @@ button:hover:not(:disabled) { background-color: var(--ui-surface-soft); }
 .status-pill { background: var(--ui-accent-dim); color: var(--accent); }
 .camHead small { background: var(--ui-surface-soft); }
 .camera-stage { background: var(--ui-surface-2); }
-.camera-standby {
- background: radial-gradient(ellipse at 70% 10%,var(--ui-accent-dim),transparent 75%),
- radial-gradient(circle,var(--ui-accent-dim) .7px,transparent .9px) 0 0/17px 17px,
- linear-gradient(140deg,var(--ui-surface-2),var(--ui-surface-2));
-}
-.standby-info { color: var(--muted); }
-.viewfinder i { border-color: var(--ui-stroke-strong); }
 .optical-field::before { border-color: var(--ui-stroke-strong); }
 .optical-field::after { border-color: var(--ui-stroke-strong); }
 .videoNote { background: var(--ui-surface-soft); color: var(--muted); }
@@ -737,12 +674,9 @@ button:hover:not(:disabled) { background-color: var(--ui-surface-soft); }
 .dashboard-footer { color: var(--muted); }
 .safety-banner { color: var(--ui-danger); background: var(--ui-surface-soft); }
 .dashboard .alarm-slow b, .dashboard .alarm-slow small { color: var(--ui-danger); }
-.recent-events .alarm-event { color: var(--ui-danger); background: var(--ui-surface-soft); }
 .skip-link { background: var(--ui-surface-2); color: var(--accent); }
-.standby-info button, .voice button, .primary-action,
-.history-selector button[aria-pressed=true] { background: var(--accent); color: var(--muted); }
-.standby-info button:hover:not(:disabled), .voice button:hover:not(:disabled),
-.primary-action:hover:not(:disabled), .history-selector button[aria-pressed=true]:hover:not(:disabled) { background: var(--accent); }
+.voice button, .primary-action, .history-selector button[aria-pressed=true] { background: var(--accent); color: var(--muted); }
+.voice button:hover:not(:disabled), .primary-action:hover:not(:disabled), .history-selector button[aria-pressed=true]:hover:not(:disabled) { background: var(--accent); }
 :where(a,button,select,summary):focus-visible { outline-color: var(--ui-stroke-strong); }
 details[open] summary::after { content: '−'; }
 @media(max-width:899px) {

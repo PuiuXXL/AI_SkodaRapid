@@ -24,5 +24,6 @@
    "message": {"type": "command", "cmd": "declare_occupant", "value": {"remove": 3}}},
   {"name": "request", "args": {"text": "Propune muzică"},
    "message": {"type": "speech", "text": "Propune muzică", "final": true, "addressed": true}},
-  {"name": "answer", "args": {"id": "q1", "value": "da"}, "message": {"type": "speech", "text": "da", "final": true, "addressed": true}}
+  {"name": "answer", "args": {"id": "q1", "value": "da"}, "message": {"type": "speech", "text": "da", "final": true, "addressed": true}},
+  {"name": "stop_media", "args": {}, "message": {"type": "speech", "text": "Oprește muzica", "final": true, "addressed": true}}
 ]

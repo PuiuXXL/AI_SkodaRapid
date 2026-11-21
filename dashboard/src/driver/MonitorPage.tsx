@@ -7,23 +7,24 @@ import {InstrumentStack} from "./InstrumentStack";
 import {ControlPanel} from "./ControlPanel";
 import {KpiStrip,Overview,StatusStrip} from "./MonitorParts";
 import {useDriver} from "./context";
-import {PageHeading} from "./DrivingPages";
+import {PageHeading} from "./PageHeading";
 import {useTelemetry} from "../telemetry";
 import {causes,label,safetyLevels} from "../labels";
 import "./monitor-layout.css";
 
 export function MonitorPage(){
-  const {data,live,setLive,fresh}=useDriver();
-  const s=live&&!fresh?{}:data.state;
+  const {data,fresh}=useDriver();
+  // Stale or missing data is shown as no data, never as the last values received.
+  const s=fresh?data.state:{};
   const [docked,setDocked]=useState(false),[eventTime,setEventTime]=useState<number>();
-  const history=live&&!fresh?[]:data.history;
+  const history=fresh?data.history:[];
   const samples=useTelemetry(s);
   const cards=[
     {label:"Scoruri",icon:"chart",description:"Atenție, oboseală și dezinteres · aceeași scală, în timp.",body:<>
       <ScoreHistory points={history} sectionId="score-history" eventTime={eventTime}/>
       <div className="score-context"><h3>Contextul evaluării</h3><Rows items={[["Nivel de siguranță",(s.safety?.level??"—")+" · "+label(safetyLevels,s.safety?.level)],["Risc raportat",fmt(s.assessment?.risk," / 3")],["Cauză",label(causes,s.cause?.label)],["Încredere cauză",fmt(s.cause?.conf,"%",100)],["Ultima intervenție",words(s.intervention?.last)],["Efect măsurat",fmt(s.intervention?.effect_pct,"%")],["Ultima stare",time(s.ts)],["Mostre disponibile",fmt(history.filter(Boolean).length)]]}/></div>
     </>},
-    {label:"Privire",icon:"eye",description:"Direcția privirii, pleoape și calitatea semnalului ocular.",body:<Eyes s={s} live={live} samples={samples}/>},
+    {label:"Privire",icon:"eye",description:"Direcția privirii, pleoape și calitatea semnalului ocular.",body:<Eyes s={s} samples={samples}/>},
     {label:"Reacție",icon:"pulse",description:"Răspunsurile șoferului comparate cu referința personală.",body:<Reaction s={s}/>},
     {label:"Cabină",icon:"cabin",description:"Ocupanți, telefon, conversație și conținutul de la bord.",body:<Cabin s={s}/>},
     {label:"Fișă",icon:"report",description:"Concentrare, intervenții și rezultatele călătoriei.",body:<Scorecard s={s}/>},
@@ -35,10 +36,10 @@ export function MonitorPage(){
     <PageHeading label="INSTRUMENTE / MONITORIZARE" title="Dashboard" description="Camere, starea șoferului și telemetria de bord"/>
     <StatusStrip s={s} connection={data.connection}/>
     <KpiStrip s={s} history={history} samples={samples}/>
-    <Cameras live={live} socket={data.socket} cue={data.cue} trip={s.trip} onLive={()=>setLive(true)} onDock={setDocked}/>
+    <Cameras socket={data.socket} cue={data.cue} trip={s.trip} onDock={setDocked}/>
     <div className="content monitor-overview">
       <Overview s={s} samples={samples} slot={<div className="camera-slot" data-camera-slot="overview" aria-hidden="true"/>}/>
-      {live&&<VisionDiagnostics s={s} connection={data.connection}/>}
+      <VisionDiagnostics s={s} connection={data.connection}/>
     </div>
     <InstrumentStack cards={cards} dock={docked}/>
   </div></InlineDetails.Provider>;

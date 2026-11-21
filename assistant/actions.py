@@ -124,7 +124,8 @@ def _allowed_poi_ids(state: State, event: Optional[Event]) -> set[str]:
     """POIs the LLM may suggest: only those proposed by P2's rule (plan D3, K3).
 
     Sources: ``event.data["poi_id"]`` / ``event.data["poi_options"]`` of a
-    ``stop_suggested`` event, and ``state.trip.next_poi``.
+    ``stop_suggested`` event, ``state.trip.next_poi``, and the tourist sights ahead
+    on the map route (``trip.attractions_ahead``, listed by P2's trip source).
     """
     ids: set[str] = set()
     if event is not None:
@@ -133,6 +134,9 @@ def _allowed_poi_ids(state: State, event: Optional[Event]) -> set[str]:
         ids.update(str(p) for p in event.data.get("poi_options", []) or [])
     if state.trip.next_poi is not None:
         ids.add(state.trip.next_poi.id)
+    for sight in (state.trip.model_extra or {}).get("attractions_ahead") or []:
+        if isinstance(sight, dict) and sight.get("id"):
+            ids.add(str(sight["id"]))
     return ids
 
 

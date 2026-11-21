@@ -38,6 +38,11 @@ does not declare has a `CONTRACT:` line in `docs/perception.md` §9.
 
 When a side changes the boundary on purpose: regenerate the fixtures, review the JSON diff, tell the other side.
 
+The route file of the dashboard's location simulator is shared the same way:
+`tests/contract/fixtures/dashboard_route_file.json` must equal what `routeFile(...)` produces (`npm test`) and be
+accepted by P4's trip source in core (`tests/contract/test_dashboard_route.py`, run by the core job with
+`tests/simulator`).
+
 ## Running the jobs locally
 
 From the repository root, in a venv with the job's requirements (the `pip install` line of each workflow).

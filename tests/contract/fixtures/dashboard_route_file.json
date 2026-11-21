@@ -1,0 +1,21 @@
+{
+  "type": "drivemate_route", "version": 1, "id": "route-fixture", "name": "Sud → Nord", "source": "dashboard_map",
+  "created_ts": 1795000000.0,
+  "origin": {"id": "a", "name": "Sud", "category": "origin", "lat": 46.0, "lon": 23.0},
+  "stops": [
+    {"id": "b", "name": "Benzinărie", "category": "fuel", "lat": 46.03, "lon": 23.0},
+    {"id": "w", "name": "Nod", "category": "waypoint", "lat": 46.05, "lon": 23.0},
+    {"id": "d", "name": "Nord", "category": "destination", "lat": 46.1, "lon": 23.0}
+  ],
+  "geometry": [
+    {"lat": 46.0, "lon": 23.0}, {"lat": 46.01, "lon": 23.0}, {"lat": 46.02, "lon": 23.0}, {"lat": 46.03, "lon": 23.0},
+    {"lat": 46.04, "lon": 23.0}, {"lat": 46.05, "lon": 23.0}, {"lat": 46.06, "lon": 23.0}, {"lat": 46.07, "lon": 23.0},
+    {"lat": 46.08, "lon": 23.0}, {"lat": 46.09, "lon": 23.0}, {"lat": 46.1, "lon": 23.0}
+  ],
+  "distance_km": 11.119,
+  "speed_kmh": 72,
+  "attractions": [
+    {"id": "wiki-ro-1", "name": "Cetate", "kind": "fort", "lat": 46.07, "lon": 23.02,
+     "description": "O cetate medievală.", "wikipedia": "ro:Cetate", "source": "wikipedia"}
+  ]
+}

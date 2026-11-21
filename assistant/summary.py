@@ -44,18 +44,57 @@ def _cabin_line(state: State) -> str:
     return line
 
 
+def _km(value: object) -> str:
+    return f"{value:g} km" if isinstance(value, (int, float)) and not isinstance(value, bool) else "? km"
+
+
+def _place_line(state: State) -> str:
+    """Where the car is, in names from the map route (P4 simulator: ``trip.place``, an extra field of Trip).
+
+    Names come from the route the user drew, never from coordinates: the LLM cannot misplace the car.
+    """
+    place = (state.trip.model_extra or {}).get("place")
+    if not isinstance(place, dict) or not place.get("after"):
+        return ""
+    text = f"Location: after {place['after']} ({_km(place.get('after_km'))} behind)"
+    if place.get("before"):
+        text += f", before {place['before']} ({_km(place.get('before_km'))} ahead)"
+    if place.get("destination"):
+        text += f"; destination {place['destination']} in {_km(place.get('destination_km'))}"
+    return text
+
+
+def _attractions_line(state: State) -> str:
+    """Tourist sights ahead on the map route (``trip.attractions_ahead``), with their id and description."""
+    items = (state.trip.model_extra or {}).get("attractions_ahead") or []
+    parts = []
+    for item in items[:3]:
+        if not isinstance(item, dict) or not item.get("id") or not item.get("name"):
+            continue
+        part = (f"{item['name']} [{item['id']}] ({item.get('kind') or 'attraction'}, in {_km(item.get('dist_km'))}, "
+                f"{_km(item.get('detour_km'))} off the road)")
+        if item.get("description"):
+            part += f': "{item["description"]}"'
+        parts.append(part)
+    return "Tourist sights ahead (facts only from these descriptions): " + "; ".join(parts) if parts else ""
+
+
 def _trip_line(state: State) -> str:
-    """Road, speed, time at the wheel, ETA, next stop."""
+    """Road, speed, time at the wheel, ETA, next stop; where the car is and the sights ahead (map route)."""
     trip = state.trip
     text = f"{trip.road}, {trip.speed_kmh:.0f} km/h, {trip.elapsed_min:.0f} min driving"
     if trip.eta_min is not None:
         text += f", ETA {trip.eta_min:.0f} min"
     if trip.stopped:
-        text += ", STOPPED" + (f" at {trip.at_poi.id} ({trip.at_poi.category})" if trip.at_poi else "")
+        poi_at = trip.at_poi
+        text += ", STOPPED" + (f" at {poi_at.name or poi_at.id} [{poi_at.id}] ({poi_at.category})" if poi_at else "")
     if trip.next_poi:
         poi = trip.next_poi
         dist = f" in {poi.dist_km:g} km" if poi.dist_km is not None else ""
         text += f". Next stop: {poi.name or poi.id} [{poi.id}] ({poi.category}){dist}"
+    for extra in (_place_line(state), _attractions_line(state)):
+        if extra:
+            text += f". {extra}"
     return text
 
 

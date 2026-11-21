@@ -299,7 +299,10 @@ class AssistantLink:
                     state.scorecard.reminders_done += 1
             text = f"Memento bifat: {action.reminder_id}."
         elif kind == "suggest_stop":
-            text = f"Oprire acceptată: {action.poi_id}."
+            # With P4's map simulator the car really goes there and stops (simulator/sim.py stop_at).
+            stop_at = getattr(self.engine.simulator, "stop_at", None)
+            going = callable(stop_at) and bool(stop_at(str(action.poi_id)))
+            text = f"Oprire acceptată: {action.poi_id}." + (" Mașina oprește acolo." if going else "")
         elif kind == "delegate":
             text = f"Delegat lui {action.to_person}: {action.task}."
         elif kind == "show_on_screen":

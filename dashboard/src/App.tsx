@@ -1,16 +1,15 @@
 import {MotionConfig} from "motion/react";
 import type {StateProps, SessionData, Trip} from "./types";
 import React,{useState,useRef,useEffect} from "react";
-import {videoOrigin} from "./session";
+import {videoOrigin} from "./driver/session";
 import {Panel,Metrics,Detail,Rows,fmt,words,time,yes} from "./Panels";
 
 import "./design.css";
 import "./obsidian.css";
 import {DriverApp} from "./driver/DriverApp";
-import {Optic} from "./Optic";
 import {DataBars} from "./DataBars";
 
-import {AttentionGauge,CameraStandby,ScoreReading,TripStrip} from "./Overview";
+import {AttentionGauge,ScoreReading,TripStrip} from "./Overview";
 import {zones} from "./labels";
 import {Spark} from "./charts";
 import type {Sample} from "./telemetry";
@@ -20,7 +19,8 @@ function Feed({src,label}: {src: string; label: string}){
  return error?<div className="feed-error">{label} · indisponibil <button onClick={()=>{retry(attempt+1);setError(false)}}>Reîncearcă</button></div>:
  <img key={attempt} src={src} alt={label} onError={()=>setError(true)}/>;
 }
-export function Cameras({live,socket,cue,trip,onLive,onDock}: {live: boolean; socket: SessionData["socket"]; cue: number; trip: Trip | undefined; onLive: () => void; onDock: (docked: boolean) => void}){
+/** P1's two MJPEG streams (perception/stream.py). A stream that cannot be loaded says so and offers a retry. */
+export function Cameras({socket,cue,trip,onDock}: {socket: SessionData["socket"]; cue: number; trip: Trip | undefined; onDock: (docked: boolean) => void}){
  const [requested,setRequested]=useState<boolean | null>(null);
  const camera=useRef<HTMLElement>(null), boundary=useRef<HTMLDivElement>(null);
  const [compact,setCompact]=useState(false);
@@ -93,14 +93,14 @@ export function Cameras({live,socket,cue,trip,onLive,onDock}: {live: boolean; so
        {(["driver","passenger"] as const).map(seat=>{
          const label=seat==="driver"?"Șofer":"Pasager";
          return <figure key={seat} className="seat-feed">
-           <figcaption><span>{label}</span><small>{live?"LIVE":"SIMULAT"}</small></figcaption>
-           <div className="camera-stage">{live?<Feed src={videoOrigin+"/video/"+seat} label={"Camera · "+label}/>:<CameraStandby onLive={onLive}/>}</div>
+           <figcaption><span>{label}</span><small>LIVE</small></figcaption>
+           <div className="camera-stage"><Feed src={videoOrigin+"/video/"+seat} label={"Camera · "+label}/></div>
          </figure>;
        })}
        {compact&&<button className="camera-return" onClick={returnToCamera} aria-label="Revino la camere">↗</button>}
      </section>
    </div>
-   {live&&<div className="camera-controls"><button disabled={!socket} onClick={debug}>Debug · D</button>{requested!==null&&socket&&<span>{requested?"Activare cerută":"Dezactivare cerută"}</span>}</div>}
+   {<div className="camera-controls"><button disabled={!socket} onClick={debug}>Debug · D</button>{requested!==null&&socket&&<span>{requested?"Activare cerută":"Dezactivare cerută"}</span>}</div>}
    <TripStrip trip={trip}/>
  </div>;
 }
@@ -117,14 +117,14 @@ export function General({s}: StateProps & {points: SessionData["history"]}){
 </div>
  <Detail title="Șofer și context"><Rows items={[["Timp pe traseu",fmt(s.trip?.elapsed_min," min")],["Până la destinație",fmt(s.trip?.eta_min," min")],["Tip drum",words(s.trip?.road)],["Următoarea oprire",s.trip?.next_poi?.name],["Distanță până la oprire",fmt(s.trip?.next_poi?.dist_km," km")],["Ultima stare",time(s.ts)],["Cauză",words(c.label)],["Țintă / priviri în 30 s",words(c.target)+" / "+fmt(c.glances_30s)],["Surse",c.sources?.join?.(", ")||"—"],["Încredere cauză",fmt(c.conf,"%",100)],["Poziție cap · yaw / pitch / roll",[h.yaw,h.pitch,h.roll].map(v=>fmt(v,"°")).join(" / ")],["Cădere de cap",yes(h.nodding)],["Căscat",yes(s.driver?.yawn)],["Vorbește",yes(s.driver?.speaking)],["Telefon folosit",yes(s.driver?.phone?.in_use)],["Sursă telefon",words(s.driver?.phone?.source)],["Încredere telefon",fmt(s.driver?.phone?.conf,"%",100)]]}/></Detail></section>;
 }
-export function Eyes({s,live,samples=[]}: StateProps & {live: boolean; samples?: Sample[]}){
+export function Eyes({s,samples=[]}: StateProps & {samples?: Sample[]}){
  const rawEyes=s.driver?.eyes??{},g=s.driver?.gaze??{},crop=import.meta.env.VITE_EYE_STREAM_URL;
  const monitored=s.driver?.monitoring_ok!==false && s.perf?.cameras?.driver?.available!==false;
  const known=monitored && g.calibrated!==false && Boolean(zones[g.zone??""]);
  const e=monitored && rawEyes.reliable===true?rawEyes:{reliable:rawEyes.reliable,state:"UNKNOWN"};
  return <section id="eyes" className="optical"><small>ANALIZĂ OCULARĂ</small><h2>Privire</h2>
- <div className="ocular">{live&&crop&&monitored&&e.reliable===true?<Feed src={crop} label="Decupaj ocular"/>:!live&&e.reliable&&<Optic sideways={g.zone?.startsWith("mirror")}/>}
- <div><strong>{known?zones[g.zone!]:"Direcție nedeterminată"}</strong><p>{live?(e.reliable===false?"Semnal ocular nesigur":crop&&monitored&&e.reliable?"Decupaj ocular live":"Decupaj ocular indisponibil"):"Schemă ilustrativă · simulare"}</p></div></div>
+ <div className="ocular">{crop&&monitored&&e.reliable===true&&<Feed src={crop} label="Decupaj ocular"/>}
+ <div><strong>{known?zones[g.zone!]:"Direcție nedeterminată"}</strong><p>{e.reliable===false?"Semnal ocular nesigur":crop&&monitored&&e.reliable?"Decupaj ocular live":"Decupaj ocular indisponibil"}</p></div></div>
  <Metrics items={[["PERCLOS · 60 s",fmt(e.perclos_60s,"%",100)],["Ultima clipire",fmt(e.blink_ms," ms")],["În afara drumului",known?fmt(g.off_road_ms," s",.001,2):"—"]]}/>
  <div className="fx-trends">
    <figure><figcaption>Deschidere oculară (EAR)<b>{fmt(e.ear,"",1,2)}</b></figcaption><Spark values={samples.map(sample=>sample.ear)} label="Deschiderea oculară în ultimul minut"/></figure>

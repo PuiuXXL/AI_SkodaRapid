@@ -10,7 +10,6 @@
 .driver-main .camera-pair.is-docked { position:fixed; z-index:12; right:16px; bottom:16px; width:min(360px,calc(100% - 32px)); height:110px; gap:4px; padding:4px; border:1px solid var(--line); border-radius:14px; background:var(--ui-surface-1); box-shadow:0 8px 32px var(--ui-shadow-color) }
 .is-docked .seat-feed { border-radius:9px }
 .is-docked figcaption { padding:3px 8px; font-size:12px }
-.is-docked .standby-info,.is-docked .viewfinder { display:none }
 .camera-pair .camera-return { position:absolute; bottom:5px; right:5px; width:42px; height:42px; background:var(--ui-surface-1); color:var(--text); border:1px solid var(--line); border-radius:10px }
 .camera-controls { display:flex; align-items:center; gap:12px; margin-bottom:12px }
 .monitor-cameras,.monitor-overview { margin-bottom:18px }
@@ -60,7 +59,6 @@
 .instrument-body #eyes > .scores { grid-column:auto; grid-template-columns:1fr }
 .instrument-body #eyes > .inline-detail { grid-column:1/-1 }
 .instrument-body #eyes .inline-detail dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); column-gap:20px }
-.instrument-body .ocular .optic-art { max-width:240px; margin:auto }
 .instrument-body #reaction { grid-template-columns:repeat(3,minmax(0,1fr)) }
 .instrument-body #reaction > .inline-detail { grid-column:1/-1 }
 .instrument-body #reaction .inline-detail dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); column-gap:20px }
@@ -137,10 +135,8 @@
   .monitor-page .camera-anchor { height:clamp(155px,38vw,225px) }
   .driver-main .camera-pair { gap:5px }
   .seat-feed figcaption { padding:6px 8px; font-size:13px }
-  .seat-feed .standby-info { display:flex; flex-direction:column; gap:4px }
-  .seat-feed .standby-info strong,.seat-feed .optical-field { display:none }
+  .seat-feed .optical-field { display:none }
   .driver-main .camera-pair.is-docked { width:min(280px,70%); height:80px; bottom:8px; right:8px }
-  .camera-pair.is-docked .standby-info { display:none }
   .instrument-label { padding:14px; gap:10px }
   .instrument-icon { width:40px; height:40px; border-radius:11px }
   .instrument-icon svg { width:23px; height:23px }

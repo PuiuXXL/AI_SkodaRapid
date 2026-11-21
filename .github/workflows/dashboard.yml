@@ -6,10 +6,12 @@ on:
   push:
     paths:
       - "dashboard/**"
+      - "tests/contract/fixtures/dashboard_*.json"  # shared with core's contract tests
       - ".github/workflows/dashboard.yml"
   pull_request:
     paths:
       - "dashboard/**"
+      - "tests/contract/fixtures/dashboard_*.json"  # shared with core's contract tests
       - ".github/workflows/dashboard.yml"
   workflow_dispatch:
 

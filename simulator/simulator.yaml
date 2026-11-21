@@ -1,0 +1,14 @@
+# P4 trip source (simulator/): following the route drawn on the dashboard map (#/simulator).
+# Loaded by simulator/sim.py; core's own thresholds stay in core/config.
+
+default_speed_kmh: 50      # until the dashboard, a scene or the route file sets one (same as core's demo trip)
+highway_kmh: 80            # trip.road = "highway" at or above this speed, "city" below (kept while stopped)
+stop_offset_max_m: 500     # a stop farther than this from the road is rejected (the map snaps points within 500 m)
+arrive_km: 0.005           # closer than 5 m to a stop or the destination counts as arrived
+passed_poi_km: 0.05        # a stop passed by more than 50 m is no longer the next one
+geometry_max_points: 20000 # route file limits
+stops_max: 30
+attraction_offset_max_m: 5000 # a tourist sight farther than this from the road is refused (the map keeps 2 km)
+attractions_max: 30
+attractions_ahead_km: 40   # trip.attractions_ahead: sights at most this far ahead ...
+attractions_listed: 3      # ... the nearest ones

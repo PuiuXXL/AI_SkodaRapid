@@ -206,6 +206,14 @@ reminders:                      # K2, K3
   stop_search_km: 40            # K3: stops ahead considered for a break
   reminder_detour_km: 15        # K3: a stop that solves an open reminder wins if at most this much farther
 
+attractions:                    # K4: tourist sights on the map route (P4's simulator, trip.attractions_ahead)
+  enabled: true
+  min_drive_min: 5              # propose one only after this much trip time (trip.elapsed_min)
+  cooldown_min: 15              # at most one proposal per this much trip time
+  min_ahead_km: 1               # not closer than this (time to answer and slow down) ...
+  suggest_within_km: 15         # ... and not farther than this
+  speech_wait_s: 20             # an utterance without speak_done (sound off in the browser) blocks no longer
+
 intervention:                   # D6: attention (and D or F) before vs. after each intervention
   before_s: 60
   after_s: 60

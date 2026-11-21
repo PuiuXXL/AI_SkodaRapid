@@ -7,7 +7,8 @@ Run from the repo root::
     python scripts/fake_perception.py        # in a second terminal: P1's stand-in, one key per scene
 
 Mounted when importable: ``assistant.router`` (P3: ``/tts``, ``/media``) and ``integrations.contact_app.router``
-(P4: DriveMate Contact). ``GET /health`` shows the connections, the data age and the simulator in use.
+(P4: DriveMate Contact). ``GET /health`` shows the connections, the data age and the simulator in use. With P4's
+simulator, ``/simulator/route`` takes the route drawn on the dashboard map (core/route_api.py).
 """
 
 from __future__ import annotations
@@ -26,9 +27,11 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from core.assistant_link import AssistantLink
+from core.attractions import AttractionRule
 from core.engine import Engine
 from core.hub import Hub, Peer
 from core.reminders import ReminderRule
+from core.route_api import route_router
 from core.safe_contact import SafeContactRule
 from core.safety import Safety
 from core.scorecard import TripReport
@@ -117,6 +120,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         TripReport(engine)  # J2, J3: the scorecard and the trip report
     if engine.assistant is None:
         AssistantLink(engine)  # the slow path: P3's assistant, after the safety rules
+    AttractionRule(engine)  # K4: a tourist sight on the map route, proposed as a stop (P4's simulator)
     assistant_router = _optional_router("assistant.router")
     hub = engine.hub
 
@@ -139,6 +143,9 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         app.include_router(assistant_router)
     if contact_router is not None:
         app.include_router(contact_router)
+    simulator_router = route_router(engine)
+    if simulator_router is not None:
+        app.include_router(simulator_router)
 
     @app.get("/health")
     async def health() -> dict[str, Any]:

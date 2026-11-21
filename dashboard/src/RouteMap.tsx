@@ -1,6 +1,6 @@
 import React,{useEffect,useRef,useState} from "react";
 import type * as Leaflet from "leaflet";
-import type {RouteSimulation} from "./route-simulation";
+import type {RoutePlanner} from "./route-simulation";
 import "leaflet/dist/leaflet.css";
 
 const mapViews = [
@@ -11,13 +11,14 @@ const mapViews = [
 ] as const;
 type MapView = typeof mapViews[number]["id"];
 
-export function RouteMap({simulation,disabled,pointsOpen,onOpenLayers}: {simulation:RouteSimulation;disabled:boolean;pointsOpen:boolean;onOpenLayers:()=>void}) {
+/** The road route and its points (editable), and the car where core says it is (planner.position). */
+export function RouteMap({planner:simulation,disabled,pointsOpen,onOpenLayers}: {planner:RoutePlanner;disabled:boolean;pointsOpen:boolean;onOpenLayers:()=>void}) {
   const host=useRef<HTMLDivElement>(null),map=useRef<Leaflet.Map|null>(null);
   const library=useRef<typeof Leaflet|null>(null),layers=useRef<Leaflet.LayerGroup|null>(null);
   const car=useRef<Leaflet.Marker|null>(null),latest=useRef({simulation,disabled});
   const [ready,setReady]=useState(false),[mapError,setMapError]=useState("");
   const [mapView,setMapView]=useState<MapView>("soft");
-  const [showRoute,setShowRoute]=useState(true),[showPoints,setShowPoints]=useState(true),[showCar,setShowCar]=useState(true);
+  const [showRoute,setShowRoute]=useState(true),[showPoints,setShowPoints]=useState(true),[showCar,setShowCar]=useState(true),[showSights,setShowSights]=useState(true);
   const layerPanel=useRef<HTMLDetailsElement>(null);
   const tileKind=mapView==="soft"?"streets":mapView;
   useEffect(()=>{if(pointsOpen&&(host.current?.clientWidth??0)<620&&layerPanel.current)layerPanel.current.open=false},[pointsOpen]);
@@ -39,7 +40,9 @@ export function RouteMap({simulation,disabled,pointsOpen,onOpenLayers}: {simulat
         layers.current=L.layerGroup().addTo(view);
         view.on("click",(event:Leaflet.LeafletMouseEvent)=>{
           const point=event.latlng.wrap();
-          if(!latest.current.disabled)void latest.current.simulation.add({lat:point.lat,lon:point.lng});
+          const planner=latest.current.simulation;
+          if(planner.placing)planner.placeAttraction({lat:point.lat,lon:point.lng});  // "Adaugă obiectiv pe hartă"
+          else if(!latest.current.disabled)void planner.add({lat:point.lat,lon:point.lng});
         });
         observer=new ResizeObserver(()=>view.invalidateSize({pan:false}));
         observer.observe(host.current);
@@ -80,7 +83,7 @@ export function RouteMap({simulation,disabled,pointsOpen,onOpenLayers}: {simulat
       const tooltip=document.createElement("span");tooltip.textContent=point.name;
       const marker=L.marker([point.lat,point.lon],{
         draggable:!disabled&&!simulation.adding,
-        icon:L.divIcon({className:"route-waypoint"+(index===0?" waypoint-start":index===simulation.points.length-1?" waypoint-end":""),html:`<span>${index+1}</span>`,iconSize:[30,30],iconAnchor:[15,15]}),
+        icon:L.divIcon({className:"route-waypoint"+(index===0?" waypoint-start":index===simulation.points.length-1?" waypoint-end":point.category==="waypoint"?" waypoint-pass":""),html:`<span>${index+1}</span>`,iconSize:[30,30],iconAnchor:[15,15]}),
         title:`${index+1}. ${point.name}`,keyboard:true
       }).bindTooltip(tooltip).addTo(group);
       marker.on("dragend",()=>{
@@ -89,7 +92,14 @@ export function RouteMap({simulation,disabled,pointsOpen,onOpenLayers}: {simulat
         void latest.current.simulation.add({lat:dropped.lat,lon:dropped.lng},point.id);
       });
     });
-  },[ready,simulation.points,simulation.route,simulation.adding,disabled,showRoute,showPoints]);
+    if(showSights)simulation.sights.forEach(sight=>{
+      const tooltip=document.createElement("span");tooltip.textContent=sight.name+(sight.selected?"":" · neales");
+      L.marker([sight.lat,sight.lon],{icon:L.divIcon({className:"route-attraction"+(sight.selected?"":" is-off"),
+        html:'<span aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 21l1.6-7L2 9.2l7.1-.6Z"/></svg></span>',
+        iconSize:[26,26],iconAnchor:[13,13]}),title:sight.name,keyboard:true}).bindTooltip(tooltip)
+        .on("click",()=>latest.current.simulation.toggleAttraction(sight.id)).addTo(group);
+    });
+  },[ready,simulation.points,simulation.route,simulation.adding,simulation.sights,disabled,showRoute,showPoints,showSights]);
   useEffect(()=>{
     const L=library.current,view=map.current,position=simulation.position;
     if(!ready||!L||!view)return;
@@ -113,16 +123,16 @@ export function RouteMap({simulation,disabled,pointsOpen,onOpenLayers}: {simulat
   }
   return <div className="route-map-shell">
     <div className="route-map-toolbar"><span>Hartă rutieră · navigare liberă</span><div><button onClick={()=>fit(false)} disabled={!ready}>Cluj–A3</button><button onClick={()=>fit(true)} disabled={!ready||!simulation.points.length}>Vezi traseul</button></div></div>
-    <div className="route-map-canvas">
+    <div className="route-map-canvas" data-placing={simulation.placing||undefined}>
       <div ref={host} className="route-map" data-view={mapView} role="region" aria-label="Hartă rutieră interactivă. Apasă pentru a adăuga un punct."/>
       <details ref={layerPanel} className="map-layers" onToggle={event=>{if(event.currentTarget.open&&(host.current?.clientWidth??0)<620)onOpenLayers()}} onKeyDown={event=>{if(event.key==="Escape"){event.currentTarget.open=false;event.currentTarget.querySelector("summary")?.focus()}}}>
         <summary><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m3 7 9-5 9 5-9 5-9-5Zm0 5 9 5 9-5M3 17l9 5 9-5"/></svg><span>Straturi</span><small>{mapViews.find(item=>item.id===mapView)?.label}</small></summary>
         <div className="map-layer-content">
           <fieldset><legend>Vizualizare hartă</legend><div className="map-view-options">{mapViews.map(item=><button key={item.id} aria-pressed={mapView===item.id} onClick={()=>setMapView(item.id)} disabled={!ready}><span className="map-view-swatch" data-view={item.id} aria-hidden="true"/>{item.label}</button>)}</div></fieldset>
-          <fieldset className="map-overlay-options"><legend>Elemente vizibile</legend><label><input type="checkbox" checked={showRoute} onChange={event=>setShowRoute(event.target.checked)}/>Traseu</label><label><input type="checkbox" checked={showPoints} onChange={event=>setShowPoints(event.target.checked)}/>Puncte de oprire</label><label><input type="checkbox" checked={showCar} onChange={event=>setShowCar(event.target.checked)}/>Mașină</label></fieldset>
+          <fieldset className="map-overlay-options"><legend>Elemente vizibile</legend><label><input type="checkbox" checked={showRoute} onChange={event=>setShowRoute(event.target.checked)}/>Traseu</label><label><input type="checkbox" checked={showPoints} onChange={event=>setShowPoints(event.target.checked)}/>Puncte de oprire</label><label><input type="checkbox" checked={showCar} onChange={event=>setShowCar(event.target.checked)}/>Mașină</label><label><input type="checkbox" checked={showSights} onChange={event=>setShowSights(event.target.checked)}/>Obiective turistice</label></fieldset>
         </div>
       </details>
-      <div className="map-route-legend" aria-hidden="true"><i/>{simulation.editingLocked?"Simulare în curs":simulation.route?"Traseu auto":"Planificare traseu"}</div>
+      <div className="map-route-legend" aria-hidden="true"><i/>{simulation.placing?"Apasă pe hartă unde e obiectivul":simulation.synced?"Traseu urmat de core":simulation.route?"Traseu auto · netrimis":"Planificare traseu"}</div>
     </div>
     {mapError&&<p className="map-notice" role="status">{mapError}</p>}
   </div>;
