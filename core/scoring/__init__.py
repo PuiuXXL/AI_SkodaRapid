@@ -144,3 +144,5 @@ class Scores:
         assistant = self.engine.assistant
         if assistant is not None and not muted:
             assistant.submit(event, now)
+            if name == "fatigue" and self.engine.safe_contact is not None:
+                self.engine.safe_contact.fatigue_dialog_started(now, value)  # C10: a refusal now counts

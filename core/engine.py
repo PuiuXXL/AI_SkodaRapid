@@ -97,6 +97,7 @@ class Engine:
         self.safety: Any = None  # core.safety.Safety, attached by it
         self.assistant: Any = None  # core.assistant_link.AssistantLink, attached by it
         self.scores: Any = None  # core.scoring.Scores, attached by it
+        self.safe_contact: Any = None  # core.safe_contact.SafeContactRule, attached by it
         self.llm_status = "unknown"  # last status reported by the assistant; "off" while the director has it off
 
     # --- plug-in points for the next steps ----------------------------------------------------------------------

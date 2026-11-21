@@ -265,7 +265,34 @@ Checked end to end (real processes, P3's real client): scene 4, Maria shows her 
 both cameras -> "Maria, poți să-i povestești tu?" / "Andrei, ochii pe drum." -> A/B 2 / 0 -> 15 s later "Cauză
 rezolvată ✓ (+100%)".
 
-## 8. Testing without the others
+## 8. The trusted contact (C10, D10, F8): `core/safe_contact.py`, `core/profiles.py`
+
+A rule, never the LLM. The fatigue dialog is on for `safe_contact.dialog_s` after `fatigue_high`; a refusal in it
+(the keyword path of P3's `assistant.refusal`, ✋ / 👎 in the KSS question, or the LLM's
+`stay_silent(reason="driver_refused")`) with F >= `safe_contact.fatigue_min`:
+
+1. after P3's "Ok, te las în pace.", `assistant.muted_until = now + refusal_mute_min` (P3-P4 silent; alarms, SOS
+   and the delivery of messages are not affected);
+2. if the profile has a contact, consent, and `cooldown_min` has passed: "Îi dau de veste lui Mihai." (clip
+   `notify_contact_<name>`, only when the contact really is told and `announce` is on), then the fixed text
+   (`templates.yaml` `safe_contact.sms`) to the channels `sms` (driver's phone, via the bridge) and `contact_page`
+   (P4's `push_safe_contact`): both `not_connected` until wired. Event `safe_contact_notified`, source RULE;
+   otherwise `safe_contact_skipped` with the reason;
+3. the contact's answer is a normal message (`safe_contact_reply`, F2); once it has been read, **one**
+   `stop_suggested` goes to the assistant with the silence lifted for it (P3's policy would otherwise block it).
+
+`profiles.py` reads `profiles/<driver>/profile.json` (P4's format: `safe_contact.name`, `consent.safe_contact_notify`,
+`announce`) and re-reads it when it changes; no file = no contact. Phone numbers stay in `.env`.
+
+Also new: an initiative the assistant skipped by policy (`rate_limited`, `safety_veto`, `conversation`) is sent again
+after `assistant.retry_s` (at most `max_retries`) while its condition still holds; never while muted. Core passes its
+clock to `handle_event` (`now`), so P3's one-initiative-per-30-s rule runs on the same time as core.
+
+Checked end to end (real processes, P3's real client, a test profile outside the repo): scene 6, F 0.60 -> KSS
+question -> "Lasă-mă în pace." -> "Ok, te las în pace." -> "Îi dau de veste lui Mihai." -> the text for Mihai ->
+his answer read after "da" -> "Oprim la Cafenea peste 10.8 km?" -> "da".
+
+## 9. Testing without the others
 
 ```bash
 pytest tests/core                                   # the rules, scene by scene, in fake time
