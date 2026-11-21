@@ -588,7 +588,7 @@ the CONTRACT texts below; with `false` only the plan §7 fields are sent.
 | AP6 passenger gestures / answer | `passenger.gesture`, `passenger.answer` | passenger | 👍 done; ✋ and yes not detected live (to diagnose) | icon / chip on the passenger card |
 | Passenger posture | `passenger.posture`* | passenger | done; 4 false events in 60 s (automatic reference, to tune) | posture tag |
 | Camera selection | `driver/passenger.monitoring_reason = "camera_fallback"`* | both | done (dev fallback off by default) | "fallback camera" note |
-| J1 performance | `perf.cameras.*` (`available`, `capture_ts`, `age_ms`, `dropped_results`), `perf.*_ms_p50`, `e2e_ms_p95`, `degrade_level`, `stages_ms`, `publish_ts` | both | done (driver face 29-30 fps at 1080p30 capture; passenger 10 Hz) | performance panel |
+| J1 performance | `perf.cameras.*` (`available`, `capture_ts`, `age_ms`, `dropped_results`), `perf.*_ms_p50`, `e2e_ms_p95`, `degrade_level`, `stages_ms`, `publish_ts` | both | done (both cameras 720p30 captured and processed at ~30 fps, e2e p95 66 ms, live 2026-11-21) | performance panel |
 
 \* not yet in `shared/contracts.py` (contract 2.1): see below. Everything else above is already in contract 2.1.
 

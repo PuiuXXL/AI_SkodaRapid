@@ -12,12 +12,11 @@ cameras:
     device: "usb:046d:082c"    # Logi C615 (an OpenCV index, path or URL also works)
     device_name: "C615"        # no usb match -> unique friendly-name substring (null = off)
     backend: auto              # auto | dshow | msmf | v4l2 | any   (Windows: dshow opens MJPG reliably)
-    width: 1920                # 1080p30 (P1 requirement 2026-11-21); the C615 delivers 1080p MJPG at 30 fps
-    height: 1080
+    width: 1280                # 720p30 (P1 decision 2026-11-21, was 1080p): no decode/resize cost, 30 fps on both
+    height: 720
     fps: 30
-    fourcc: MJPG               # compressed USB stream -> 1080p30 without USB bandwidth issues
-    process_width: 1280        # models get ONE 1280x720 copy per frame: at full 1080p the face fell to 22 fps and
-                               # e2e p95 to 199 ms (live 2026-11-21); pixel thresholds stay the 720p-tuned ones
+    fourcc: MJPG               # compressed USB stream -> both cameras at 30 fps on one root hub
+    process_width: null        # processed as captured (720p = the size every pixel threshold was tuned at)
     buffer_size: 1             # keep only the latest frame
     reconnect_s: 1.0           # wait between reconnect attempts
     max_read_failures: 15      # consecutive failed reads (~0.5 s at 30 fps) -> reopen the camera
@@ -95,7 +94,7 @@ face:                          # MediaPipe Face Landmarker, rules R-FL1..R-FL5 i
 
 rates:
   driver_face_every_frame: true  # the driver face is never degraded
-  passenger_face_hz: 10
+  passenger_face_hz: 30        # every frame (P1 decision 2026-11-21); the degrade ladder still halves it under load
   gaze_hz: 15
   phone_hz: 5
   pose_hz: 2                   # rear_seat confirmation only

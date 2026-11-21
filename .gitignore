@@ -50,3 +50,5 @@ dashboard/dist/
 .coverage.*
 coverage-*.xml
 htmlcov/
+
+.env

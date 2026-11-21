@@ -27,8 +27,8 @@ def test_default_config_loads() -> None:
     assert isinstance(cfg, PerceptionConfig)
     assert cfg.cameras.driver.enabled
     assert isinstance(cfg.cameras.driver.device, int | str)  # the index depends on the machine (0 laptop, 1 USB)
-    assert (cfg.cameras.driver.width, cfg.cameras.driver.height, cfg.cameras.driver.fps) == (1920, 1080, 30)
-    assert cfg.cameras.driver.process_width == 1280  # 1080p capture, 720p processing
+    assert (cfg.cameras.driver.width, cfg.cameras.driver.height, cfg.cameras.driver.fps) == (1280, 720, 30)
+    assert cfg.cameras.driver.process_width is None  # 720p captured and processed as is
     assert cfg.cameras.driver.fourcc == "MJPG"
     assert cfg.output.publish_hz == 15
     assert cfg.output.mjpeg_port == 8001
