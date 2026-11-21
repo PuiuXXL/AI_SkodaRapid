@@ -127,6 +127,18 @@ class HandsResult:
         return asdict(self)
 
 
+class _MediaPipeRecognizer:
+    def __init__(self, recognizer: Any) -> None:
+        import mediapipe as mp
+
+        self._mp = mp
+        self._recognizer = recognizer
+
+    def recognize_for_video(self, image: npt.NDArray[np.uint8], timestamp_ms: int) -> Any:
+        mp_image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=image)
+        return self._recognizer.recognize_for_video(mp_image, timestamp_ms)
+
+
 class HandTracker:
     """Gesture Recognizer + hold logic for one camera.
 
@@ -294,7 +306,7 @@ class HandTracker:
             from mediapipe.tasks.python import BaseOptions, vision
 
             cfg = self.cfg
-            self._recognizer = vision.GestureRecognizer.create_from_options(
+            recognizer = vision.GestureRecognizer.create_from_options(
                 vision.GestureRecognizerOptions(
                     base_options=BaseOptions(model_asset_path=str(cfg.model_path())),
                     running_mode=vision.RunningMode.VIDEO,
@@ -304,14 +316,13 @@ class HandTracker:
                     min_tracking_confidence=cfg.min_tracking_conf,
                 )
             )
+            self._recognizer = _MediaPipeRecognizer(recognizer)
         return self._recognizer
 
     def _recognize(self, image: npt.NDArray[np.uint8], t: float) -> list[HandFeatures]:
-        import mediapipe as mp
-
         recognizer = self._ensure_recognizer()
         rgb = cv2.cvtColor(as_bgr(image), cv2.COLOR_BGR2RGB)
-        result = recognizer.recognize_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), self._clock(t))
+        result = recognizer.recognize_for_video(rgb, self._clock(t))
         hands: list[HandFeatures] = []
         for i, points in enumerate(result.hand_landmarks):
             handed = result.handedness[i][0] if i < len(result.handedness) and result.handedness[i] else None

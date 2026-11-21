@@ -285,7 +285,7 @@ def test_open_y16_is_reported_and_converted(fake_cv: type[FakeCapture]) -> None:
     first, second = src.read(), src.read()
     for img in (first, second):
         assert img is not None and img.shape == (6, 8, 3) and img.dtype == np.uint8
-        assert int(img.max()) == 255
+        assert int(np.max(img)) == 255
 
 
 def test_unknown_backend_fps_falls_back_to_requested(fake_cv: type[FakeCapture]) -> None:
