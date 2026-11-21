@@ -1,0 +1,245 @@
+{
+  "ts": 1763672400.123,
+  "seq": 18231,
+  "trip": {
+    "speed_kmh": 118,
+    "road": "highway",
+    "elapsed_min": 74,
+    "pos": {
+      "lat": 45.75,
+      "lon": 21.23
+    },
+    "eta_min": 20,
+    "scene": 6,
+    "stopped": false,
+    "at_poi": null,
+    "next_poi": {
+      "id": "omv_km42",
+      "category": "fuel",
+      "dist_km": 12
+    }
+  },
+  "occupants": [
+    {
+      "id": 1,
+      "seat": "driver",
+      "source": "cam_driver",
+      "profile": "andrei",
+      "role": "adult"
+    },
+    {
+      "id": 2,
+      "seat": "front_right",
+      "source": "cam_passenger",
+      "profile": "maria",
+      "role": "adult"
+    },
+    {
+      "id": 3,
+      "seat": "rear",
+      "source": "declared",
+      "profile": "ioana",
+      "role": "child"
+    }
+  ],
+  "driver": {
+    "eyes": {
+      "ear": 0.27,
+      "eye_used": "left",
+      "perclos_60s": 0.08,
+      "blink_ms": 180,
+      "microsleep": false,
+      "reliable": true
+    },
+    "head": {
+      "yaw": -4,
+      "pitch": 2,
+      "roll": 1,
+      "nodding": false,
+      "answer": null
+    },
+    "gaze": {
+      "zone": "road",
+      "conf": 0.91,
+      "source": "face",
+      "off_road_ms": 0,
+      "vats_60s": 2,
+      "entropy_60s": 1.42
+    },
+    "yawn": false,
+    "speaking": false,
+    "phone": {
+      "in_use": false,
+      "conf": 0.12,
+      "source": null
+    },
+    "gesture": null,
+    "reaction": {
+      "visual_ms": 650,
+      "verbal_ms": 1400,
+      "gesture_ms": 900,
+      "baseline_ms": {
+        "visual": 500,
+        "verbal": 900,
+        "gesture": 800
+      },
+      "missed": 0,
+      "response_rate_10min": 0.8
+    }
+  },
+  "passenger": {
+    "present": true,
+    "awake": true,
+    "eyes_closed_s": 0,
+    "speaking": false,
+    "holding_phone": true,
+    "gesture": null,
+    "answer": null
+  },
+  "conversation": false,
+  "cause": {
+    "target": "passenger",
+    "person_id": 2,
+    "label": "passenger_showing_phone",
+    "glances_30s": 3,
+    "conf": 0.8,
+    "sources": [
+      "cam_driver",
+      "cam_passenger"
+    ]
+  },
+  "assessment": {
+    "attention": 0.82,
+    "fatigue": 0.35,
+    "disengagement": 0.61,
+    "risk": 1
+  },
+  "safety": {
+    "level": "P3",
+    "alert": null,
+    "llm_allowed": true,
+    "llm_enabled": true,
+    "monitoring_ok": true,
+    "alarm_ms_last": 120
+  },
+  "interaction": {
+    "state": "speaking",
+    "addressed_to": 1,
+    "dialog_window_open": false,
+    "last_input": {
+      "from": 1,
+      "channel": "nod",
+      "value": "yes",
+      "ts": 1763672398.4
+    }
+  },
+  "assistant": {
+    "muted_until": null,
+    "mute_reason": null
+  },
+  "safe_contact": {
+    "name": "Mihai",
+    "configured": true,
+    "consent": true,
+    "announce": true,
+    "notified_ts": null,
+    "last_reply_msg_id": null
+  },
+  "phone": {
+    "connected": true,
+    "battery": 64
+  },
+  "messages": [
+    {
+      "id": "m17",
+      "app": "whatsapp",
+      "from": "Mihai",
+      "state": "deferred",
+      "deferred_reason": "high_speed",
+      "replyable": true,
+      "ts": 1763672390.0
+    }
+  ],
+  "call": null,
+  "reminders": [
+    {
+      "id": "r1",
+      "task": "lichid de parbriz",
+      "trigger": {
+        "type": "stop_at_category",
+        "category": "fuel"
+      },
+      "state": "active",
+      "created_ts": 1763671200.0
+    }
+  ],
+  "media": {
+    "playing": true,
+    "track_id": "t07",
+    "title": "…",
+    "volume": 0.4,
+    "reason": "disengagement",
+    "kid_safe": false
+  },
+  "intervention": {
+    "last": "music_energetic",
+    "effect_pct": 18,
+    "stats": {
+      "music": 0.18,
+      "delegate": 0.31,
+      "quiz": 0.08
+    }
+  },
+  "ab": {
+    "naive_alerts": 7,
+    "our_alerts": 1
+  },
+  "blind_m": {
+    "last": 64,
+    "trip": 180
+  },
+  "scorecard": {
+    "longest_focus_min": 23,
+    "hands_free_messages": 2,
+    "phone_touches": 0,
+    "suggestions_accepted": 3,
+    "suggestions_rejected": 1,
+    "reminders_done": 1
+  },
+  "integrations": {
+    "phone_bridge": "ok",
+    "twilio": "ok",
+    "contact_app": "ok",
+    "llm": "ok"
+  },
+  "perf": {
+    "cameras": {
+      "driver": {
+        "capture_fps": 30,
+        "process_fps": 24,
+        "dropped_frames": 3
+      },
+      "passenger": {
+        "capture_fps": 25,
+        "process_fps": 10,
+        "dropped_frames": 1
+      }
+    },
+    "face_driver_ms_p50": 9,
+    "face_passenger_ms_p50": 8,
+    "pose_ms_p50": 22,
+    "phone_ms_p50": 18,
+    "gesture_ms_p50": 7,
+    "sface_ms_p50": 25,
+    "e2e_ms_p95": 95,
+    "alarm_ms_last": 120,
+    "llm_ttft_ms": 640,
+    "llm_total_ms": 1500,
+    "stt_final_ms": 700,
+    "tts_first_audio_ms": 400,
+    "msg_to_voice_ms": 2100,
+    "cpu": 61,
+    "ram_mb": 2100,
+    "gpu": 35
+  }
+}

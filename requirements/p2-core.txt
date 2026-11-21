@@ -1,0 +1,24 @@
+# P2 - context + safety + SOS (core/, shared/contracts.py, integrations/twilio_call.py, scripts/fake_perception.py)
+# Python 3.11. Install with:  pip install -r requirements/p2-core.txt
+
+# JSON contract (shared/contracts.py); the other modules use Pydantic v2 too
+pydantic>=2.7,<3
+
+# Thresholds and templates (core/config/*.yaml), secrets (.env)
+pyyaml>=6.0
+python-dotenv>=1.0
+
+# core/main.py: FastAPI with /ws/perception, /ws/ui, /ws/phone and the 10 Hz state loop
+fastapi>=0.110
+uvicorn[standard]>=0.29
+orjson>=3.10
+
+# scripts/fake_perception.py: WebSocket client towards core
+websockets>=12.0
+
+# SOS call (integrations/twilio_call.py)
+twilio>=9.0
+
+# Tests
+pytest>=8.0
+pytest-asyncio>=0.23

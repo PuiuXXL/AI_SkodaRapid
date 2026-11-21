@@ -1,0 +1,84 @@
+# P2 fixed texts (plan C5, C10, F6, F8, K2, principle 4). Never written by the LLM.
+# Rendered with Python str.format through core/settings.py::render(); the fields of each template are listed above it.
+# Phone numbers are never here: only in .env (EMERGENCY_NUMBER, SAFE_CONTACT_NUMBER).
+
+links:
+  # Fields: lat, lon
+  maps: "https://www.google.com/maps?q={lat:.5f},{lon:.5f}"
+
+sos:                            # C5, F6: driver not responding
+  # Twilio <Say> in ro-RO. A link cannot be read aloud: the location goes by SMS and on DriveMate Contact.
+  # Fields: driver_name, unresponsive_s, occupants_n, passenger_state_text, time_hhmm
+  call: >-
+    Alertă automată DriveMate. {driver_name} nu răspunde de {unresponsive_s} secunde.
+    Ocupanți: {occupants_n}; pasagerul din dreapta e {passenger_state_text}.
+    Locația a fost trimisă prin SMS. Ora: {time_hhmm}.
+  # SMS from the driver's phone (send_sms to=emergency) and the red alert on DriveMate Contact.
+  # Fields: driver_name, unresponsive_s, occupants_n, passenger_state_text, maps_url, time_hhmm
+  sms: >-
+    Alertă automată DriveMate. {driver_name} nu răspunde de {unresponsive_s} secunde.
+    Ocupanți: {occupants_n}; pasagerul din dreapta e {passenger_state_text}.
+    Locație: {maps_url}. Ora: {time_hhmm}.
+  # passenger_state_text, from SosReport.passenger_state
+  passenger_state:
+    awake: treaz
+    asleep: adormit
+    absent: absent
+  # Spoken to the passenger when the countdown starts (clip passenger_instructions_<passenger>_<driver> when it
+  # exists, TTS otherwise). Never "apucă volanul". Fields: passenger_name, driver_name
+  passenger_instructions: "{passenger_name}, {driver_name} nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+
+safe_contact:                   # C10, F8: tired driver who refused the assistant
+  # SMS from the driver's phone (send_sms to=safe_contact) and the yellow notice on DriveMate Contact.
+  # Fields: driver_name, elapsed_text, maps_url, eta_min
+  sms: >-
+    DriveMate: {driver_name} pare obosit ({elapsed_text} la volan) și nu vrea pauză acum.
+    Scrie-i un mesaj (i-l citesc cu voce tare) sau sună-l.
+    Locație: {maps_url}. Ajunge în ~{eta_min} min.
+  # The same without an ETA (no destination). Fields: driver_name, elapsed_text, maps_url
+  sms_no_eta: >-
+    DriveMate: {driver_name} pare obosit ({elapsed_text} la volan) și nu vrea pauză acum.
+    Scrie-i un mesaj (i-l citesc cu voce tare) sau sună-l.
+    Locație: {maps_url}.
+  # elapsed_text. Fields: h, m
+  elapsed_hours: "{h} h {m} min"
+  elapsed_minutes: "{m} min"
+
+reminders:                      # K2: delivered only with the car stopped at a POI of the category
+  # Fields: task (the noun phrase of create_reminder, e.g. "lichid de parbriz")
+  due: "Ai zis să iei {task}."
+
+explanations:                   # principle 4, D5: one sentence per alert, in the event log and for alert_explain
+  # Fields: s (seconds, one decimal with a comma, e.g. "2,1"), speed_kmh, zone_text, reason_text
+  microsleep: "Ochii închiși {s} s la {speed_kmh} km/h."
+  nodding: "Capul a căzut la {speed_kmh} km/h."
+  off_road: "Ai privit {zone_text} {s} s la {speed_kmh} km/h."
+  phone: "Telefon în mână {s} s la {speed_kmh} km/h."
+  unresponsive: "Nu ai răspuns {s} s după alarmă."
+  monitoring_lost: "Camera nu te mai vede: {reason_text}."
+
+# zone_text for explanations.off_road, by driver.gaze.zone
+zones:
+  lap: "în jos"
+  passenger: "spre pasager"
+  infotainment: "spre ecran"
+  cluster: "spre bord"
+  rear_seat: "în spate"
+  away: "în altă parte"
+  mirror_left: "în oglinda stângă"
+  mirror_right: "în oglinda dreaptă"
+  mirror_rear: "în retrovizor"
+
+# reason_text for explanations.monitoring_lost, by driver.monitoring_reason (both P1 vocabularies)
+monitoring_reasons:
+  occluded: "camera e acoperită"
+  camera_covered: "camera e acoperită"
+  face_lost: "fața nu se mai vede"
+  too_dark: "e prea întuneric"
+  blurred: "imaginea e neclară"
+  frozen: "imaginea e înghețată"
+  camera_frozen: "imaginea e înghețată"
+  no_frames: "camera nu mai trimite imagini"
+  camera_unavailable: "camera nu mai trimite imagini"
+  mode_switch: "camera își schimbă modul"
+  unknown: "motiv necunoscut"

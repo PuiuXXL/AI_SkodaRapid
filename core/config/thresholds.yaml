@@ -1,0 +1,203 @@
+# P2 thresholds: safety rules, scores, windows (DriveMate-PLAN-FINAL.md 4.B, 4.C, 5, 8: "niciun prag în cod").
+# Read through core/settings.py. With demo_mode: true, the `demo:` block at the end is merged over these values
+# (shorter windows for the 4.5-minute demo). Tuned in the hall on Sunday.
+#
+# Field names in the comments are contract fields (shared/contracts.py).
+
+demo_mode: true
+
+loop:
+  state_hz: 10                  # State on /ws/ui
+  perception_stale_ms: 1000     # no PerceptionFrame for this long -> no camera data (C7: monitoring lost)
+
+# --- Safety (C): deterministic, no LLM on this path ------------------------------------------------------------------
+
+safety:
+  alarm_target_ms: 300          # C3: threshold crossed -> alarm_played; the dashboard colors alarm_ms against it
+  min_gaze_conf: 0.5            # driver.gaze.conf below this = unknown zone (unknown never alerts)
+
+  microsleep:                   # P1 (C3, C4): eyes closed -> alarm with the driver's name
+    closed_ms: 1000             # driver.eyes.closed_ms at or above = microsleep (P1 always sends microsleep=false)
+    min_speed_kmh: 0            # 0 = also when stopped (safety first); raise it to silence a parked car
+    nodding_alarm: true         # driver.head.nodding (fatigue head drop) also raises the P1 alarm
+
+  distraction:                  # P2: critical distraction
+    min_speed_kmh: 10           # below this no P2 alert (parking, standing in traffic)
+    off_road_ms: 2000           # driver.gaze.off_road_ms at or above (P1 already excludes mirror glances < 2 s)
+    off_road_ms_high_speed: 1500
+    high_speed_kmh: 90          # at or above this speed the stricter off_road_ms_high_speed applies
+    phone_min_ms: 1000          # driver.phone.in_use with source=detector for this long
+    lap_pattern_min_conf: 0.35  # source=lap_pattern counts only at or above this conf (P1 sends 0.40)
+
+  escalation:                   # C2: discrete signal (event visual_cue) -> voice -> alarm, for P2 distractions
+    voice_after_ms: 1500        # still distracted this long after the visual cue -> voice
+    alarm_after_ms: 3000        # still distracted this long after the visual cue -> alarm
+    cooldown_s: 10              # after an episode ends, the next visual cue waits this long (no nagging)
+
+  monitoring:                   # C7: "Nu te mai văd, monitorizarea e întreruptă"
+    lost_after_ms: 500          # driver.monitoring_ok=false this long -> announce (P1 already waits face_lost_s=2 s)
+    repeat_s: 30                # repeat the announcement while it is still lost
+
+sos:                            # P0 (C4, C5): alarm -> "Ești bine?" -> countdown -> SOS on three channels (F6)
+  ask_after_alarm_s: 1.5        # pause between the alarm clip and "Ești bine?"
+  answer_window_s: 6            # time to answer "Ești bine?" (voice / nod / thumbs up) before the countdown
+  countdown_s: 10               # countdown before the call; any "yes" (voice / nod / thumbs up) cancels it
+  realarm_s: 3                  # the alarm is replayed this often while waiting for an answer
+
+dialog:
+  window_s: 6                   # E1: dialog window opened at speak_done of a question (interaction.dialog_window_open)
+
+# C8: thumbs down adjusts only P3-P4 thresholds, inside fixed limits. Microsleep, distraction, SOS: never.
+tuning:
+  step: 0.05
+  limits:
+    fatigue.high: [0.55, 0.75]
+    disengagement.high: [0.55, 0.80]
+
+# --- State understanding (B) -----------------------------------------------------------------------------------------
+# norm: [a, b] = term 0 at a, 1 at b, linear and clipped in between: term = clip((x - a) / (b - a), 0, 1).
+# b < a is an inverted range (a low value is the bad one).
+
+reaction:                       # B1: reaction on 3 channels vs. the driver's own baseline
+  baseline_min_samples: 3       # baseline = median of the first 3-5 reactions per channel
+  baseline_max_samples: 5
+  default_baseline_ms:          # used until the baseline is learned
+    visual: 600
+    verbal: 1000
+    gesture: 900
+  missed_ms:                    # no reaction = this value (and reaction.missed += 1)
+    visual: 5000                # visual_cue -> gaze back on the road
+    verbal: 6000                # speak_done of a question -> speech_onset
+    gesture: 6000               # proposal -> gesture / head answer
+  response_window_min: 10       # reaction.response_rate_10min
+
+fatigue:                        # B2: F = sum(weight * term), plan formula
+  weights:
+    perclos: 0.30               # driver.eyes.perclos_60s
+    blink_duration: 0.20        # mean driver.eyes.blink_ms over window_s
+    yawn: 0.15                  # yawns in window_s
+    slow_reaction: 0.20         # mean r = latency / baseline
+    nodding: 0.10               # nodding episodes in window_s
+    trip_duration: 0.05         # trip.elapsed_min
+  norm:
+    perclos: [0.05, 0.30]
+    blink_duration: [150, 450]  # ms
+    yawn: [0, 3]
+    slow_reaction: [1.0, 2.5]
+    nodding: [0, 3]
+    trip_duration: [60, 240]    # minutes
+  window_s: 300                 # counting window for yawns, nodding, blink duration
+  ema_tau_s: 20                 # smoothing of F
+  high: 0.6                     # event fatigue_high (D3, D10)
+  low: 0.45                     # hysteresis: fatigue_high is armed again below this
+
+disengagement:                  # B2: D = sum(weight * term), plan formula
+  weights:
+    slow_reaction: 0.30         # mean r = latency / baseline
+    low_entropy: 0.25           # 1 - entropy: driver.gaze.entropy_60s (bits)
+    low_response_rate: 0.20     # 1 - response rate: driver.reaction.response_rate_10min
+    short_answers: 0.15         # few words per answer
+    monotony: 0.10              # monotonous context (below)
+  norm:
+    slow_reaction: [1.0, 2.5]
+    low_entropy: [1.8, 0.5]     # inverted range: term 0 at >= 1.8 bits, 1 at <= 0.5 bits
+    low_response_rate: [0.9, 0.4]  # inverted range: term 0 at >= 0.9, 1 at <= 0.4
+    short_answers: [4, 1]       # inverted range, mean words per answer: term 0 at >= 4, 1 at <= 1
+  monotony:                     # the context is monotonous when all of these hold
+    roads: [highway]            # trip.road
+    min_minutes: 5              # for at least this long
+    max_speed_std_kmh: 8        # with a steady speed
+  max_fatigue: 0.4              # D counts only while F is below this (demanding traffic also lowers entropy)
+  ema_tau_s: 20
+  high: 0.6                     # event disengagement_high (D8)
+  low: 0.45
+
+attention:                      # B3: 0..1
+  window_s: 10                  # share of the last 10 s with the gaze on the road (mirrors under 2 s count as road)
+  vats_free: 4                  # driver.gaze.vats_60s up to this costs nothing
+  vats_penalty: 0.03            # per VATS glance above vats_free
+  phone_penalty: 0.4            # driver.phone.in_use
+
+risk:                           # B3: 0..3, combines attention, F and speed
+  speed_ref_kmh: 130            # speed factor = min(1, trip.speed_kmh / 130): 0 when parked, maximum at 130
+  weights:
+    inattention: 0.6            # 1 - attention
+    fatigue: 0.4                # F
+  levels: [0.15, 0.35, 0.60]    # raw risk (score x speed factor) at or above -> risk 1, 2, 3
+
+conversation:                   # B9: lips alternate between the two cameras + the microphone is active
+  window_s: 10
+  min_turns: 3                  # driver <-> passenger speaker changes in the window
+  mic_recent_s: 3               # a speech / speech_onset from the browser in the last 3 s
+  hold_s: 5                     # conversation stays true this long after the last turn
+
+cause:                          # B4: cause of the distraction, from the two cameras
+  window_s: 30
+  passenger_glances_min: 3      # zone passenger >= 3 times in 30 s AND passenger.holding_phone -> passenger_showing_phone
+  passenger_talk_glances_min: 3 # the same glances + passenger.speaking -> passenger_talk
+  message_window_s: 10          # driver phone / lap glances within 10 s of a new message -> incoming_message
+  hold_s: 10                    # cause.label is kept this long after the evidence stops
+  resolve_window_s: 30          # D2: the remedy is dropped if the glances do not fall within this window
+
+blind_m:                        # B6: speed x time with the gaze off the road
+  min_segment_m: 5              # shorter off-road stretches are not drawn on the map
+
+ab_baseline:                    # B8: same detector, fixed thresholds, no zones, calibration or context
+  yaw_deg: 20                   # |driver.head.yaw| above this ...
+  pitch_deg: 15                 # ... or |driver.head.pitch| above this ...
+  min_ms: 1500                  # ... for this long = one naive alert (a mirror glance counts)
+  closed_ms: 1000               # eyes closed this long = one naive alert
+  any_phone: true               # any phone seen by the driver camera counts, the passenger's too (G5)
+  cooldown_s: 5                 # one naive alert per episode
+
+# --- Messages, reminders, interventions (F2, K, D6, J) ---------------------------------------------------------------
+
+messages:                       # F2: defer / ask / read
+  defer_min_risk: 2             # assessment.risk at or above -> defer
+  defer_min_speed_kmh: 120      # trip.speed_kmh at or above -> defer
+  defer_levels: [P0, P1, P2]    # safety.level in these -> defer
+  defer_on_cause: true          # cause.label set -> defer
+  retry_s: 5                    # a deferred message is checked again this often
+
+reminders:                      # K2, K3
+  stopped_max_kmh: 1            # trip.speed_kmh at or below = stopped
+  stopped_min_s: 2              # K2 fires after being stopped this long at a POI of the category
+  stop_search_km: 40            # K3: stops ahead considered for a break
+  reminder_detour_km: 15        # K3: a stop that solves an open reminder wins if at most this much farther
+
+intervention:                   # D6: attention (and D or F) before vs. after each intervention
+  before_s: 60
+  after_s: 60
+  min_samples: 20
+
+scorecard:                      # J2
+  focus_break_ms: 2000          # longest_focus_min: a stretch without an off-road glance longer than this
+
+refusal_mute_min: 15            # C10, D10: after a refusal the assistant is silent (P3-P4 only; P0-P2 stay on)
+
+safe_contact:                   # C10: trusted contact
+  fatigue_min: 0.6              # F at or above + a refusal in the fatigue dialog -> SMS + yellow notice
+  cooldown_min: 30              # at most one message per cooldown
+
+# --- Demo overrides (merged over the values above when demo_mode: true) ------------------------------------------
+# Only keys that exist above are allowed here (core/settings.py checks it).
+
+demo:
+  refusal_mute_min: 3
+  safe_contact:
+    cooldown_min: 2
+  fatigue:
+    window_s: 60
+    ema_tau_s: 5
+    norm:
+      trip_duration: [30, 120]
+  disengagement:
+    ema_tau_s: 5
+    monotony:
+      min_minutes: 1
+  intervention:
+    before_s: 15
+    after_s: 15
+    min_samples: 5
+  cause:
+    resolve_window_s: 15
