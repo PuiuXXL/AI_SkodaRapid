@@ -11,8 +11,9 @@
   set after opening and falls back to YUY2, 10 fps at 720p over USB 2). Mono formats (GREY / Y8 / Y16) are
   converted to 3-channel BGR uint8 (:func:`to_bgr8`), so every consumer keeps seeing the same image type.
 * Devices: ``cameras.<name>.device`` is an OpenCV index, a path / URL, or a stable USB selector
-  ``usb:<vid>:<pid>[:<serial>]`` resolved at every open (:func:`resolve_device`; DirectShow enumeration on Windows,
-  sysfs on Linux), so the camera keeps its role when indices shift after re-plugging.
+  ``usb:<vid>:<pid>[:<serial>][@<port>]`` resolved at every open (:func:`resolve_device`; DirectShow enumeration on
+  Windows, sysfs on Linux), so the camera keeps its role when indices shift after re-plugging; ``@<port>`` tells two
+  cameras of the same model apart (``scripts/camera_probe.py`` prints the ports).
 """
 
 from __future__ import annotations
@@ -209,6 +210,9 @@ class CameraDevice:
     pid: str | None = None
     serial: str | None = None
     stable_path: str | None = None  # Linux: /dev/v4l/by-id/... symlink pointing at this node
+    # USB port identity, for two cameras of the same model without serial: Linux = the sysfs USB path ("1-2.3"),
+    # Windows = the parent part of the interface instance id ("7&d60e892"), which Windows derives from the port.
+    port: str | None = None
 
 
 _USB_SELECTOR = re.compile(r"^usb:(?P<vid>[0-9a-fA-F]{4}):(?P<pid>[0-9a-fA-F]{4})(?::(?P<serial>\S+))?$")
@@ -223,25 +227,40 @@ def parse_usb_selector(device: str) -> tuple[str, str, str | None] | None:
     return m["vid"].lower(), m["pid"].lower(), m["serial"]
 
 
+def split_port(selector: str) -> tuple[str, str | None]:
+    """``"usb:046d:082c@d60e892"`` -> (``"usb:046d:082c"``, ``"d60e892"``); no ``@`` -> (selector, None)."""
+    base, sep, port = selector.strip().partition("@")
+    return base, (port.strip().lower() or None) if sep else None
+
+
 def match_device(selector: str, devices: Sequence[CameraDevice]) -> CameraDevice:
-    """The single device matching a ``usb:`` selector.
+    """The single device matching a ``usb:<vid>:<pid>[:<serial>][@<port>]`` selector.
+
+    ``@<port>`` tells apart two cameras of the same model without a serial (``scripts/camera_probe.py`` prints each
+    camera's port): it matches when the device's :attr:`CameraDevice.port` contains it (case-insensitive). It is tied
+    to the physical USB port: moving a camera to another port needs the new value.
 
     Raises:
-        CameraOpenError: malformed selector, no match, or several matches (add the serial to the selector).
+        CameraOpenError: malformed selector, no match, or several matches (add the serial or the port).
     """
-    parsed = parse_usb_selector(selector)
+    base, port = split_port(selector)
+    parsed = parse_usb_selector(base)
     if parsed is None:
-        raise CameraOpenError(f"not a usb selector: {selector!r} (expected usb:<vid>:<pid>[:<serial>])")
+        raise CameraOpenError(f"not a usb selector: {selector!r} (expected usb:<vid>:<pid>[:<serial>][@<port>])")
     vid, pid, serial = parsed
     hits = [d for d in devices if d.vid == vid and d.pid == pid]
     if serial is not None:
         hits = [d for d in hits if d.serial is not None and d.serial.lower() == serial.lower()]
+    if port is not None:
+        hits = [d for d in hits if d.port is not None and port in d.port.lower()]
     if not hits:
-        seen = ", ".join(f"{d.index}:{d.name} ({d.vid}:{d.pid})" for d in devices) or "none"
+        seen = ", ".join(f"{d.index}:{d.name} ({d.vid}:{d.pid} port={d.port})" for d in devices) or "none"
         raise CameraOpenError(f"no camera matches {selector!r}; devices: {seen}")
     if len(hits) > 1:
-        names = ", ".join(f"{d.index}:{d.name} serial={d.serial}" for d in hits)
-        raise CameraOpenError(f"{selector!r} matches {len(hits)} cameras ({names}); add :<serial> to the selector")
+        names = ", ".join(f"{d.index}:{d.name} serial={d.serial} port={d.port}" for d in hits)
+        raise CameraOpenError(
+            f"{selector!r} matches {len(hits)} cameras ({names}); add :<serial> or @<port> to the selector"
+        )
     return hits[0]
 
 
@@ -252,6 +271,16 @@ def _win_ids(path: str) -> tuple[str | None, str | None, str | None]:
     # A non-composite device's instance id is its serial; a composite interface (&mi_xx) has a generated id with '&'.
     serial = None if "&mi_" in m["rest"] or "&" in m["instance"] else m["instance"]
     return m["vid"], m["pid"], serial
+
+
+def _win_port(path: str) -> str | None:
+    """Port identity from a DirectShow device path: the parent part of a generated instance id ("7&d60e892" of
+    "7&d60e892&0&0002"); Windows derives it from the parent device, i.e. from the USB port. None with a serial."""
+    m = _WIN_PATH_IDS.search(path.lower())
+    if m is None or "&" not in m["instance"]:
+        return None
+    parts = m["instance"].split("&")
+    return "&".join(parts[:2]) if len(parts) >= 2 else m["instance"]
 
 
 @dataclass(frozen=True)
@@ -509,7 +538,9 @@ def _list_dshow_devices() -> list[CameraDevice]:  # pragma: no cover - needs Win
             com.release(moniker)
             path = props.get("DevicePath", "")
             vid, pid, serial = _win_ids(path)
-            devices.append(CameraDevice(index, props.get("FriendlyName", "?"), path, vid, pid, serial))
+            devices.append(
+                CameraDevice(index, props.get("FriendlyName", "?"), path, vid, pid, serial, port=_win_port(path))
+            )
     finally:
         com.close()
     return devices
@@ -606,6 +637,7 @@ def _list_v4l2_devices(
                 pid=pid.lower() if pid else None,
                 serial=serial,
                 stable_path=by_id.get(node.name),
+                port=usb.name if usb else None,
             )
         )
     return devices
@@ -636,7 +668,7 @@ def resolve_device(device: int | str, backend: str = "auto") -> int | str:
         return device
     if device.isdigit():
         return int(device)
-    if parse_usb_selector(device) is None:
+    if parse_usb_selector(split_port(device)[0]) is None:
         return device
     if _PLATFORM == "win32" and backend not in ("auto", "dshow"):
         log.warning(

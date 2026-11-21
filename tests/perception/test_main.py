@@ -19,7 +19,7 @@ from pydantic import ValidationError
 
 from perception.config import load_config
 from perception.contract import PerceptionFrame, validate_frame
-from perception.main import Perception, _with_driver_device, load_pending
+from perception.main import Perception, _with_driver_device
 from perception.stream import MjpegServer
 from perception.worker import WorkerOptions
 
@@ -93,7 +93,9 @@ def test_commands_without_a_module_are_only_logged(caplog: pytest.LogCaptureFixt
         assert any("logged only" in r.getMessage() for r in caplog.records)
         worker.capabilities = worker.capabilities | {"enroll"}
         app.handle_message({"cmd": "enroll", "name": "andrei"})
-        assert app.acks[-1]["status"] == "ok"
+        assert app.acks[-1] == {"type": "ack", "cmd": "enroll", "status": "started", "detail": "camera driver"}
+        app.handle_message({"cmd": "enroll"})
+        assert app.acks[-1]["status"] == "error"  # no name
         app.handle_message({"cmd": "dialog_window", "open": True, "to": "passenger"})
         assert app.acks[-1]["status"] == "error"  # passenger camera not enabled
         app.handle_message({"cmd": "calibrate"})
@@ -131,7 +133,8 @@ def test_commands_reach_the_worker_through_main() -> None:
                 await run
 
     app = asyncio.run(scenario())
-    assert {a["cmd"]: a["status"] for a in app.acks} == {"enroll": "ok", "dialog_window": "ok", "debug": "ok"}
+    first = {a["cmd"]: a["status"] for a in reversed(app.acks)}  # the command acks (enroll events follow)
+    assert first == {"enroll": "started", "dialog_window": "ok", "debug": "ok"}
     echo = (app.workers["driver"].latest or {}).get("echo") or []
     assert [c["cmd"] for c in echo] == ["enroll", "dialog_window", "debug"]
     assert echo[0]["name"] == "andrei"
@@ -166,7 +169,9 @@ def test_frames_reach_core_over_ws_and_commands_are_acked() -> None:
     frames = [validate_frame(m) for m in received if "seq" in m]
     assert len(frames) >= 30
     acks = [m for m in received if m.get("type") == "ack"]
-    assert acks and acks[0]["cmd"] == "enroll" and acks[0]["status"] == "not_implemented"
+    assert acks and acks[0]["cmd"] == "enroll" and acks[0]["status"] == "started"
+    # synthetic camera, no models: the identity module reports the failure as an enroll event
+    assert any(a["cmd"] == "enroll" and a["status"] == "error" for a in acks[1:])
 
 
 # --- MJPEG (stream.py) ----------------------------------------------------------------------------------
@@ -247,17 +252,11 @@ def test_busy_mjpeg_port_disables_only_the_preview() -> None:
 # --- config ---------------------------------------------------------------------------------------------
 
 
-def test_pending_config_is_strict(tmp_path: Path) -> None:
-    pending = load_pending()
-    assert pending.output.result_max_age_ms > 0
-    assert pending.workers.modules == {"driver": [], "passenger": []}
-    bad = tmp_path / "output.yaml"
-    bad.write_text(
-        "output: {result_max_age_ms: 500, mjpeg_host: 0.0.0.0, typo: 1}\nworkers: {modules: {driver: []}}\n",
-        encoding="utf-8",
-    )
-    with pytest.raises(ValidationError):
-        load_pending(bad)
+def test_output_and_worker_keys_live_in_the_validated_config() -> None:
+    cfg = load_config()
+    assert cfg.output.result_max_age_ms > 0 and cfg.output.mjpeg_host
+    assert cfg.workers.modules == {"driver": [], "passenger": []}
+    assert not (Path(__file__).resolve().parents[2] / "perception" / "config" / "pending").exists()
 
 
 def test_device_override_keeps_the_yaml_rules() -> None:

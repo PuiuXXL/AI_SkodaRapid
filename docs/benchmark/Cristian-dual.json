@@ -1,0 +1,106 @@
+{
+  "frames": 900,
+  "cameras": {
+    "driver": {
+      "available_pct": 100.0,
+      "capture_fps": 30.2,
+      "process_fps": 29.8,
+      "age_ms_p95": 112.23999999999997,
+      "dropped_frames": 344
+    },
+    "passenger": {
+      "available_pct": 100.0,
+      "capture_fps": 30.2,
+      "process_fps": 10.1,
+      "age_ms_p95": 124.3,
+      "dropped_frames": 69
+    }
+  },
+  "models": {
+    "driver.face": {
+      "p50": 8.67,
+      "p95": 11.115,
+      "p95_max": 12.11
+    },
+    "driver.gaze": {
+      "p50": 13.41,
+      "p95": 17.82,
+      "p95_max": 19.24
+    },
+    "driver.phone": {
+      "p50": 14.57,
+      "p95": 18.68,
+      "p95_max": 20.47
+    },
+    "driver.gesture": {
+      "p50": 15.58,
+      "p95": 27.48,
+      "p95_max": 33.9
+    },
+    "driver.sface": {
+      "p50": 8.3,
+      "p95": 18.27,
+      "p95_max": 19.53
+    },
+    "driver.monitoring_module": {
+      "p50": 1.25,
+      "p95": 1.92,
+      "p95_max": 2.29
+    },
+    "driver.e2e_worker": {
+      "p50": 26.79,
+      "p95": 53.599999999999994,
+      "p95_max": 92.49
+    },
+    "passenger.face": {
+      "p50": 8.64,
+      "p95": 11.4,
+      "p95_max": 12.08
+    },
+    "passenger.phone": {
+      "p50": 16.06,
+      "p95": 20.27,
+      "p95_max": 22.47
+    },
+    "passenger.gesture": {
+      "p50": 14.21,
+      "p95": 28.28,
+      "p95_max": 37.38
+    },
+    "passenger.sface": {
+      "p50": 14.16,
+      "p95": 21.45,
+      "p95_max": 22.25
+    },
+    "passenger.monitoring_module": {
+      "p50": 1.3,
+      "p95": 1.98,
+      "p95_max": 2.17
+    },
+    "passenger.e2e_worker": {
+      "p50": 20.13,
+      "p95": 43.77,
+      "p95_max": 61.36
+    }
+  },
+  "system": {
+    "cpu": {
+      "p50": 42.3,
+      "max": 61.0
+    },
+    "ram_mb": {
+      "p50": 808.8,
+      "max": 822.9
+    },
+    "gpu": {
+      "p50": 1.0,
+      "max": 16.0
+    }
+  },
+  "publish_hz": 15.000333671439085,
+  "span_s": 59.932000160217285,
+  "publish_gap_max_s": 0.10699987411499023,
+  "e2e_ms_p95": 96.8,
+  "e2e_ms_p95_max": 137.2,
+  "degrade_level_max": 0
+}

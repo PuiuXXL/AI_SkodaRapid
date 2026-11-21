@@ -29,6 +29,7 @@ __all__ = ["CRITERIA", "EvalResult", "PipelineRun", "evaluate", "neutral_jitter"
 BLINK_MATCH_BEFORE_S = 0.3
 BLINK_MATCH_AFTER_S = 1.0
 STILL_SKIP_S = 1.0  # ignore the first second of the "still" window (settling)
+CLOSED_LATENCY_MS = 300.0  # eyes physically closed -> reported CLOSED (plan §8: alarm < 300 ms)
 POSE_SKIP_S = 2.0  # people react to a pose prompt after ~1.5-2 s (diag 2026-11-21): skip that part of the window
 SPEECH_ONSET_DELTA = 0.005  # lip gap / face height above the pre-window rest level = the lips started moving
 SPEECH_DETECT_S = 1.0  # a segment counts if speaking turns true within this long after the onset
@@ -38,6 +39,8 @@ CRITERIA = {
     "blink_detection": "blinks detected >= 95%",
     "false_alarms": "false closures <= 1 per minute",
     "closed_2s": "2 s closures detected 100%, closed_ms error < 100 ms",
+    "closed_latency": "eyes closed -> reported CLOSED, median < 300 ms (plan §8 alarm budget)",
+    "nodding": "head drop with closed eyes reported as nodding in every nod window",
     "squint_smile": "squint / smile reported as closed: 0",
     "yawn_detection": "yawns detected >= 90%",
     "no_false_yawn_speaking": "no yawn while speaking",
@@ -77,7 +80,8 @@ class EvalResult:
 
     @property
     def passed(self) -> bool:
-        return all(v for v in self.checks.values() if v is not None)
+        measured = [v for v in self.checks.values() if v is not None]
+        return bool(measured) and all(measured)
 
 
 def neutral_jitter(times: Sequence[float], values: Sequence[float], mask: Sequence[bool]) -> float:
@@ -154,11 +158,36 @@ def evaluate(run: PipelineRun, intervals: Sequence[Interval], blink_max_ms: floa
         m["closed_ms_error_mean"] = round(statistics.mean(errors), 1) if errors else None
         m["closed_ms_error_max"] = round(max(errors), 1) if errors else None
         res.checks["closed_2s"] = detected == len(closed_windows) and bool(errors) and statistics.mean(errors) < 100
+        # detector latency: the eye physically closes (closure start = 50 % crossing on the way down) -> first frame
+        # reported CLOSED. Plan §8: eyes close -> alarm < 300 ms; this is the perception detector's share.
+        closed_lat: list[float] = []
+        for win in closed_windows:
+            hits = [e for e in run.eye_events if e.kind == "closure" and _overlaps(e.start, e.end, win.start, win.end)]
+            if not hits:
+                continue
+            ev = min(hits, key=lambda e: e.start)
+            first = next((s.t for s in run.states if s.t >= ev.start and s.eyes.state == "CLOSED"), None)
+            if first is not None and first <= ev.end:
+                closed_lat.append((first - ev.start) * 1000.0)
+        m["closed_detect_latency_ms_median"] = round(statistics.median(closed_lat), 1) if closed_lat else None
+        m["closed_detect_latency_ms_max"] = round(max(closed_lat), 1) if closed_lat else None
+        res.checks["closed_latency"] = bool(closed_lat) and statistics.median(closed_lat) < CLOSED_LATENCY_MS
     else:
         res.checks["closed_2s"] = None
+        res.checks["closed_latency"] = None
+
+    # --- head drop with closed eyes (fatigue nodding, plan scene 9) ---------------------------------------
+    nod_windows = _of(intervals, "nod")
+    if nod_windows:
+        nod_hits = sum(any(s.head.nodding for s in _states_in(run.states, w.start, w.end)) for w in nod_windows)
+        m["nods_labelled"] = len(nod_windows)
+        m["nods_detected"] = nod_hits
+        res.checks["nodding"] = nod_hits == len(nod_windows)
+    else:
+        res.checks["nodding"] = None
 
     # --- false closures (closures outside closed / yawn windows) ------------------------------------------
-    allowed = closed_windows + _of(intervals, "yawn")
+    allowed = closed_windows + _of(intervals, "yawn") + _of(intervals, "nod")
     false_closures = [
         e
         for e in run.eye_events
