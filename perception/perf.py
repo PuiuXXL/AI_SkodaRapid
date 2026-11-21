@@ -4,6 +4,9 @@
 * :class:`RateMeter`: events per second over a sliding window (fps).
 * :class:`PerfTracker`: named windows per model and per stage, one picklable :meth:`PerfTracker.snapshot`.
 * :class:`SystemMonitor`: CPU %, RAM (this process tree) and GPU % (pynvml, optional), sampled at most once a second.
+* :func:`build_perf_block`: the contract's ``perf`` block (``perf.cameras.*``, ``perf.*_ms_p50``, ``e2e_ms_p95``,
+  CPU / RAM / GPU) from the newest worker messages. The degradation rule that acts on ``e2e_ms_p95`` lives in
+  :mod:`perception.degrade` (passenger rate first, then YOLO; the driver face never).
 """
 
 from __future__ import annotations
@@ -12,11 +15,31 @@ import math
 import threading
 import time
 from collections import deque
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, suppress
 from typing import Any
 
-__all__ = ["LatencyWindow", "PerfTracker", "RateMeter", "SystemMonitor", "percentile", "round_or_none"]
+__all__ = [
+    "MODEL_FIELDS",
+    "LatencyWindow",
+    "PerfTracker",
+    "RateMeter",
+    "SystemMonitor",
+    "build_perf_block",
+    "percentile",
+    "round_or_none",
+]
+
+# worker latency window -> contract field (driver camera, passenger camera). A model the camera does not run has no
+# window, so its field stays None. A new module that attaches a window under one of these names (e.g. ``sface`` for
+# identity, ``pose`` for rear_seat) fills the field without any change here.
+MODEL_FIELDS: dict[str, tuple[str, str | None]] = {
+    "face": ("face_driver_ms_p50", "face_passenger_ms_p50"),
+    "pose": ("pose_ms_p50", "pose_ms_p50"),
+    "phone": ("phone_ms_p50", "phone_ms_p50"),
+    "gesture": ("gesture_ms_p50", "gesture_ms_p50"),
+    "sface": ("sface_ms_p50", "sface_ms_p50"),
+}
 
 
 def round_or_none(value: float | None, digits: int = 1) -> float | None:
@@ -210,3 +233,75 @@ class SystemMonitor:
             with suppress(Exception):
                 self._nvml.nvmlShutdown()
             self._nvml = None
+
+
+def _model_p50(msg: Mapping[str, Any] | None, model: str) -> float | None:
+    if not msg:
+        return None
+    value = msg.get("perf", {}).get("models", {}).get(model, {}).get("p50")
+    return float(value) if value is not None else None
+
+
+def build_perf_block(
+    cameras: Mapping[str, bool],
+    msgs: Mapping[str, Mapping[str, Any] | None],
+    *,
+    e2e_ms_p95: float | None,
+    system: Mapping[str, float | None],
+    proposed: bool,
+    degrade_level: int = 0,
+    timing: Mapping[str, tuple[float | None, float | None]] | None = None,
+    publish_ts: float | None = None,
+) -> dict[str, Any]:
+    """The contract's ``perf`` block (plan §7 / J1).
+
+    Args:
+        cameras: enabled camera -> available (process running and its newest result fresh).
+        msgs: camera -> its newest **fresh** ``kind="frame"`` worker message, or None.
+        e2e_ms_p95: capture of the newest driver frame -> its publication, p95 over the last ``perf_window``.
+        system: ``SystemMonitor.sample()`` (cpu, ram_mb, gpu).
+        proposed: also write the fields proposed for the contract (docs/notes/output.md, CONTRACT texts).
+        timing: camera -> (capture_ts = ``time.time()`` at capture, age_ms at publication) of its newest result,
+            fresh or not (proposed fields only).
+        publish_ts: ``time.time()`` of this publication (proposed field only).
+    """
+    perf: dict[str, Any] = {"cameras": {}}
+    for name, available in cameras.items():
+        msg = msgs.get(name)
+        cam: dict[str, Any] = {"capture_fps": 0.0, "process_fps": 0.0, "dropped_frames": 0}
+        if msg is not None:
+            p = msg["perf"]
+            cam = {
+                "capture_fps": p["capture_fps"],
+                "process_fps": p["process_fps"],
+                "dropped_frames": p["dropped_frames"],
+            }
+        if proposed:
+            capture_ts, age_ms = (timing or {}).get(name, (None, None))
+            cam.update(
+                available=available,
+                capture_ts=capture_ts,
+                age_ms=age_ms,
+                dropped_results=int(msg["perf"].get("dropped_results", 0)) if msg is not None else 0,
+            )
+        perf["cameras"][name] = cam
+    fields: dict[str, float | None] = {}
+    for model, (driver_field, passenger_field) in MODEL_FIELDS.items():
+        fields.setdefault(driver_field, None)
+        if passenger_field is not None:
+            fields.setdefault(passenger_field, None)
+        driver_p50 = _model_p50(msgs.get("driver"), model)
+        passenger_p50 = _model_p50(msgs.get("passenger"), model)
+        if driver_field == passenger_field:  # one field for both cameras: the driver's value, else the passenger's
+            fields[driver_field] = driver_p50 if driver_p50 is not None else passenger_p50
+        else:
+            fields[driver_field] = driver_p50
+            if passenger_field is not None:
+                fields[passenger_field] = passenger_p50
+    perf.update(fields)
+    perf.update(e2e_ms_p95=e2e_ms_p95, cpu=system.get("cpu"), ram_mb=system.get("ram_mb"), gpu=system.get("gpu"))
+    if proposed:
+        perf["degrade_level"] = degrade_level
+        perf["stages_ms"] = {name: msg["perf"]["models"] for name, msg in msgs.items() if msg is not None}
+        perf["publish_ts"] = round(publish_ts, 3) if publish_ts is not None else None
+    return perf
