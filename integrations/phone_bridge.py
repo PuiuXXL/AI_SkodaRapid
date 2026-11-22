@@ -52,7 +52,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -80,7 +80,7 @@ def core_ws_url() -> str:
     return base.replace("https://", "wss://").replace("http://", "ws://") + "/ws/phone"
 
 
-def classify(app_name: str, sender: str, text: str) -> Optional[str]:
+def classify(app_name: str, sender: str, text: str) -> str | None:
     """Return the contract app code (``sms`` / ``whatsapp``) if the notification is accepted.
 
     Rejects: apps not in ``phone.app_whitelist``; senders not in
@@ -152,7 +152,7 @@ class CoreLink:
         async for raw in ws:
             try:
                 await self.on_command(json.loads(raw))
-            except Exception:  # noqa: BLE001 - a bad command must not kill the bridge
+            except Exception:
                 log.exception("command failed: %s", raw)
 
 
@@ -199,9 +199,9 @@ class PhoneBridge:
             text = await iface.get_text()
             try:
                 reply_id = await iface.get_reply_id()
-            except Exception:  # noqa: BLE001 - property missing on old KDE Connect versions
+            except Exception:
                 reply_id = ""
-        except Exception as exc:  # noqa: BLE001 - notification vanished, D-Bus error
+        except Exception as exc:
             log.warning("cannot read notification %s: %s", public_id, exc)
             return
         self.forward(public_id, app_name, sender, text, bool(reply_id))
@@ -238,7 +238,7 @@ class PhoneBridge:
             intro = await self.bus.introspect(KDE_SERVICE, path)
             battery = self.bus.get_proxy_object(KDE_SERVICE, path, intro).get_interface(BATTERY_IFACE)
             status["battery"] = int(await battery.get_charge())
-        except Exception as exc:  # noqa: BLE001 - plugin disabled / older KDE Connect
+        except Exception as exc:
             log.debug("status read failed: %s", exc)
         return status
 
@@ -256,7 +256,7 @@ class PhoneBridge:
             else:
                 return
             self.core.send({"type": "phone_result", "request_id": request_id, "ok": True, "error": None})
-        except Exception as exc:  # noqa: BLE001 - report every failure to core
+        except Exception as exc:
             log.warning("%s failed: %s", kind, exc)
             self.core.send({"type": "phone_result", "request_id": request_id, "ok": False, "error": str(exc)})
 
@@ -361,7 +361,7 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(name)s %(levelname)s %(message)s")
-    try:
+    try:  # noqa: SIM105
         asyncio.run(amain(args.dry_run))
     except KeyboardInterrupt:
         pass

@@ -74,7 +74,7 @@ class SafeDict(dict):
         super().__init__(*args, **kwargs)
         self._default = default
 
-    def __missing__(self, key: str) -> str:  # noqa: D401 - dict protocol
+    def __missing__(self, key: str) -> str:
         return self._default
 
 

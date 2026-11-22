@@ -305,7 +305,8 @@ class ZoneReplay:
 def run_zone_pipeline(
     cfg: PerceptionConfig, frames: Iterable[FeatureFrame], frame_size: tuple[int, int], calibration: Calibration
 ) -> ZoneReplay:
-    pipeline = DriverPipeline(cfg, frame_size, calibration.ear_baseline, calibration.model)
+    knn = cfg.model_copy(update={"gaze": cfg.gaze.model_copy(update={"mode": "knn"})})  # this evaluates the kNN model
+    pipeline = DriverPipeline(knn, frame_size, calibration.ear_baseline, calibration.model)
     out = ZoneReplay(ZoneSeries(), [], [])
     for ff in frames:
         st = pipeline.update(ff)

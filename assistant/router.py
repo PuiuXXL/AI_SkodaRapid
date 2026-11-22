@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 import aiohttp
 from fastapi import APIRouter, HTTPException, Request
@@ -55,7 +55,7 @@ async def get_tts(speech_id: str) -> Response:
         first = await chunks.__anext__()
     except StopAsyncIteration:
         raise HTTPException(status_code=502, detail="tts returned no audio") from None
-    except Exception as exc:  # noqa: BLE001 - any synthesis failure = 502
+    except Exception as exc:
         log.warning("TTS failed for %s: %s", speech_id, exc)
         raise HTTPException(status_code=502, detail="tts failed") from exc
 
@@ -89,7 +89,7 @@ _CONTENT_RANGE = re.compile(r"/(\d+)$")
 _PIECE = 64 * 1024
 
 
-def parse_range(header: Optional[str]) -> tuple[int, Optional[int], bool]:
+def parse_range(header: str | None) -> tuple[int, int | None, bool]:
     """``"bytes=100-199"`` -> ``(100, 199, True)``; missing / unsupported -> ``(0, None, False)``."""
     match = _RANGE.match((header or "").strip())
     if not match:
@@ -154,7 +154,7 @@ async def get_youtube_audio(video_id: str, request: Request) -> Response:
                 position = first_end + 1
                 while position <= last:
                     stop = min(position + chunk - 1, last)
-                    async with session.get(stream.url, headers={**stream.headers, "Range": f"bytes={position}-{stop}"}) as part:
+                    async with session.get(stream.url, headers={**stream.headers, "Range": f"bytes={position}-{stop}"}) as part:  # noqa: E501
                         if part.status not in (200, 206):
                             log.warning("YouTube chunk %s-%s of %s: HTTP %s", position, stop, video_id, part.status)
                             return

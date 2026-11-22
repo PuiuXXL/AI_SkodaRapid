@@ -37,7 +37,7 @@ Contents:
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -70,8 +70,8 @@ class Poi(_Model):
 
     id: str
     category: str
-    dist_km: Optional[float] = None
-    name: Optional[str] = None
+    dist_km: float | None = None
+    name: str | None = None
 
 
 class Position(_Model):
@@ -88,11 +88,11 @@ class Trip(_Model):
     road: str = "city"
     elapsed_min: float = 0.0
     pos: Position = Field(default_factory=Position)
-    eta_min: Optional[float] = None
-    scene: Optional[int] = None
+    eta_min: float | None = None
+    scene: int | None = None
     stopped: bool = False
-    at_poi: Optional[Poi] = None
-    next_poi: Optional[Poi] = None
+    at_poi: Poi | None = None
+    next_poi: Poi | None = None
 
 
 class Occupant(_Model):
@@ -101,17 +101,17 @@ class Occupant(_Model):
     id: int
     seat: Literal["driver", "front_right", "rear"]
     source: Literal["cam_driver", "cam_passenger", "declared"] = "declared"
-    profile: Optional[str] = None
+    profile: str | None = None
     role: Literal["adult", "child"] = "adult"
 
 
 class Eyes(_Model):
     """Driver eye metrics (P1, plan AS2)."""
 
-    ear: Optional[float] = None
-    eye_used: Optional[str] = None
+    ear: float | None = None
+    eye_used: str | None = None
     perclos_60s: float = 0.0
-    blink_ms: Optional[float] = None
+    blink_ms: float | None = None
     microsleep: bool = False
     reliable: bool = True
 
@@ -123,7 +123,7 @@ class Head(_Model):
     pitch: float = 0.0
     roll: float = 0.0
     nodding: bool = False
-    answer: Optional[Literal["yes", "no"]] = None
+    answer: Literal["yes", "no"] | None = None
 
 
 class Gaze(_Model):
@@ -131,10 +131,10 @@ class Gaze(_Model):
 
     zone: GazeZone = "unknown"
     conf: float = 0.0
-    source: Optional[str] = None
+    source: str | None = None
     off_road_ms: float = 0.0
     vats_60s: int = 0
-    entropy_60s: Optional[float] = None
+    entropy_60s: float | None = None
 
 
 class Phone(_Model):
@@ -142,18 +142,18 @@ class Phone(_Model):
 
     in_use: bool = False
     conf: float = 0.0
-    source: Optional[Literal["detector", "lap_pattern"]] = None
+    source: Literal["detector", "lap_pattern"] | None = None
 
 
 class Reaction(_Model):
     """Reaction times on 3 channels vs. the personal baseline (P2, plan B1)."""
 
-    visual_ms: Optional[float] = None
-    verbal_ms: Optional[float] = None
-    gesture_ms: Optional[float] = None
+    visual_ms: float | None = None
+    verbal_ms: float | None = None
+    gesture_ms: float | None = None
     baseline_ms: dict[str, float] = Field(default_factory=dict)
     missed: int = 0
-    response_rate_10min: Optional[float] = None
+    response_rate_10min: float | None = None
 
 
 class Driver(_Model):
@@ -165,7 +165,7 @@ class Driver(_Model):
     yawn: bool = False
     speaking: bool = False
     phone: Phone = Field(default_factory=Phone)
-    gesture: Optional[str] = None
+    gesture: str | None = None
     reaction: Reaction = Field(default_factory=Reaction)
 
 
@@ -177,16 +177,16 @@ class Passenger(_Model):
     eyes_closed_s: float = 0.0
     speaking: bool = False
     holding_phone: bool = False
-    gesture: Optional[str] = None
-    answer: Optional[Literal["yes", "no"]] = None
+    gesture: str | None = None
+    answer: Literal["yes", "no"] | None = None
 
 
 class Cause(_Model):
     """Cause of the distraction, fused from both cameras (P2, plan B4)."""
 
-    target: Optional[str] = None
-    person_id: Optional[int] = None
-    label: Optional[str] = None
+    target: str | None = None
+    person_id: int | None = None
+    label: str | None = None
     glances_30s: int = 0
     conf: float = 0.0
     sources: list[str] = Field(default_factory=list)
@@ -204,12 +204,12 @@ class Assessment(_Model):
 class Safety(_Model):
     """Safety status (P2, plan C). ``llm_allowed`` is the veto; ``llm_enabled`` the director switch."""
 
-    level: Optional[SafetyLevel] = None
-    alert: Optional[str] = None
+    level: SafetyLevel | None = None
+    alert: str | None = None
     llm_allowed: bool = True
     llm_enabled: bool = True
     monitoring_ok: bool = True
-    alarm_ms_last: Optional[float] = None
+    alarm_ms_last: float | None = None
 
 
 class LastInput(_Model):
@@ -217,44 +217,44 @@ class LastInput(_Model):
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
-    from_: Optional[int] = Field(default=None, alias="from")
-    channel: Optional[str] = None
-    value: Optional[str] = None
-    ts: Optional[float] = None
+    from_: int | None = Field(default=None, alias="from")
+    channel: str | None = None
+    value: str | None = None
+    ts: float | None = None
 
 
 class Interaction(_Model):
     """Dialog status (plan E1, E3): is the assistant speaking, is the dialog window open."""
 
-    state: Optional[str] = None
-    addressed_to: Optional[int] = None
+    state: str | None = None
+    addressed_to: int | None = None
     dialog_window_open: bool = False
-    last_input: Optional[LastInput] = None
+    last_input: LastInput | None = None
 
 
 class AssistantStatus(_Model):
     """Silence after a refusal (plan C10, D10). Safety is never affected."""
 
-    muted_until: Optional[float] = None
-    mute_reason: Optional[str] = None
+    muted_until: float | None = None
+    mute_reason: str | None = None
 
 
 class SafeContact(_Model):
     """Trusted contact from the profile (plan C10). The phone number is only in .env."""
 
-    name: Optional[str] = None
+    name: str | None = None
     configured: bool = False
     consent: bool = False
     announce: bool = True
-    notified_ts: Optional[float] = None
-    last_reply_msg_id: Optional[str] = None
+    notified_ts: float | None = None
+    last_reply_msg_id: str | None = None
 
 
 class PhoneStatus(_Model):
     """Driver's phone connection over KDE Connect (plan F1)."""
 
     connected: bool = False
-    battery: Optional[int] = None
+    battery: int | None = None
 
 
 class Message(_Model):
@@ -266,17 +266,17 @@ class Message(_Model):
     app: Literal["sms", "whatsapp", "contact_app"] = "sms"
     from_: str = Field(default="", alias="from")
     state: Literal["pending", "deferred", "read", "replied"] = "pending"
-    deferred_reason: Optional[str] = None
+    deferred_reason: str | None = None
     replyable: bool = False
-    ts: Optional[float] = None
-    text: Optional[str] = None
+    ts: float | None = None
+    text: str | None = None
 
 
 class ReminderTrigger(_Model):
     """When a reminder fires (plan K1): at a stop of a given POI category."""
 
     type: str = "stop_at_category"
-    category: Optional[str] = None
+    category: str | None = None
 
 
 class Reminder(_Model):
@@ -286,20 +286,20 @@ class Reminder(_Model):
     task: str
     trigger: ReminderTrigger = Field(default_factory=ReminderTrigger)
     state: Literal["proposed", "active", "done"] = "proposed"
-    created_ts: Optional[float] = None
+    created_ts: float | None = None
 
 
 class Media(_Model):
     """What is playing (plan D8)."""
 
     playing: bool = False
-    track_id: Optional[str] = None
-    title: Optional[str] = None
-    volume: Optional[float] = None
-    reason: Optional[str] = None
+    track_id: str | None = None
+    title: str | None = None
+    volume: float | None = None
+    reason: str | None = None
     kid_safe: bool = False
     # P3 addition (YouTube, docs/assistant.md section 6.1): "catalog" or "youtube".
-    source: Optional[str] = None
+    source: str | None = None
 
 
 class State(_Model):
@@ -325,7 +325,7 @@ class State(_Model):
     safe_contact: SafeContact = Field(default_factory=SafeContact)
     phone: PhoneStatus = Field(default_factory=PhoneStatus)
     messages: list[Message] = Field(default_factory=list)
-    call: Optional[dict[str, Any]] = None
+    call: dict[str, Any] | None = None
     reminders: list[Reminder] = Field(default_factory=list)
     media: Media = Field(default_factory=Media)
     intervention: dict[str, Any] = Field(default_factory=dict)
@@ -437,29 +437,29 @@ class Action(_Model):
     """
 
     type: ActionType
-    to: Optional[Addressee] = None
-    text: Optional[str] = None
-    question: Optional[str] = None
-    expects: Optional[Literal["yes_no", "kss", "free", "choice"]] = None
-    track_id: Optional[str] = None
-    volume: Optional[float] = None
-    reason: Optional[str] = None
-    msg_id: Optional[str] = None
-    task: Optional[str] = None
-    trigger: Optional[ReminderTrigger] = None
-    reminder_id: Optional[str] = None
-    poi_id: Optional[str] = None
-    to_person: Optional[str] = None
-    target: Optional[str] = None
-    key: Optional[str] = None
-    value: Optional[Any] = None
+    to: Addressee | None = None
+    text: str | None = None
+    question: str | None = None
+    expects: Literal["yes_no", "kss", "free", "choice"] | None = None
+    track_id: str | None = None
+    volume: float | None = None
+    reason: str | None = None
+    msg_id: str | None = None
+    task: str | None = None
+    trigger: ReminderTrigger | None = None
+    reminder_id: str | None = None
+    poi_id: str | None = None
+    to_person: str | None = None
+    target: str | None = None
+    key: str | None = None
+    value: Any | None = None
     # --- P3 extras ---
     source: Literal["LLM", "RULE"] = "LLM"
-    clip_id: Optional[str] = None
+    clip_id: str | None = None
     needs_confirmation: bool = False
     streamed: bool = False
     # --- P3 extras for YouTube media (section 6.1 of docs/assistant.md) ---
-    query: Optional[str] = None
-    kind: Optional[Literal["music", "podcast"]] = None
-    options: Optional[list[dict[str, Any]]] = None
-    title: Optional[str] = None
+    query: str | None = None
+    kind: Literal["music", "podcast"] | None = None
+    options: list[dict[str, Any]] | None = None
+    title: str | None = None

@@ -17,7 +17,6 @@ import logging
 import random
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Optional
 
 from assistant.settings import cfg, resolve_path
 from assistant.textutil import normalize
@@ -72,7 +71,7 @@ def is_correct(question: Question, text: str) -> bool:
 class QuizSession:
     """One quiz: a few random questions, a running score."""
 
-    def __init__(self, kid_safe_only: bool = False, length: Optional[int] = None, seed: Optional[int] = None) -> None:
+    def __init__(self, kid_safe_only: bool = False, length: int | None = None, seed: int | None = None) -> None:
         """Pick the questions.
 
         Args:
@@ -92,7 +91,7 @@ class QuizSession:
         return len(self.questions)
 
     @property
-    def current(self) -> Optional[Question]:
+    def current(self) -> Question | None:
         """The question waiting for an answer, or None when the quiz is over."""
         return self.questions[self.index] if self.index < len(self.questions) else None
 

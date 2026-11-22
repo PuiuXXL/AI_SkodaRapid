@@ -10,7 +10,7 @@ JSON state and the conversation / message text reach the cloud).
 from __future__ import annotations
 
 import time
-from typing import Iterable
+from collections.abc import Iterable
 
 from assistant import cabin, music, preferences
 from assistant.contract import Event, State
@@ -176,7 +176,7 @@ def summarize(state: State, event: Event, turns: Iterable[Turn] = ()) -> str:
     cause = state.cause
     cause_text = "none"
     if cause.label:
-        cause_text = f"{cause.label} (target {cause.target}, {cause.glances_30s} glances in 30 s, conf {_pct(cause.conf)})"
+        cause_text = f"{cause.label} (target {cause.target}, {cause.glances_30s} glances in 30 s, conf {_pct(cause.conf)})"  # noqa: E501
     muted = "MUTED after refusal" if state.assistant.muted_until else "not muted"
     contact = state.safe_contact
     contact_text = f"{contact.name} (configured)" if contact.configured and contact.name else "none"
@@ -187,8 +187,8 @@ def summarize(state: State, event: Event, turns: Iterable[Turn] = ()) -> str:
 
     lines = [
         f"EVENT: {event.type} ({data}). Local time {clock}.",
-        f"Safety: level {state.safety.level or 'P4'}, risk {a.risk}/3, monitoring {'ok' if state.safety.monitoring_ok else 'LOST'}. "
-        f"Driver state: attention {_pct(a.attention)}, fatigue F {_pct(a.fatigue)}, disengagement D {_pct(a.disengagement)}, gaze {state.driver.gaze.zone}.",
+        f"Safety: level {state.safety.level or 'P4'}, risk {a.risk}/3, monitoring {'ok' if state.safety.monitoring_ok else 'LOST'}. "  # noqa: E501
+        f"Driver state: attention {_pct(a.attention)}, fatigue F {_pct(a.fatigue)}, disengagement D {_pct(a.disengagement)}, gaze {state.driver.gaze.zone}.",  # noqa: E501
         f"Alerts: {_alerts_line(state)}.",
         f"Distraction cause: {cause_text}.",
         f"Cabin: {_cabin_line(state)}.",

@@ -25,11 +25,10 @@ import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
 
 from assistant import cabin
-from assistant.preferences import driver_profile
 from assistant.contract import State
+from assistant.preferences import driver_profile
 from assistant.settings import cfg, resolve_path
 
 log = logging.getLogger("drivemate.assistant.music")
@@ -89,7 +88,7 @@ def load_catalog() -> tuple[Track, ...]:
     return tuple(tracks)
 
 
-def get_track(track_id: Optional[str]) -> Optional[Track]:
+def get_track(track_id: str | None) -> Track | None:
     """Return the catalog track with this id, or None."""
     return next((t for t in load_catalog() if t.id == track_id), None)
 
@@ -177,7 +176,7 @@ def podcasts(state: State) -> list[Track]:
     return [t for t in load_catalog() if t.genre == podcast_genre and (t.kid_safe or not child)]
 
 
-def pick_track(state: State, reason: str = "disengagement") -> Optional[Track]:
+def pick_track(state: State, reason: str = "disengagement") -> Track | None:
     """Deterministic choice used without the LLM: the best candidate, or None."""
     found = candidates(state, reason)
     return found[0] if found else None

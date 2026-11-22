@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from perception.config import PerceptionConfig
 from perception.driver_cam.eyes import EyeOutput, EyeTracker
+from perception.driver_cam.gaze_boxes import BoxClassifier
 from perception.driver_cam.gaze_metrics import GazeMetrics
 from perception.driver_cam.gaze_model import GazeSmoother
 from perception.driver_cam.gaze_zones import (
@@ -184,6 +185,19 @@ class DriverPipeline:
             RearGlanceConfig(r.min_yaw_deg, r.min_rise_deg, r.rising_s, r.max_gap_s, r.max_s, float(r.right_sign)),
             enabled=cfg.demo.rear_seat,
         )
+        b = g.boxes
+        self.boxes = (
+            BoxClassifier(
+                b.zones,
+                margin_deg=b.margin_deg,
+                right_sign=float(b.right_sign),
+                center_window_s=b.center_window_s,
+                center_min_s=b.center_min_s,
+                away_beyond_deg=b.away_beyond_deg,
+            )
+            if g.mode == "boxes"
+            else None
+        )
         self.gaze_metrics = GazeMetrics(cfg)
         self.last_zone_features: npt.NDArray[np.float64] | None = None  # for the zone parameter sweep
         self.last_eyes = EyeOutput()
@@ -210,9 +224,15 @@ class DriverPipeline:
         x = self.gaze_features.build(ff, *zone_head_angles(head.yaw, head.raw_yaw, head.raw_pitch), gaze)
         self.last_zone_features = x
         result: ZoneResult | None = None
-        if self.zone_model is not None and x is not None and not eyes_closed:
+        if self.boxes is not None:
+            # gaze.mode boxes: MobileGaze direction (eyes + head) when fresh, else the head angles
+            direction = gaze if gaze is not None else (head.yaw, head.pitch)
+            if not eyes_closed and direction[0] is not None and direction[1] is not None:
+                result = self.boxes.classify(ff.t, float(direction[0]), float(direction[1]))
+        elif self.zone_model is not None and x is not None and not eyes_closed:
             result = self.zone_model.classify(x)
-        zone = self.zones.update(ff.t, result, eyes_closed=eyes_closed and self.zone_model is not None)
+        zoned = self.boxes is not None or self.zone_model is not None
+        zone = self.zones.update(ff.t, result, eyes_closed=eyes_closed and zoned)
         rear = self.rear.update(ff.t, ff.face.present, head.raw_yaw)  # AS13: overrides the face-lost "unknown"
         if rear:
             zone = "rear_seat"
@@ -227,7 +247,7 @@ class DriverPipeline:
             off_road_ms=metrics.off_road_ms,
             vats_60s=metrics.vats_60s,
             entropy_60s=metrics.entropy_60s,
-            calibrated=self.zone_model is not None,
+            calibrated=(self.boxes.ready if self.boxes is not None else self.zone_model is not None),
             raw_zone=result.zone if result is not None else None,
             nearest=result.nearest if result is not None else None,
             knn_dist=round(result.distance, 3) if result is not None and result.distance is not None else None,

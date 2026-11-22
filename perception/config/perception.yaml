@@ -224,6 +224,24 @@ gaze:                          # docs/perception.md §3.4. Starting values: tune
   min_conf: 0.6                # vote share below this -> unknown
   zone_min_frames: 5           # a new zone is accepted after this many frames (~170 ms at 30 fps; 3 flickered
                                # 61 times / min live on 2026-11-21)
+  mode: boxes                  # boxes = angular boxes below (wide road, no calibration needed); knn = the per-driver
+                               # kNN calibration (rejected most real glances as unknown: "off-road" while looking ahead)
+  boxes:                       # perception/driver_cam/gaze_boxes.py; degrees from the driver's road centre
+    right_sign: -1             # raw yaw < 0 when looking towards the passenger (calibration data 2026-11-21)
+    center_window_s: 60        # road centre = median direction over the last 60 s (the driver looks ahead most)
+    center_min_s: 2
+    margin_deg: 8              # outside every box but within 8 deg of one -> that zone (lower confidence)
+    away_beyond_deg: 80        # farther to the side than this -> away
+    zones:                     # [yaw_lo, yaw_hi, pitch_lo, pitch_hi]; yaw > 0 = towards the passenger, pitch > 0 = up;
+                               # the first box that contains the direction wins (road first)
+      road: [-18, 18, -12, 12]           # WIDE: the windscreen, not one point (a driver does not stare at the camera)
+      cluster: [-15, 15, -35, -12]       # instruments: straight ahead, down
+      lap: [-30, 30, -75, -35]           # far down
+      mirror_rear: [8, 35, 5, 30]        # up, slightly right
+      infotainment: [15, 40, -40, -10]   # right, down
+      mirror_left: [-65, -18, -15, 15]   # left
+      mirror_right: [35, 75, -10, 15]    # far right, eye level
+      passenger: [35, 85, -40, -10]      # far right, lower (the passenger's face / hands)
   rear_seat:                   # AS13 (switch demo.rear_seat): face lost right after a growing right turn -> rear_seat
     min_yaw_deg: 35            # |yaw| towards the passenger side on the last face frames (start value, tune in B3)
     min_rise_deg: 10           # ... still growing by this much over rising_s (a turn, not a held pose)

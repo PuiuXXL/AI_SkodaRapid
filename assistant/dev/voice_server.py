@@ -28,12 +28,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
-from collections.abc import AsyncIterator
 import json
 import logging
 import sys
 import time
-from pathlib import Path
+from collections.abc import AsyncIterator
 from typing import Any
 
 import uvicorn
@@ -42,8 +41,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from assistant import media_search, music, preferences
-from assistant.client import AssistantClient
 from assistant.answers import InputEvent
+from assistant.client import AssistantClient
 from assistant.contract import Action, Event, Reminder, State
 from assistant.dialog import DialogManager
 from assistant.refusal import is_refusal
@@ -233,7 +232,7 @@ def create_app(scene: str | None = None) -> FastAPI:
                 mute_s = 15 * 60
                 state.assistant.muted_until = time.time() + mute_s
                 state.assistant.mute_reason = "driver_refused"
-                await log_line(f"[simulat P2 · regula C10] asistent pe liniște {mute_s // 60} min (alarmele rămân active)")
+                await log_line(f"[simulat P2 · regula C10] asistent pe liniște {mute_s // 60} min (alarmele rămân active)")  # noqa: E501
                 if contact.configured and contact.consent and contact.name:
                     if contact.announce:
                         clip = f"notify_contact_{normalize(contact.name).replace(' ', '_')}"
@@ -270,7 +269,7 @@ def create_app(scene: str | None = None) -> FastAPI:
                         await run_event(Event(type="driver_speech", ts=time.time(), data={"text": text}))
                 elif kind == "speak_done" and message.get("is_question") and not message.get("interrupted"):
                     # Runs in the background so speech keeps being received during the window.
-                    asyncio.create_task(open_dialog_window())
+                    asyncio.create_task(open_dialog_window())  # noqa: RUF006
                 elif kind in ("speech_onset", "alarm_played", "speak_done"):
                     await log_line(f"{kind}: {json.dumps(message)}")
                 elif kind == "command" and message.get("name") == "input":
@@ -288,11 +287,11 @@ def create_app(scene: str | None = None) -> FastAPI:
         """Buttons of dev.html: trigger an event, say a text, alarm, pause/resume."""
         name = message.get("name")
         if name == "trigger":
-            await run_event(Event(type=message.get("event", "trip_start"), ts=time.time(), data=message.get("data", {})))
+            await run_event(Event(type=message.get("event", "trip_start"), ts=time.time(), data=message.get("data", {})))  # noqa: E501
         elif name == "say":
             await send(speak_message(Action(type="speak", to="driver", text=message.get("text", ""), source="RULE")))
         elif name == "alarm":
-            await send({"type": "alarm", "id": f"a{int(time.time())}", "clip_url": message.get("clip_url"), "ts": time.time()})
+            await send({"type": "alarm", "id": f"a{int(time.time())}", "clip_url": message.get("clip_url"), "ts": time.time()})  # noqa: E501
         elif name in ("pause", "resume", "stop"):
             await send({"type": "speak_control", "action": name})
         elif name == "music":

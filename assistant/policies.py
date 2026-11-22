@@ -20,12 +20,11 @@ Rules, in order:
 
 Note: whether the LLM itself is switched off (director button, plan C6) is not a
 policy - in that case the fixed fallback texts are used (see client.py).
-"""
+"""  # noqa: RUF002
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from assistant import preferences
 from assistant.contract import Event, State
@@ -54,7 +53,7 @@ class Policies:
 
     def __init__(self) -> None:
         """Start with no previous proactive intervention."""
-        self._last_proactive_ts: Optional[float] = None
+        self._last_proactive_ts: float | None = None
 
     @staticmethod
     def is_proactive(event: Event) -> bool:
@@ -77,7 +76,7 @@ class Policies:
             return PolicyDecision(False, "safety_veto")
 
         muted_until = state.assistant.muted_until
-        if muted_until is not None and muted_until > now:
+        if muted_until is not None and muted_until > now:  # noqa: SIM102
             if event.type not in cfg("policies", "allowed_while_muted", default=[]):
                 return PolicyDecision(False, "muted")
 

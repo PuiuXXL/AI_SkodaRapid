@@ -333,6 +333,25 @@ class RearSeatConfig(_Section):
     right_sign: Literal[-1, 1]  # sign of the raw yaw when the head turns right (towards the passenger)
 
 
+class GazeBoxesConfig(_Section):
+    """``gaze.mode: boxes``: angular boxes around the driver's median direction (driver_cam/gaze_boxes.py)."""
+
+    right_sign: Literal[-1, 1]  # raw yaw sign when the driver looks towards the passenger
+    center_window_s: PositiveFloat  # road centre = median direction over this window
+    center_min_s: PositiveFloat  # ... available after this much data
+    margin_deg: Annotated[float, Field(ge=0)]  # outside every box but this close to one -> that zone
+    away_beyond_deg: PositiveFloat  # |yaw| from the centre beyond this (and no box) -> away
+    # [yaw_lo, yaw_hi, pitch_lo, pitch_hi] per zone, degrees from the road centre
+    zones: dict[str, Annotated[list[float], Field(min_length=4, max_length=4)]]
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        for zone, (y0, y1, p0, p1) in self.zones.items():
+            if y0 >= y1 or p0 >= p1:
+                raise ValueError(f"gaze.boxes.zones.{zone}: need yaw_lo < yaw_hi and pitch_lo < pitch_hi")
+        return self
+
+
 class GazeConfig(_Section):
     zones: Annotated[list[CalibratedZone], Field(min_length=2)]
     crop_expand: Annotated[float, Field(ge=1.0, le=2.0)]  # MobileGaze crop = face box x this (yakhyo: 1.0)
@@ -345,6 +364,8 @@ class GazeConfig(_Section):
     min_conf: Fraction
     zone_min_frames: PositiveInt
     rear_seat: RearSeatConfig
+    mode: Literal["boxes", "knn"]  # boxes: angular boxes (no calibration needed); knn: the per-driver calibration
+    boxes: GazeBoxesConfig
     unknown_hold_s: Annotated[float, Field(ge=0)]  # a classifier "unknown" keeps the last zone this long (no flicker)
     away_margin_deg: Annotated[float, Field(ge=0)]
     on_road_zones: Annotated[list[CalibratedZone], Field(min_length=1)]

@@ -29,8 +29,19 @@ log = logging.getLogger("drivemate.assistant.contract")
 
 #: Names the assistant needs from the contract.
 __all__ = [
-    "Action", "ActionType", "Addressee", "Event", "EVENT_TYPES", "Message", "Occupant",
-    "Poi", "Reminder", "ReminderTrigger", "SafetyLevel", "State", "CONTRACT_VERSION",
+    "CONTRACT_VERSION",  # noqa: F822
+    "EVENT_TYPES",  # noqa: F822
+    "Action",  # noqa: F822
+    "ActionType",  # noqa: F822
+    "Addressee",  # noqa: F822
+    "Event",  # noqa: F822
+    "Message",  # noqa: F822
+    "Occupant",  # noqa: F822
+    "Poi",  # noqa: F822
+    "Reminder",  # noqa: F822
+    "ReminderTrigger",  # noqa: F822
+    "SafetyLevel",  # noqa: F822
+    "State",  # noqa: F822
 ]
 
 try:

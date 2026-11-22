@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from assistant import cabin
 from assistant.contract import Action, State
@@ -93,7 +93,7 @@ def driver_profile(state: State) -> dict[str, Any]:
     return data
 
 
-def _profile_key(state: Optional[State]) -> str:
+def _profile_key(state: State | None) -> str:
     """Key under which voice changes are kept: the driver's profile id, ``""`` when unknown."""
     if state is None:
         return ""
@@ -133,7 +133,7 @@ class PreferenceStore:
         result.update(self._voice.get(key, {}))
         return result
 
-    def apply(self, action: Action, state: Optional[State] = None) -> bool:
+    def apply(self, action: Action, state: State | None = None) -> bool:
         """Remember a ``set_preference`` the driver confirmed (or that needs no confirmation).
 
         Only keys of :data:`KEYS` with an allowed value are kept; anything else (volume,
@@ -167,7 +167,7 @@ def effective(state: State) -> dict[str, str]:
     return store.effective(state)
 
 
-def comfort_interval_s(state: State) -> Optional[float]:
+def comfort_interval_s(state: State) -> float | None:
     """Minimum seconds between two comfort suggestions for this driver's ``talkativeness``.
 
     Returns:
@@ -178,13 +178,13 @@ def comfort_interval_s(state: State) -> Optional[float]:
     return float(value) if value is not None else None
 
 
-def answer_words(state: State) -> Optional[int]:
+def answer_words(state: State) -> int | None:
     """Word count the LLM should aim for (``answer_length``), or None for no extra target."""
     value = cfg("driver_preferences", "answer_words", effective(state)["answer_length"], default=None)
     return int(value) if value is not None else None
 
 
-def voice_command(text: str) -> Optional[tuple[str, str]]:
+def voice_command(text: str) -> tuple[str, str] | None:
     """A preference asked by voice in a known phrase ("răspunde mai scurt"), recognised without the LLM.
 
     The phrases are in ``driver_preferences.voice_commands`` (normalised). One must appear as consecutive

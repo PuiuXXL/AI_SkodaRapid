@@ -1,0 +1,32 @@
+#!/bin/sh
+# Blocks a push whose CI would be red: runs locally, with scripts/ci_all.ps1, exactly the GitHub workflows that the
+# pushed files trigger (their "paths:" filters). Enable once per clone:  git config core.hooksPath .githooks
+# Disable:  git config --unset core.hooksPath
+
+zero=0000000000000000000000000000000000000000
+list=$(mktemp)
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue                      # deleting a branch: nothing to check
+    if [ "$remote_sha" = "$zero" ]; then
+        base=$(git merge-base "$local_sha" origin/main 2>/dev/null || git rev-list --max-parents=0 "$local_sha" | tail -1)
+    else
+        base=$remote_sha
+    fi
+    git diff --name-only "$base" "$local_sha" >> "$list"
+done
+
+if [ ! -s "$list" ]; then
+    rm -f "$list"
+    exit 0
+fi
+
+echo "pre-push: running the CI of the changed paths locally (scripts/ci_all.ps1)..."
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci_all.ps1 -ChangedFile "$list"
+status=$?
+rm -f "$list"
+if [ $status -ne 0 ]; then
+    echo "pre-push: CI ROSU -> push oprit. Repara ce e rosu mai sus si incearca din nou."
+    exit 1
+fi
+echo "pre-push: CI VERDE -> push"
+exit 0

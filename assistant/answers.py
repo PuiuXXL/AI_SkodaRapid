@@ -19,8 +19,9 @@ Recognizer: ``Thumb_Up``, ``Thumb_Down``, ``Open_Palm``.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, Literal, Optional
+from typing import Literal
 
 from assistant.refusal import is_refusal
 from assistant.textutil import normalize
@@ -73,7 +74,7 @@ class Answer:
     ts: float
 
 
-def interpret_voice(text: str, fatigue_dialog: bool = False) -> Optional[AnswerValue]:
+def interpret_voice(text: str, fatigue_dialog: bool = False) -> AnswerValue | None:
     """Interpret a spoken answer.
 
     Args:
@@ -102,7 +103,7 @@ KSS_WORDS: dict[str, int] = {
 }
 
 
-def parse_kss(text: str) -> Optional[int]:
+def parse_kss(text: str) -> int | None:
     """Read a Karolinska Sleepiness Scale answer (1 = very alert ... 9 = very sleepy).
 
     Accepts digits ("7", "cam 7") and Romanian words ("șapte", "vreo opt"). The first
@@ -142,7 +143,7 @@ _NOT_A_REQUEST = frozenset({"nu", "da", "acum", "te", "rog", "multumesc", "mersi
                             "incolo", "apoi", "dupa", "putin", "stiu"})
 
 
-def request_after_answer(text: str) -> Optional[str]:
+def request_after_answer(text: str) -> str | None:
     """The new request that follows a yes / no: "nu, vreau să pui muzică" -> "vreau să pui muzică".
 
     Returns:
@@ -168,7 +169,7 @@ def is_plain_answer(text: str) -> bool:
     return not any(len(w) >= 3 and w not in _NOT_A_REQUEST for w in normalize(rest).split())
 
 
-def interpret(event: InputEvent, fatigue_dialog: bool = False) -> Optional[AnswerValue]:
+def interpret(event: InputEvent, fatigue_dialog: bool = False) -> AnswerValue | None:
     """Interpret one input on any channel (see module docstring for the mapping)."""
     if event.channel == "voice":
         return interpret_voice(event.value, fatigue_dialog)
@@ -180,7 +181,7 @@ def interpret(event: InputEvent, fatigue_dialog: bool = False) -> Optional[Answe
     return meaning
 
 
-def fuse(inputs: Iterable[InputEvent], fatigue_dialog: bool = False) -> Optional[Answer]:
+def fuse(inputs: Iterable[InputEvent], fatigue_dialog: bool = False) -> Answer | None:
     """Return the earliest meaningful answer among the inputs, or None.
 
     Args:

@@ -26,7 +26,8 @@ import asyncio
 import hashlib
 import logging
 from collections import OrderedDict
-from typing import Any, AsyncIterator, Optional
+from collections.abc import AsyncIterator
+from typing import Any
 
 import edge_tts
 
@@ -46,7 +47,7 @@ def default_voice() -> str:
     return cfg("tts", "voices", language, default="ro-RO-EmilNeural")
 
 
-async def audio_chunks(text: str, voice: Optional[str] = None, rate: Optional[str] = None) -> AsyncIterator[bytes]:
+async def audio_chunks(text: str, voice: str | None = None, rate: str | None = None) -> AsyncIterator[bytes]:
     """Stream mp3 chunks for ``text`` from edge-tts as they are generated (needs internet).
 
     Args:
@@ -63,7 +64,7 @@ async def audio_chunks(text: str, voice: Optional[str] = None, rate: Optional[st
             yield chunk["data"]
 
 
-async def synthesize(text: str, voice: Optional[str] = None, rate: Optional[str] = None) -> bytes:
+async def synthesize(text: str, voice: str | None = None, rate: str | None = None) -> bytes:
     """Synthesize ``text`` to complete mp3 bytes (used for the pre-generated clips).
 
     Raises:
@@ -89,9 +90,9 @@ class _Synthesis:
         """Empty buffer, not started."""
         self.buffer = bytearray()
         self.done = False
-        self.error: Optional[BaseException] = None
+        self.error: BaseException | None = None
         self.changed = asyncio.Condition()
-        self.task: Optional[asyncio.Task] = None
+        self.task: asyncio.Task | None = None
 
     async def run(self, text: str, voice: str, rate: str) -> None:
         """Produce the audio (runs as a task); errors are kept for the readers."""
@@ -102,7 +103,7 @@ class _Synthesis:
                     self.changed.notify_all()
             if not self.buffer:
                 raise RuntimeError(f"edge-tts returned no audio for {text!r}")
-        except Exception as exc:  # noqa: BLE001 - reported to every reader
+        except Exception as exc:
             self.error = exc
         finally:
             async with self.changed:
@@ -139,7 +140,7 @@ class SpeechCache:
     can be read while it is still being generated (:meth:`stream`).
     """
 
-    def __init__(self, size: Optional[int] = None) -> None:
+    def __init__(self, size: int | None = None) -> None:
         """Create an empty cache holding at most ``size`` audio files (``tts.cache_size``)."""
         self._size = size or int(cfg("tts", "cache_size", default=256))
         self._texts: dict[str, tuple[str, str, str]] = {}
@@ -149,9 +150,9 @@ class SpeechCache:
     @staticmethod
     def make_id(text: str, voice: str, rate: str) -> str:
         """Stable id of a sentence (16 hex chars)."""
-        return hashlib.sha1(f"{voice}|{rate}|{text}".encode("utf-8")).hexdigest()[:16]
+        return hashlib.sha1(f"{voice}|{rate}|{text}".encode()).hexdigest()[:16]
 
-    def register(self, text: str, voice: Optional[str] = None, rate: Optional[str] = None) -> str:
+    def register(self, text: str, voice: str | None = None, rate: str | None = None) -> str:
         """Remember a sentence so it can later be fetched by id.
 
         Args:
@@ -240,7 +241,7 @@ speech_cache = SpeechCache()
 _counter = 0
 
 
-def speak_message(action: Action, utterance_id: Optional[str] = None) -> dict[str, Any]:
+def speak_message(action: Action, utterance_id: str | None = None) -> dict[str, Any]:
     """Build the ``speak`` message sent to the browser on ``/ws/ui`` for a speak/ask action.
 
     Message format (P3 proposal, documented in docs/assistant.md)::

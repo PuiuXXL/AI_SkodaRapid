@@ -36,10 +36,11 @@ import json
 import logging
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 from assistant import actions as actions_mod
 from assistant import cabin, fallback, media_search, music, preferences
@@ -109,11 +110,11 @@ class AnswerInfo:
     source: str = "RULE"
     reason: str = "ok"
     latency_ms: float = 0.0
-    llm_ttft_ms: Optional[float] = None
-    llm_total_ms: Optional[float] = None
+    llm_ttft_ms: float | None = None
+    llm_total_ms: float | None = None
     rejected: list[tuple[Any, str]] = field(default_factory=list)
-    error: Optional[str] = None
-    retry: Optional[str] = None
+    error: str | None = None
+    retry: str | None = None
 
 
 def _short_error(exc: Exception) -> str:
@@ -139,7 +140,7 @@ class _StreamWatcher:
         self._event = event
         self._callback = callback
         self._decoder = json.JSONDecoder()
-        self._pos: Optional[int] = None  # parse position inside the actions array
+        self._pos: int | None = None  # parse position inside the actions array
         self._index = 0                  # index of the next action object
         self.streamed: set[int] = set()  # indexes already handed to TTS
 
@@ -170,14 +171,14 @@ class _StreamWatcher:
                     self.streamed.add(index)
                     try:
                         self._callback(checked.accepted[0].model_copy(update={"streamed": True}))
-                    except Exception:  # noqa: BLE001 - a UI callback must never break the answer
+                    except Exception:
                         log.exception("on_early_speech callback failed")
 
 
 class AssistantClient:
     """Stateful assistant: provider, policies and short memory for one trip."""
 
-    def __init__(self, provider: Optional[LLMProvider] = None) -> None:
+    def __init__(self, provider: LLMProvider | None = None) -> None:
         """Create the client.
 
         Args:
@@ -193,8 +194,8 @@ class AssistantClient:
         self,
         event: Event | dict,
         state: State | dict,
-        on_early_speech: Optional[EarlySpeechCallback] = None,
-        now: Optional[float] = None,
+        on_early_speech: EarlySpeechCallback | None = None,
+        now: float | None = None,
     ) -> list[Action]:
         """Turn one event into validated actions (see module docstring for the pipeline).
 
@@ -257,7 +258,7 @@ class AssistantClient:
         return result
 
     async def _ask_llm(
-        self, event: Event, state: State, info: AnswerInfo, on_early_speech: Optional[EarlySpeechCallback]
+        self, event: Event, state: State, info: AnswerInfo, on_early_speech: EarlySpeechCallback | None
     ) -> list[Action]:
         """Call the LLM under the deadline (one retry on a transient error), validate, fall back when needed."""
         watcher = _StreamWatcher(state, event, on_early_speech) if on_early_speech else None
@@ -269,7 +270,7 @@ class AssistantClient:
                 self.provider.generate(system_prompt(), user, watcher.feed if watcher else None),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             info.reason = "timeout"
             log.warning("LLM timeout after %.1fs on %s; using fallback.", timeout, event.type)
             return self._fallback(event, state, info, skip_speech=bool(watcher and watcher.streamed))
@@ -290,7 +291,7 @@ class AssistantClient:
                     self.provider.generate_retry(system_prompt(), user, watcher.feed if watcher else None),
                     timeout=remaining,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 info.reason = "timeout"
                 log.warning("LLM retry timeout on %s; using fallback.", event.type)
                 return self._fallback(event, state, info, skip_speech=bool(watcher and watcher.streamed))
@@ -342,7 +343,7 @@ class AssistantClient:
             # Mark the actions already handed to TTS while streaming (same raw index).
             return [
                 action.model_copy(update={"streamed": True}) if index in watcher.streamed else action
-                for action, index in zip(checked.accepted, checked.accepted_indexes)
+                for action, index in zip(checked.accepted, checked.accepted_indexes)  # noqa: B905
             ]
         return checked.accepted
 
@@ -390,7 +391,7 @@ class AssistantClient:
                                 reason="follow_up", source="RULE")]
 
     @staticmethod
-    def _can_retry(exc: LLMError, watcher: Optional[_StreamWatcher], remaining: float) -> bool:
+    def _can_retry(exc: LLMError, watcher: _StreamWatcher | None, remaining: float) -> bool:
         """True when a failed LLM call deserves its one retry.
 
         Only transient errors (overload, rate limit), only if nothing was handed to TTS
@@ -405,7 +406,7 @@ class AssistantClient:
 
     async def _resolve_media_search(
         self, result: list[Action], event: Event, state: State, info: AnswerInfo,
-        on_early_speech: Optional[EarlySpeechCallback],
+        on_early_speech: EarlySpeechCallback | None,
     ) -> list[Action]:
         """Replace ``search_media`` with the spoken choice of YouTube results (docs/assistant.md 6.1).
 
@@ -423,7 +424,7 @@ class AssistantClient:
             try:
                 on_early_speech(searching)
                 kept.append(searching)
-            except Exception:  # noqa: BLE001 - a UI callback must never break the answer
+            except Exception:
                 log.exception("on_early_speech callback failed")
         try:
             found = await media_search.search(search.query or "", search.kind or "music",
@@ -433,12 +434,12 @@ class AssistantClient:
             log.warning("YouTube search failed (%s) for %r", exc, search.query)
             return kept + self._media_fallback(state, event, child=str(exc) == "kid_safe_needs_api")
         if not found:
-            return kept + [Action(type="speak", to="driver", text=texts.get("youtube_none", ""), source="RULE")]
+            return kept + [Action(type="speak", to="driver", text=texts.get("youtube_none", ""), source="RULE")]  # noqa: RUF005
         question, options = media_search.build_choice(found, media_search.offer_size(state))
         media_search.prefetch(o["track_id"][len(media_search.TRACK_PREFIX):] for o in options if o["offered"])
         ask = Action(type="ask", to="driver", question=question, expects="choice", options=options,
                      reason="media_choice", source=search.source)
-        return kept + [ask]
+        return kept + [ask]  # noqa: RUF005
 
     def _media_fallback(self, state: State, event: Event, child: bool) -> list[Action]:
         """Search impossible: offer a catalog track (kid_safe with a child), or just say so."""
@@ -475,7 +476,7 @@ class AssistantClient:
         preferences.store.reset()
 
 
-_client: Optional[AssistantClient] = None
+_client: AssistantClient | None = None
 
 
 def get_client() -> AssistantClient:
@@ -487,7 +488,7 @@ def get_client() -> AssistantClient:
 
 
 async def handle_event(
-    event: Event | dict, state: State | dict, on_early_speech: Optional[EarlySpeechCallback] = None
+    event: Event | dict, state: State | dict, on_early_speech: EarlySpeechCallback | None = None
 ) -> list[Action]:
     """Interface for core (plan section 13): ``handle_event(event, state) -> list[Action]``.
 
