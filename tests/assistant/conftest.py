@@ -5,6 +5,8 @@
 * Points the music module at ``fixtures/media_catalog_test.json`` (20 synthetic
   tracks, including kid_safe ones) so the tests do not depend on the real catalog,
   which changes whenever the team adds or removes mp3 files.
+* Points ``assistant.preferences`` at an empty temporary ``profiles/`` folder
+  (fixture ``_isolated_profiles``, also usable by name to write a test profile).
 """
 
 import sys
@@ -29,3 +31,20 @@ def _test_media_catalog(monkeypatch):
     music.load_catalog.cache_clear()
     yield
     music.load_catalog.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_profiles(monkeypatch, tmp_path):
+    """Point profiles/ at an empty temporary folder and forget voice preferences.
+
+    A real ``profiles/andrei/profile.json`` written by the dashboard on this laptop
+    must not change the results (the example state's driver is ``andrei``).
+    """
+    from assistant import preferences
+
+    profiles = tmp_path / "profiles"
+    profiles.mkdir()
+    monkeypatch.setattr(preferences, "PROFILES_DIR", profiles)
+    preferences.store.reset()
+    yield profiles
+    preferences.store.reset()

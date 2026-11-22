@@ -370,3 +370,61 @@ async def test_a_policy_decision_keeps_the_last_llm_status() -> None:
     rig.link._record(c.Event(type="driver_speech", ts=rig.t), rig.t)
     rig.run(0.2)
     assert rig.state.integrations.llm == "down"
+
+
+# --- P3's interaction preferences (talkativeness, follow_up, answer_length) ------------------------------------------
+
+
+def preference(key: str, value: str) -> c.Action:
+    return c.Action(type="set_preference", key=key, value=value)
+
+
+async def test_confirmed_preference_is_applied_after_the_check_and_shown_in_the_state() -> None:
+    rig = Rig(scene=5, assistant=FakeClient({}))
+    rig.run(0.5)
+    assert rig.state.assistant.preferences["answer_length"] == "normal"  # synced every tick (defaults, no profile)
+    rig.state.safety.level = "P4"
+    assert rig.link.execute(preference("answer_length", "short"), rig.t, confirmed=True)
+    assert rig.state.assistant.preferences["answer_length"] == "short"
+    rig.run(0.5)
+    assert rig.state.assistant.preferences["answer_length"] == "short"  # the tick keeps it (voice change, this trip)
+
+
+async def test_preference_rejected_by_core_never_applies() -> None:
+    rig = Rig(scene=5, assistant=FakeClient({}))
+    rig.run(0.5)
+    rig.state.safety.level = "P3"  # set_preference is allowed only at P4
+    assert not rig.link.execute(preference("follow_up", "never"), rig.t, confirmed=True)
+    assert rejected(rig)[-1] == "level:P3"
+    assert rig.state.assistant.preferences["follow_up"] == "always"
+
+
+async def test_reset_forgets_voice_preferences() -> None:
+    rig = Rig(scene=5, assistant=AssistantClient())
+    rig.run(0.5)
+    rig.state.safety.level = "P4"
+    rig.link.execute(preference("talkativeness", "low"), rig.t, confirmed=True)
+    assert rig.state.assistant.preferences["talkativeness"] == "low"
+    rig.link.reset(rig.t)
+    rig.run(0.2)
+    assert rig.state.assistant.preferences["talkativeness"] == "normal"
+
+
+async def test_panel_preference_applies_at_once_for_this_trip() -> None:
+    """The dashboard's "Copilot · preferințe" selects send ``assistant_preference``: no "Bine?", any level."""
+    rig = Rig(scene=5, assistant=FakeClient({}))
+    rig.run(0.5)
+    rig.browser({"type": "command", "cmd": "assistant_preference", "value": {"key": "follow_up", "value": "never"}})
+    assert rig.state.assistant.preferences["follow_up"] == "never"
+    assert rig.hub.events("assistant_action")[-1]["data"]["action_type"] == "set_preference"
+    rig.command("reset")
+    rig.run(0.2)
+    assert rig.state.assistant.preferences["follow_up"] == "always"
+
+
+async def test_panel_preference_with_an_unknown_value_is_rejected() -> None:
+    rig = Rig(scene=5, assistant=FakeClient({}))
+    rig.run(0.5)
+    rig.browser({"type": "command", "cmd": "assistant_preference", "value": {"key": "answer_length", "value": "huge"}})
+    assert rig.state.assistant.preferences["answer_length"] == "normal"
+    assert rejected(rig)[-1] == "unknown_preference"

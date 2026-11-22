@@ -94,6 +94,7 @@ class PhoneConfig:
     foreign_dx_ratio: float = 1.5
     passenger_side: str = "right"
     mirrored: bool = False
+    owned_needs_contact: bool = True  # a driver phone must be near the face or in a hand ("visible" alone never votes)
     lap_conf: float = 0.40
     threads: int = 2  # CPU threads for the detector model (0 = the process-wide onnx_threads)
 
@@ -282,7 +283,10 @@ class PhoneTracker:
         ran = boxes is not None
         if boxes is not None:
             geoms = [self.geometry(b, face_box, hands) for b in boxes]
-            owned = [g for g in geoms if not g.foreign]
+            # the driver's phone needs the driver's geometry (plan AS7): near the face or in a hand. A box that is
+            # neither (a shoulder / bag read as a phone, a phone lying around) never votes for "in use"
+            contact = not self.cfg.owned_needs_contact
+            owned = [g for g in geoms if not g.foreign and (g.near_face or g.in_hand or contact)]
             foreign = [g for g in geoms if g.foreign]
             # the driver's phone: near the face first, then in a hand, then the highest score
             best = max(owned, key=lambda g: (g.near_face, g.in_hand, g.score)) if owned else None

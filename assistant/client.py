@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from assistant import actions as actions_mod
-from assistant import cabin, fallback, media_search, music
+from assistant import cabin, fallback, media_search, music, preferences
 from assistant.contract import Action, Event, State
 from assistant.llm import LLMError, LLMProvider, make_provider
 from assistant.memory import ShortMemory
@@ -227,8 +227,7 @@ class AssistantClient:
             event.type in SPEECH_EVENTS and (fallback.media_command(str(event.data.get("text", "")), state)
                                              or fallback.thanks(str(event.data.get("text", ""))))
         ):
-            # "Oprește muzica" / "mai încet" / "mulțumesc" are answered at once, without waiting for the LLM
-            # (like the refusal).
+            # Music controls, known preference commands and thanks are answered without the LLM.
             info.reason = "deterministic"
             result = self._fallback(event, state, info)
         elif not self.provider.available:
@@ -242,7 +241,7 @@ class AssistantClient:
 
         if any(a.type == "search_media" for a in result):
             result = await self._resolve_media_search(result, event, state, info, on_early_speech)
-        result = self._with_follow_up(event, result)
+        result = self._with_follow_up(event, result, state)
 
         if any(a.type != "stay_silent" for a in result):
             self.policies.record(event, now)
@@ -368,16 +367,19 @@ class AssistantClient:
             log.warning("confirmation question rejected: %s", [r.reason for r in added.rejected])
 
     @staticmethod
-    def _with_follow_up(event: Event, result: list[Action]) -> list[Action]:
+    def _with_follow_up(event: Event, result: list[Action], state: State) -> list[Action]:
         """Add "Te mai ajut cu ceva?" after a statement that answers the driver (``speech.follow_up``).
 
         Only for ``driver_speech`` (never after proactive interventions such as a cause or
         fatigue), only when the answer contains a ``speak`` to the driver and no question,
-        no held action and no ``stay_silent`` (refusal, policy). The question is an ``ask``
-        with ``reason="follow_up"``: core opens the dialog window, and
+        no held action and no ``stay_silent`` (refusal, policy), and only while the driver's
+        ``follow_up`` preference is not ``never`` (``assistant/preferences.py``). The question
+        is an ``ask`` with ``reason="follow_up"``: core opens the dialog window, and
         :class:`assistant.dialog.DialogManager` handles the "da" / "nu" that follows.
         """
         if event.type != "driver_speech" or not cfg("speech", "follow_up", "enabled", default=True):
+            return result
+        if not preferences.follow_up_enabled(state):
             return result
         if not any(a.type == "speak" and a.to in (None, "driver", "all") for a in result):
             return result
@@ -467,9 +469,10 @@ class AssistantClient:
         return result
 
     def reset(self) -> None:
-        """New trip / director reset: forget memory and the rate-limit clock."""
+        """New trip / director reset: forget memory, the rate-limit clock and preferences changed by voice."""
         self.memory.clear()
         self.policies.reset()
+        preferences.store.reset()
 
 
 _client: Optional[AssistantClient] = None

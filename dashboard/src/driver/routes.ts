@@ -1,5 +1,5 @@
 import {useSyncExternalStore} from "react";
-export const pageTitles={start:"DriveMate",salut:"Salut!",volan:"La volan",dashboard:"Dashboard",simulator:"Simulator locație",missing:"Pagina nu există"} as const;
+export const pageTitles={start:"DriveMate",salut:"Salut!",volan:"La volan",dashboard:"Dashboard",setari:"Setări",simulator:"Simulator locație",missing:"Pagina nu există"} as const;
 export type Page=keyof typeof pageTitles;
 const legacy=new Set(["#assistant","#workspace","#eyes","#performance","#general","#recent-events","#score-history"]);
 export function readPage(hash:string):Page{

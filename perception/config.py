@@ -393,6 +393,7 @@ class PhoneConfig(_Section):
     foreign_dx_ratio: PositiveFloat  # passenger side, farther than this x face width, not near the face -> foreign
     passenger_side: Literal["left", "right"]  # the passenger's side in the DRIVER's terms (left-hand-drive car)
     mirrored: bool  # the camera image is mirrored (False: image right = the driver's left)
+    owned_needs_contact: bool  # a driver phone must be near the face or in a hand to vote (AS7 geometry)
     async_inference: bool  # YOLO in its own thread: the face never waits for it (the result is 1-2 frames older)
     lap_pattern: LapPatternConfig
 

@@ -2,7 +2,7 @@
 
 The LLM never sees images or the raw ~10 Hz state: it gets about ten lines with
 what matters for the decision (roluri/P3, step 2: safety level, F, D, cause, cabin,
-messages, reminders and the last 3 utterances). This keeps the request small and
+messages, reminders, the driver's interaction preferences and the last 3 utterances). This keeps the request small and
 fast, and is what the privacy slide promises (plan section 3: only the summarised
 JSON state and the conversation / message text reach the cloud).
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 from typing import Iterable
 
-from assistant import cabin, music
+from assistant import cabin, music, preferences
 from assistant.contract import Event, State
 from assistant.memory import Turn
 from assistant.settings import cfg, poi_categories
@@ -153,6 +153,14 @@ def _alerts_line(state: State) -> str:
     return ", ".join(parts)
 
 
+def _preferences_line(state: State) -> str:
+    """How the driver wants the assistant to talk (``assistant/preferences.py``)."""
+    prefs = preferences.effective(state)
+    words = preferences.answer_words(state)
+    answers = f"answers {prefs['answer_length']}" + (f" (aim for at most {words} words)" if words else "")
+    return f"talkativeness {prefs['talkativeness']}, {answers}, follow-up question {prefs['follow_up']}"
+
+
 def summarize(state: State, event: Event, turns: Iterable[Turn] = ()) -> str:
     """Build the ~10-line text the LLM receives for one event.
 
@@ -179,9 +187,9 @@ def summarize(state: State, event: Event, turns: Iterable[Turn] = ()) -> str:
 
     lines = [
         f"EVENT: {event.type} ({data}). Local time {clock}.",
-        f"Safety: level {state.safety.level or 'P4'}, risk {a.risk}/3, monitoring {'ok' if state.safety.monitoring_ok else 'LOST'}.",
-        f"Alerts: {_alerts_line(state)}.",
+        f"Safety: level {state.safety.level or 'P4'}, risk {a.risk}/3, monitoring {'ok' if state.safety.monitoring_ok else 'LOST'}. "
         f"Driver state: attention {_pct(a.attention)}, fatigue F {_pct(a.fatigue)}, disengagement D {_pct(a.disengagement)}, gaze {state.driver.gaze.zone}.",
+        f"Alerts: {_alerts_line(state)}.",
         f"Distraction cause: {cause_text}.",
         f"Cabin: {_cabin_line(state)}.",
         f"Trip: {_trip_line(state)}.",
@@ -189,6 +197,7 @@ def summarize(state: State, event: Event, turns: Iterable[Turn] = ()) -> str:
         f"Reminders: {_reminders_line(state)}. Valid reminder categories: {', '.join(poi_categories())}.",
         f"Media: {_media_line(state)}.",
         f"Assistant: {muted}. Trusted contact: {contact_text}.",
+        f"Driver preferences: {_preferences_line(state)}.",
         f"Last utterances: {history}",
     ]
     return "\n".join(lines)

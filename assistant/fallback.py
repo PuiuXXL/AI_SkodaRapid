@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from assistant import cabin, media_search, music
+from assistant import cabin, media_search, music, preferences
 from assistant.contract import Action, Event, State
 from assistant.settings import cfg, get_texts
 from assistant.textutil import fill, normalize, word_count
@@ -251,8 +251,17 @@ def volume_request(text: str, state: State) -> float | None:
 
 
 def media_command(text: str, state: State) -> bool:
-    """True for a stop / volume command, answered at once without the LLM (``assistant/client.py``)."""
-    return stop_media_request(text, state) or volume_request(text, state) is not None
+    """True for a stop / volume / preference command, answered at once without the LLM (``assistant/client.py``)."""
+    return (stop_media_request(text, state) or volume_request(text, state) is not None
+            or preferences.voice_command(text) is not None)
+
+
+def _preference(key: str, value: str, state: State) -> list[dict]:
+    """ "Răspund mai scurt. Bine?" + the held ``set_preference``, or "E deja așa." when nothing changes."""
+    if preferences.effective(state).get(key) == value:
+        return [_speak(_t("preference_already") or "Ok.")]
+    question = _t("preference_confirm", key, value) or _t("not_understood")
+    return [{"type": "set_preference", "key": key, "value": value}, _ask(question)]
 
 
 _THANKS = frozenset({"multumesc", "multumim", "mersi", "merci", "ms", "multam"})
@@ -276,7 +285,7 @@ LLM_FAILURES = frozenset({"timeout", "llm_error", "invalid_json", "truncated"})
 
 
 def _speech(event: Event, state: State, reason: str | None = None) -> list[dict]:
-    """Free request without the LLM: stop / volume, a music / podcast request (YouTube search), else 'n-am înțeles'.
+    """Handle music controls, preferences, YouTube requests and thanks without the LLM.
 
     ``reason`` is why the LLM did not answer (``assistant/client.py``): after an LLM failure the
     request was understood, so the driver is asked to repeat with ``llm_hiccup`` instead.
@@ -290,6 +299,9 @@ def _speech(event: Event, state: State, reason: str | None = None) -> list[dict]
     volume = volume_request(text, state)
     if volume is not None:
         return [{"type": "set_preference", "key": "volume", "value": volume}, ok]
+    wanted = preferences.voice_command(text)
+    if wanted is not None:
+        return _preference(*wanted, state)
     found = media_search.media_request(text)
     if found is not None and cfg("youtube", "enabled", default=True):
         query, kind = found

@@ -41,7 +41,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from assistant import media_search, music
+from assistant import media_search, music, preferences
 from assistant.client import AssistantClient
 from assistant.answers import InputEvent
 from assistant.contract import Action, Event, Reminder, State
@@ -145,6 +145,9 @@ def create_app(scene: str | None = None) -> FastAPI:
                 state.media.volume = float(action.value)
                 await send({"type": "media", "action": "volume", "volume": state.media.volume})
                 await log_line(f"  volum muzică: {state.media.volume:.2f}")
+            elif action.type == "set_preference" and preferences.store.apply(action, state):
+                # Like core's AssistantLink._preference: recorded only when the action is executed.
+                await log_line(f"  preferință: {action.key} = {action.value} (până la finalul călătoriei)")
             elif action.type == "read_message":
                 message = next((m for m in state.messages if m.id == action.msg_id), None)
                 if message is not None and message.text:

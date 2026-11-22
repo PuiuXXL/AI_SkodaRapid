@@ -406,10 +406,17 @@ class Interaction(ContractModel):
 
 
 class AssistantStatus(ContractModel):
-    """Silence after a refusal (C10, D10): P3-P4 are quiet until ``muted_until``. Safety is never affected."""
+    """Silence after a refusal (C10, D10): P3-P4 are quiet until ``muted_until``. Safety is never affected.
+
+    ``preferences``: how the driver wants the assistant to interact (``talkativeness``, ``follow_up``,
+    ``answer_length``), as P3's ``assistant.preferences.effective`` computes them (assistant.yaml defaults ->
+    profile.json -> a confirmed voice change for this trip). Core copies them here every tick so the dashboard sees
+    voice changes too. Style only: no safety rule reads them.
+    """
 
     muted_until: float | None = None
     mute_reason: str | None = None  # "driver_refused"
+    preferences: dict[str, str] = Field(default_factory=dict)
 
 
 class SafeContact(ContractModel):
@@ -1081,6 +1088,7 @@ UI_COMMANDS: tuple[str, ...] = (
     "enroll",            # value: {name, camera} -> forwarded to P1
     "end_trip",          # the trip report (J2, J3)
     "reset",
+    "assistant_preference",  # value: {key, value} -> P3's talkativeness / follow_up / answer_length, this trip only
 )
 
 

@@ -272,3 +272,23 @@ test("tourist sights from Wikipedia: places dropped, sights ranked, chosen by de
  assert.deepEqual(spread.filter(a=>a.selected).map(a=>a.name),["Castelul E","Salina G"]);
  assert.equal(shortDescription("Salina Turda este o salină. Se află în Turda. "+"x".repeat(300)+"."),"Salina Turda este o salină. Se află în Turda.");
 });
+
+// --- Setări copilot (#/setari): P3's interaction preferences --------------------------------------------------------
+import {SettingsPage,copilotSettings} from "../src/driver/SettingsPage";
+import {readPage} from "../src/driver/routes";
+
+test("the settings page shows core's preferences and sends only contract commands",()=>{
+ assert.equal(readPage("#/setari"),"setari");
+ const offline=renderToStaticMarkup(<DriverContext.Provider value={{data:empty,fresh:false} as unknown as DriverContextValue}><SettingsPage/></DriverContext.Provider>);
+ assert.doesNotMatch(offline,/NaN|undefined|aria-pressed="true"/);  // no values invented without core
+ assert.equal((offline.match(/<button[^>]*disabled/g)??[]).length,(offline.match(/<button/g)??[]).length);
+ const live={data:{...empty,state:{assistant:{preferences:{talkativeness:"low",answer_length:"normal",follow_up:"never"}}}},fresh:true,
+  can:(name:string)=>LIVE_COMMANDS.has(name),command:()=>undefined} as unknown as DriverContextValue;
+ const html=renderToStaticMarkup(<DriverContext.Provider value={live}><SettingsPage/></DriverContext.Provider>);
+ assert.equal((html.match(/aria-pressed="true"/g)??[]).length,3);
+ assert.doesNotMatch(html,/<button[^>]*disabled/);
+ for(const setting of copilotSettings)for(const option of setting.options){
+  const message=liveMessage("set_assistant_preference",{key:setting.key,value:option.value},{});
+  assert.deepEqual(message,{type:"command",cmd:"assistant_preference",value:{key:setting.key,value:option.value}});
+ }
+});

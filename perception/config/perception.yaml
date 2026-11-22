@@ -261,6 +261,8 @@ phone:
                                # the driver's phone: it does not vote (scene 4) (start)
   passenger_side: right        # the passenger's side in the DRIVER's terms (left-hand-drive car)
   mirrored: false              # the camera image is not mirrored: image right = the driver's left
+  owned_needs_contact: true    # AS7: the driver's phone must be near the face or in a hand; a box that is neither
+                               # (the passenger's shoulder read as a phone, live 2026-11-21) never votes "in use"
   async_inference: true        # YOLO in its own thread (ORT releases the GIL): inline, yolo26s@640 dropped the driver
                                # face to 20 fps (min 11.6); the boxes are 1-2 frames older, the 3-of-5 vote absorbs it
   lap_pattern:

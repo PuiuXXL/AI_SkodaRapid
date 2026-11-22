@@ -89,8 +89,16 @@ def test_phone_in_hand_below_the_face() -> None:
     assert r.in_use and not r.near_face and r.usage == "hand" and r.side == "right"
 
 
-def test_owned_phone_without_hand_is_visible() -> None:
-    r = vote(PhoneTracker(), [True] * 3, DRIVER_LEFT_FAR)[-1]
+def test_a_box_neither_near_the_face_nor_in_a_hand_never_votes() -> None:
+    """AS7: the passenger's shoulder read as a phone next to the driver (live 2026-11-21) is not the driver's phone."""
+    results = vote(PhoneTracker(), [True] * 5, DRIVER_LEFT_FAR)
+    assert not any(r.in_use for r in results) and results[-1].votes == 0
+    shoulder = det(430, 520, 0.6)  # passenger side, closer than foreign_dx_ratio x face width: not "foreign"
+    assert not any(r.in_use for r in vote(PhoneTracker(), [True] * 5, shoulder))
+
+
+def test_owned_phone_without_hand_is_visible_when_contact_is_not_required() -> None:
+    r = vote(PhoneTracker(PhoneConfig(owned_needs_contact=False)), [True] * 3, DRIVER_LEFT_FAR)[-1]
     assert r.in_use and r.usage == "visible" and r.side == "left" and not r.foreign
 
 
@@ -118,7 +126,7 @@ def test_mirrored_camera_flips_the_side() -> None:
     r = vote(PhoneTracker(PhoneConfig(mirrored=True)), [True] * 3, NEAR_FACE)[-1]
     assert r.side == "right"
     # mirrored: image left = the driver's left -> a far image-left phone is now on the door side, owned
-    r = vote(PhoneTracker(PhoneConfig(mirrored=True)), [True] * 3, PASSENGER_FAR)[-1]
+    r = vote(PhoneTracker(PhoneConfig(mirrored=True)), [True] * 3, PASSENGER_FAR, hands=[hand_at(250, 540)])[-1]
     assert r.in_use and r.side == "left"
 
 
@@ -130,12 +138,14 @@ def test_lap_pattern_only_without_a_voted_phone() -> None:
     assert r.source == "detector" and r.usage == "call"
 
 
-def test_no_face_box_still_votes_without_geometry() -> None:
-    tr = PhoneTracker()
-    r = None
+def test_no_face_box_votes_only_with_a_hand_on_the_phone() -> None:
+    tr, held = PhoneTracker(), PhoneTracker()
+    r = h = None
     for i in range(3):
         r = tr.update(i * 0.2, [NEAR_FACE])
-    assert r is not None and r.in_use and r.side is None and not r.near_face
+        h = held.update(i * 0.2, [NEAR_FACE], hands=[hand_at(700, 300)])
+    assert r is not None and not r.in_use  # no face, no hand: nothing ties the box to the driver
+    assert h is not None and h.in_use and h.side is None and not h.near_face and h.usage == "hand"
 
 
 def test_reset_clears_the_vote() -> None:
