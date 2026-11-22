@@ -1,8 +1,9 @@
 """B3 attention and risk, B6 blind meters, B9 conversation in the car.
 
-* **attention** 0..1: share of the last ``attention.window_s`` with the gaze on the road (P1's ``off_road_ms`` is 0
-  on the road and during short mirror glances; ``unknown`` samples are skipped), minus ``vats_penalty`` per VATS
-  glance above ``vats_free``, minus ``phone_penalty`` with the phone in hand. Held while the camera is lost.
+* **attention** 0..1: share of the last ``attention.window_s`` with the gaze on the road and the eyes open (P1's
+  ``off_road_ms`` is 0 on the road and during short mirror glances; eyes closed for ``attention.eyes_closed_ms`` or
+  more count as off the road, whatever the zone; other ``unknown`` samples are skipped), minus ``vats_penalty`` per
+  VATS glance above ``vats_free``, minus ``phone_penalty`` with the phone in hand. Held while the camera is lost.
 * **risk** 0..3: ``(w_inattention·(1 - attention) + w_fatigue·F) x min(1, speed / speed_ref_kmh)``, then
   ``risk.levels``: 0 when parked, maximum at 130 km/h.
 * **blind meters**: speed x time while ``off_road_ms > 0``: ``last`` = the current (or last) glance, ``trip`` = total.
@@ -28,9 +29,11 @@ class AttentionScore:
         self.samples: deque[tuple[float, bool]] = deque()
 
     def update(self, state: State, now: float) -> float:
-        gaze = state.driver.gaze
-        if state.safety.monitoring_ok and gaze.zone != "unknown":
-            self.samples.append((now, gaze.off_road_ms <= 0))
+        gaze, eyes = state.driver.gaze, state.driver.eyes
+        # a closure longer than a blink: not watching the road, even with the head straight (the zone stays "road")
+        closed = eyes.long_closure or eyes.closed_ms >= float(th("attention", "eyes_closed_ms"))
+        if state.safety.monitoring_ok and (closed or gaze.zone != "unknown"):
+            self.samples.append((now, not closed and gaze.off_road_ms <= 0))
         while self.samples and self.samples[0][0] < now - float(th("attention", "window_s")):
             self.samples.popleft()
         if not self.samples or not state.safety.monitoring_ok:

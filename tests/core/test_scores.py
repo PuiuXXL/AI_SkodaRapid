@@ -158,6 +158,30 @@ async def test_phone_at_speed_means_low_attention_and_high_risk() -> None:
     assert parked.state.assessment.risk == 0  # no speed, no risk
 
 
+async def test_closed_eyes_lower_attention_even_looking_ahead() -> None:
+    rig = Rig(scene=8)  # 118 km/h, gaze on the road
+    rig.run(11.0)
+    before = rig.state.assessment.attention
+    assert before >= 0.9
+    start = rig.t
+
+    def eyes_closed(frame: dict[str, Any], t: float) -> None:
+        if t >= start:
+            closed_ms = round((t - start) * 1000.0, 1)
+            frame["driver"]["eyes"].update(state="CLOSED", closed_ms=closed_ms, long_closure=closed_ms > 500)
+            frame["driver"]["gaze"].update(zone="road", off_road_ms=0.0)
+
+    rig.patch = eyes_closed
+    rig.run(3.0)
+    assert rig.state.assessment.attention <= before - 0.2  # ~2.5 s of the last 10 s with the eyes shut
+    blink = Rig(scene=8)
+    blink.run(11.0)
+    before = blink.state.assessment.attention
+    blink.patch = lambda frame, t: frame["driver"]["eyes"].update(state="CLOSED", closed_ms=200.0)
+    blink.run(1.0)
+    assert blink.state.assessment.attention == pytest.approx(before, abs=0.02)  # blinks cost nothing
+
+
 async def test_blind_meters() -> None:
     rig = Rig(scene=8)  # 118 km/h
     rig.patch = look_at("lap", rig.t + 0.5, rig.t + 2.5)  # 2 s off the road

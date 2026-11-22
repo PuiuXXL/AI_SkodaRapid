@@ -207,6 +207,7 @@ disengagement:                  # B2: D = sum(weight * term), plan formula
 
 attention:                      # B3: 0..1
   window_s: 10                  # share of the last 10 s with the gaze on the road (mirrors under 2 s count as road)
+  eyes_closed_ms: 500           # eyes closed this long (longer than a blink) count as off the road
   vats_free: 4                  # driver.gaze.vats_60s up to this costs nothing
   vats_penalty: 0.03            # per VATS glance above vats_free
   phone_penalty: 0.4            # driver.phone.in_use
