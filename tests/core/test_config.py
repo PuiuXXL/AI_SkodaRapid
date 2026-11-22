@@ -123,6 +123,7 @@ def test_unknown_demo_key_is_an_error(tmp_path: Path) -> None:
 TEMPLATE_FIELDS = {
     ("links", "maps"): {"lat", "lon"},
     ("sos", "call"): {"driver_name", "unresponsive_s", "cause", "occupants_n", "passenger_state_text", "time_hhmm"},
+    ("sos", "call_short"): {"driver_name", "unresponsive_s", "cause"},
     ("sos", "sms"): {"driver_name", "unresponsive_s", "cause", "occupants_n", "passenger_state_text", "maps_url",
                      "time_hhmm"},
     ("sos", "passenger_instructions"): {"passenger_name", "driver_name"},

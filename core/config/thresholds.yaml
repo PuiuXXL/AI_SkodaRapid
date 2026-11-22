@@ -105,6 +105,7 @@ sos:                            # P0 (C4, C5): alarm -> "Ești bine?" -> countdo
   # The Twilio call to the emergency contact (integrations/twilio_call.py; keys and numbers only in .env).
   call_voice: "Polly.Carmen"    # a Romanian Twilio <Say> voice (TWILIO_VOICE in .env overrides it)
   call_repeat: 2                # the state is read this many times
+  telegram_call_lang: "ro-RO-Standard-A"   # the Google voice of the Telegram call (CallMeBot: Standard voices only)
 
 dialog:
   window_s: 6                   # E1: dialog window opened at speak_done of a question (interaction.dialog_window_open)

@@ -7,13 +7,18 @@ links:
   maps: "https://www.google.com/maps?q={lat:.5f},{lon:.5f}"
 
 sos:                            # C5, F6: driver not responding
-  # Twilio <Say> in ro-RO (integrations/twilio_call.py), read twice. A link cannot be read aloud: the location goes
-  # by SMS and on DriveMate Contact. Fields: driver_name, unresponsive_s, cause, occupants_n, passenger_state_text,
+  # Twilio <Say> in ro-RO (integrations/twilio_call.py) and the Telegram voice note, read twice. A link cannot be
+  # read aloud: the location goes in the message (Telegram / SMS) and on DriveMate Contact. Fields: driver_name, unresponsive_s, cause, occupants_n, passenger_state_text,
   # time_hhmm
   call: >-
     Alertă automată DriveMate. {driver_name} nu răspunde de {unresponsive_s} secunde. {cause}
     Ocupanți: {occupants_n}; pasagerul din dreapta e {passenger_state_text}.
-    Locația a fost trimisă prin SMS. Ora: {time_hhmm}.
+    Locația a fost trimisă prin mesaj. Ora: {time_hhmm}.
+  # The Telegram call (CallMeBot, integrations/telegram_alert.py): 256 characters at most, read twice.
+  # Fields: driver_name, unresponsive_s, cause
+  call_short: >-
+    Alertă DriveMate. {driver_name} nu răspunde de {unresponsive_s} secunde. {cause}
+    Locația e în mesajul trimis pe Telegram.
   # SMS to the emergency contact (Twilio) and the red alert on DriveMate Contact.
   # Fields: driver_name, unresponsive_s, cause, occupants_n, passenger_state_text, maps_url, time_hhmm
   sms: >-

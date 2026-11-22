@@ -45,7 +45,7 @@ def test_the_call_says_the_state_and_the_cause_without_a_link() -> None:
     report = reports[0]
     assert report.cause == "Lui Andrei i-a căzut capul la volan, mergând cu 118 la oră."
     assert report.call_text.startswith("Alertă automată DriveMate. Andrei nu răspunde de ")
-    assert report.cause in report.call_text and "Locația a fost trimisă prin SMS." in report.call_text
+    assert report.cause in report.call_text and "Locația a fost trimisă prin mesaj." in report.call_text
     assert "http" not in report.call_text  # a link cannot be read aloud
     assert report.cause in report.text and "https://" in report.text  # the SMS has the map
     assert rig.engine.safety.sos.state == "sos_sent"
