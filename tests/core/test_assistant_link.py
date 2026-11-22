@@ -430,3 +430,19 @@ async def test_panel_preference_with_an_unknown_value_is_rejected() -> None:
     rig.browser({"type": "command", "cmd": "assistant_preference", "value": {"key": "answer_length", "value": "huge"}})
     assert rig.state.assistant.preferences["answer_length"] == "normal"
     assert rejected(rig)[-1] == "unknown_preference"
+
+
+async def test_warm_up_opens_the_llm_connection_before_the_first_question() -> None:
+    """The first real answer must not pay the connection setup (it went over llm.timeout_s on a slow laptop)."""
+
+    class Provider:
+        available, name, warmed = True, "fake", 0
+
+        async def warm_up(self) -> None:
+            self.warmed += 1
+
+    client = FakeClient()
+    client.provider = Provider()
+    rig = Rig(scene=5, assistant=client)
+    await rig.link.warm_up()
+    assert client.provider.warmed == 1

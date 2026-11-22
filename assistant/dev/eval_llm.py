@@ -222,7 +222,8 @@ async def run_case(case: dict, attempt: int, base: dict, presets: dict, provider
     event = Event(type=spec["type"], ts=now, data=dict(spec.get("data") or {}))
     provider.calls.clear()
     client = AssistantClient(provider=provider)  # fresh memory and policies for every run
-    actions = await client.handle_event(event, state, now=now)
+    # like core: sentences are handed to the voice while the LLM streams (llm.timeout_s = first sentence)
+    actions = await client.handle_event(event, state, on_early_speech=lambda _action: None, now=now)
     info = client.last_result
     calls = list(provider.calls)
     outcome, problems = evaluate(case, info, actions, calls)

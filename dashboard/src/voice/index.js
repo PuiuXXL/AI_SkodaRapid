@@ -41,6 +41,9 @@ export const NO_MORE_ANSWERS = new Set([
   "asta e tot", "asta a fost tot", "mersi", "multumesc", "merci", "e ok", "e bine", "sunt ok", "ma descurc",
   "nu mai am nevoie", "nu am nevoie", "n am nevoie", "nu mai vreau nimic", "nu mai vreau", "nu vreau nimic",
   "nu nimic", "nu mersi nimic",
+  // a thank-you that closes the exchange (assistant/fallback.py thanks(): answered "Cu plăcere!")
+  "bine multumesc", "bine mersi", "ok mersi", "ok multumesc", "mersi mult", "multumesc mult", "multumesc frumos",
+  "mersi frumos", "multumim",
 ]);
 
 const nowSeconds = () => (performance.timeOrigin + performance.now()) / 1000;

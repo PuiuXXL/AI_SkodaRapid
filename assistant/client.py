@@ -264,16 +264,33 @@ class AssistantClient:
         watcher = _StreamWatcher(state, event, on_early_speech) if on_early_speech else None
         user = summarize(state, event, self.memory.recent())
         timeout = float(cfg("llm", "timeout_s", default=2.5))
+        total = max(timeout, float(cfg("llm", "total_timeout_s", default=timeout)))
         started = time.perf_counter()
+        task = asyncio.ensure_future(self.provider.generate(system_prompt(), user, watcher.feed if watcher else None))
         try:
-            llm = await asyncio.wait_for(
-                self.provider.generate(system_prompt(), user, watcher.feed if watcher else None),
-                timeout=timeout,
-            )
+            # llm.timeout_s is the deadline for the FIRST spoken sentence: an answer whose first sentence the
+            # driver already hears (streamed, on_early_speech) may go on until llm.total_timeout_s, so a long
+            # answer is not cut in the middle and replaced by a fixed text.
+            llm = await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
         except TimeoutError:
-            info.reason = "timeout"
-            log.warning("LLM timeout after %.1fs on %s; using fallback.", timeout, event.type)
-            return self._fallback(event, state, info, skip_speech=bool(watcher and watcher.streamed))
+            if watcher is not None and watcher.streamed and total > timeout:
+                try:
+                    log.info("LLM answer on %s goes past %.1fs: its first sentence is out, waiting up to %.1fs.",
+                             event.type, timeout, total)
+                    llm = await asyncio.wait_for(task, timeout=total - (time.perf_counter() - started))
+                except TimeoutError:
+                    info.reason = "timeout"
+                    log.warning("LLM timeout after %.1fs on %s; using fallback.", total, event.type)
+                    return self._fallback(event, state, info, skip_speech=True)
+                except LLMError as exc:  # failed after its first sentence: no retry (never say it twice)
+                    info.reason, info.error = "llm_error", _short_error(exc)
+                    log.warning("LLM error on %s after its first sentence: %s", event.type, exc)
+                    return self._fallback(event, state, info, skip_speech=True)
+            else:
+                task.cancel()
+                info.reason = "timeout"
+                log.warning("LLM timeout after %.1fs on %s; using fallback.", timeout, event.type)
+                return self._fallback(event, state, info, skip_speech=bool(watcher and watcher.streamed))
         except LLMError as exc:
             remaining = timeout - (time.perf_counter() - started)
             if not self._can_retry(exc, watcher, remaining):

@@ -223,12 +223,22 @@ def _follow_up_dialog():
     return dialog
 
 
-@pytest.mark.parametrize("text", ["Nu", "nu, mersi", "Nimic.", "gata", "Atât, mersi", "nu mai am nevoie", "Mersi"])
+@pytest.mark.parametrize("text", ["Nu", "nu, mersi", "Nimic.", "gata", "Atât, mersi", "nu mai am nevoie"])
 def test_follow_up_no_is_silent(text):
     dialog = _follow_up_dialog()
     result = dialog.handle([voice(text)], NOW + 1)
     assert result.handled and result.answer == "no"
     assert not result.speak and not result.events and not result.execute
+    assert dialog.pending is None
+
+
+@pytest.mark.parametrize("text", ["Bine, mulțumesc.", "Mersi", "Mulțumesc frumos!", "Ok, mersi mult."])
+def test_follow_up_thanks_closes_with_a_reply(text):
+    """A closing thank-you is not a "da": no "Spune.", but "Cu plăcere!" and the exchange ends."""
+    dialog = _follow_up_dialog()
+    result = dialog.handle([voice(text)], NOW + 1)
+    assert result.handled and result.answer == "no" and not result.events
+    assert [(a.type, a.text) for a in result.speak] == [("speak", "Cu plăcere!")]
     assert dialog.pending is None
 
 

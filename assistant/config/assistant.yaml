@@ -25,8 +25,14 @@ llm:
   # Model used when LLM_MODEL is empty in .env. Leave null to require it in .env.
   # Use a fast "Flash" model (NOT a "Pro" model): the plan needs < 2 s to first speech.
   default_model: null
-  # Hard deadline for one LLM answer, in seconds (plan C9 / D1: 2.5 s -> fixed text).
+  # Deadline for the first spoken sentence of an LLM answer, in seconds (plan C9 / D1: 2.5 s -> fixed text).
   timeout_s: 2.5
+  # Since 2026-11-22 timeout_s is the deadline for the FIRST spoken sentence: when it is already being said
+  # (streamed to the voice while the LLM goes on), the rest of the answer may take until total_timeout_s instead of
+  # being cut and replaced by a fixed text. Without a first sentence by timeout_s the fixed text is used, as before.
+  # Measured answer times: p50 0.8 s / p95 1.1 s on the main laptop, p50 3.0 s / p95 3.8 s on the slow one
+  # (docs/eval/llm-after-step4-2026-11-22.md and the 10 s run on the other laptop).
+  total_timeout_s: 6.0
   # Maximum number of actions accepted from one LLM answer (plan section 6).
   max_actions: 3
   # Sampling temperature. Low = predictable, short answers (0.4 sometimes made the

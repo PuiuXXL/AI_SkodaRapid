@@ -39,7 +39,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal
 
-from assistant import cabin, media_search, music
+from assistant import cabin, fallback, media_search, music
 from assistant.answers import InputEvent, fuse, is_plain_answer, parse_kss, request_after_answer
 from assistant.contract import Action, Event, State
 from assistant.quiz import QuizSession
@@ -250,12 +250,19 @@ class DialogManager:
 
         * "nu" / "nimic" / "gata" / 👎 / ✋ -> handled, nothing said (the browser stops
           treating speech as addressed until the next question or the wake word);
+        * a thank-you that closes ("bine, mulțumesc", "mersi mult") -> "Cu plăcere!" and the same end.
+          "Bine" alone used to count as "da" and got "Spune." (heard in the first voice tests);
         * "da" alone / 👍 -> "Spune." as a question, so a new dialog window opens;
         * "da/nu" followed by a request ("nu, pune muzică") -> that request as ``driver_speech``;
         * anything else (a request without yes / no) -> not handled: core sends it to the
           LLM as normal speech; the follow-up question is dropped.
         """
         voice = [i for i in sorted(inputs, key=lambda i: i.ts) if i.channel == "voice"]
+        if any(fallback.thanks(i.value) for i in voice):
+            self.pending = None
+            result = DialogResult(handled=True, answer="no", channel="voice")
+            result.speak.append(_say(_text("thanks") or "Cu plăcere!"))
+            return result
         if any(self._done(i.value) for i in voice):
             self.pending = None
             return DialogResult(handled=True, answer="no", channel="voice")

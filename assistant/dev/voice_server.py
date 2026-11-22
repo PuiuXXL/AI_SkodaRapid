@@ -83,10 +83,13 @@ def create_app(scene: str | None = None) -> FastAPI:
     """
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        """Load yt-dlp in the background so the first YouTube search is faster."""
-        warm = asyncio.create_task(media_search.warm_up())
+        """Warm up in the background: the LLM connection (first answer) and yt-dlp (first YouTube search)."""
+        warm = [asyncio.create_task(media_search.warm_up())]
+        if client.provider.available:
+            warm.append(asyncio.create_task(client.provider.warm_up()))
         yield
-        warm.cancel()
+        for task in warm:
+            task.cancel()
 
     app = FastAPI(title="DriveMate P3 voice test", lifespan=lifespan)
     app.include_router(assistant_router)

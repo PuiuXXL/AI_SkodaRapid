@@ -737,9 +737,20 @@ class AssistantLink:
             self.engine.hub.broadcast_ui(to_wire(UiSpeakControl(action="resume")))
 
     async def warm_up(self) -> None:
-        """Plan section 8, rule 5: load what the first answer needs before the demo starts."""
+        """Plan section 8, rule 5: load what the first answer needs before the demo starts.
+
+        The LLM connection too (one tiny request): the first real answer used to pay the TLS / connection setup,
+        ~4 s on a slow laptop against ~2-3 s afterwards, and went over ``llm.timeout_s`` to a fixed text.
+        """
         if not self.available:
             return
+        provider = getattr(self.client, "provider", None)
+        if provider is not None and getattr(provider, "available", False):
+            try:
+                await provider.warm_up()
+                log.info("LLM connection warmed up (%s)", getattr(provider, "name", "?"))
+            except Exception as exc:  # warm-up is an optimisation only
+                log.info("LLM warm-up skipped: %s", exc)
         try:
             from assistant import media_search
 

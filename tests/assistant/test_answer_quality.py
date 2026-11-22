@@ -188,3 +188,73 @@ def test_pytest_runs_offline(monkeypatch):
     assert not llm_settings().usable
     monkeypatch.setenv("DRIVEMATE_LLM_LIVE", "1")
     assert llm_settings().usable
+
+
+# --- the deadline is on the first spoken sentence (llm.timeout_s), the whole answer has llm.total_timeout_s --------
+
+
+class SlowTailProvider(FakeProvider):
+    """Streams its first action at once, then needs ``tail_s`` more for the rest of the answer."""
+
+    def __init__(self, answer, tail_s: float) -> None:
+        super().__init__(answer)
+        self.tail_s = tail_s
+
+    async def generate(self, system: str, user: str, on_text: Optional[TextCallback] = None) -> LLMResult:
+        import asyncio
+        import json
+
+        self.calls.append((system, user))
+        actions = json.loads(self.answer)["actions"]
+        first = json.dumps({"actions": actions[:1]}, ensure_ascii=False)[:-2]  # '{"actions": [{...}' (still open)
+        if on_text is not None:
+            on_text(first)
+        await asyncio.sleep(self.tail_s)
+        if on_text is not None:
+            on_text(self.answer)
+        return LLMResult(text=self.answer, ttft_ms=1.0, total_ms=self.tail_s * 1000, finish_reason="STOP")
+
+
+LONG_ANSWER = {"actions": [
+    {"type": "speak", "to": "driver", "text": "Mai ai douăzeci de minute până la destinație."},
+    {"type": "ask", "to": "driver", "question": "Vrei să oprim la OMV pe drum?", "expects": "yes_no"},
+]}
+
+
+@pytest.fixture
+def short_deadlines(monkeypatch):
+    from assistant.settings import get_config
+
+    monkeypatch.setitem(get_config()["llm"], "timeout_s", 0.1)
+    monkeypatch.setitem(get_config()["llm"], "total_timeout_s", 0.6)
+
+
+@pytest.mark.asyncio
+async def test_an_answer_already_speaking_may_finish_after_the_first_deadline(short_deadlines):
+    early = []
+    client = AssistantClient(SlowTailProvider(LONG_ANSWER, tail_s=0.3))  # past timeout_s, within total
+    actions = await client.handle_event(_speech("Cât mai am?"), make_state(), on_early_speech=early.append, now=NOW)
+    assert client.last_result.reason == "ok" and client.last_result.source == "LLM"
+    # the first sentence went out before the deadline, the question after it: both said, none replaced
+    assert [a.text or a.question for a in early] == ["Mai ai douăzeci de minute până la destinație.",
+                                                     "Vrei să oprim la OMV pe drum?"]
+    assert [a.type for a in actions] == ["speak", "ask"] and all(a.streamed for a in actions)
+
+
+@pytest.mark.asyncio
+async def test_past_the_total_deadline_the_rest_is_dropped_not_repeated(short_deadlines):
+    early = []
+    client = AssistantClient(SlowTailProvider(LONG_ANSWER, tail_s=1.0))  # past total_timeout_s
+    actions = await client.handle_event(_speech("Cât mai am?"), make_state(), on_early_speech=early.append, now=NOW)
+    assert client.last_result.reason == "timeout" and len(early) == 1
+    assert not any(a.type in ("speak", "ask") for a in actions)  # no fixed text on top of the started answer
+
+
+@pytest.mark.asyncio
+async def test_nothing_said_by_the_first_deadline_still_means_the_fixed_text(short_deadlines):
+    client = AssistantClient(FakeProvider(LONG_ANSWER, delay_s=0.3))  # silent past timeout_s
+    actions = await client.handle_event(_speech("Cât mai am?"), make_state(), on_early_speech=lambda a: None,
+                                        now=NOW)
+    assert client.last_result.reason == "timeout"
+    assert [a.question for a in actions] == [_fb("llm_hiccup")]
+
