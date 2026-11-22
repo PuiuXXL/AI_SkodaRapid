@@ -187,6 +187,8 @@ class SystemMonitor:
     """
 
     def __init__(self, min_interval_s: float = 1.0) -> None:
+        import importlib
+
         import psutil
 
         self._psutil = psutil
@@ -197,7 +199,8 @@ class SystemMonitor:
         self._nvml: Any = None
         self._gpu_handle: Any = None
         try:
-            import pynvml  # type: ignore[import-untyped]  # optional: NVIDIA only
+            # Optional plugin: CPU-only environments do not install NVIDIA bindings.
+            pynvml = importlib.import_module("pynvml")
 
             pynvml.nvmlInit()
             self._gpu_handle = pynvml.nvmlDeviceGetHandleByIndex(0)

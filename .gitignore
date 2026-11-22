@@ -1,6 +1,11 @@
 # Secrets
 .env
 
+# Local presentation build output and Office lock files
+presentation/.pitch-build/
+.codex/pitch-build/
+~$*.pptx
+
 # Claude Code (shared directly, not through git)
 CLAUDE.md
 CLAUDE.local.md

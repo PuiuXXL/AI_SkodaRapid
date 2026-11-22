@@ -93,6 +93,8 @@
 .route-workspace { display:grid; gap:16px; grid-template-columns:minmax(0,1fr); }
 .route-workspace .route-points { position:static; width:auto; max-height:none; min-width:0; padding:16px; background:var(--fx-inset); box-shadow:none; }
 .route-workspace .route-map { height:clamp(320px,52svh,590px); min-height:300px; }
+.route-workspace .route-map-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin:0 0 12px; }
+.route-workspace .route-map-toolbar > div { gap:8px; }
 .route-list-heading h3 { margin:0; }
 .route-points .route-point-list li { display:grid; grid-template-columns:auto auto minmax(0,1fr); }
 .route-points .point-actions { grid-column:3; justify-self:end; }
@@ -101,7 +103,11 @@
 .route-playback .scores > span { flex-wrap:wrap; }
 @container workspace (min-width:860px) {
   .route-workspace { grid-template-columns:minmax(0,1fr) minmax(260px,32%); }
-  .route-workspace .route-points { max-height:65svh; overflow:auto; }
+  .route-workspace .route-map-shell { display:contents; }
+  .route-workspace .route-map-toolbar { grid-column:1/-1; grid-row:1; margin:0; }
+  .route-workspace .route-map-canvas { grid-column:1; grid-row:2; min-width:0; isolation:isolate; }
+  .route-workspace .route-points { grid-column:2; grid-row:2; align-self:start; max-height:clamp(320px,52svh,590px); overflow:auto; }
+  .route-workspace .map-notice { grid-column:1; grid-row:3; margin:0; }
 }
 
 /* Telemetry labels, plot and notes each own a row, even with the sidebar expanded. */

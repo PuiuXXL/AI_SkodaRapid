@@ -10,12 +10,14 @@ on:
       - "shared/**"
       - "simulator/**"
       - "integrations/**"
+      - "assistant/**"
       - "tests/core/**"
       - "tests/simulator/**"
       - "tests/contract/**"
       - "scripts/fake_perception.py"
       - "scripts/core_command.py"
       - "requirements/p2-core.txt"
+      - "requirements/p3-assistant.txt"
       - "pyproject.toml"
       - ".github/workflows/core.yml"
   pull_request:
@@ -24,10 +26,15 @@ on:
       - "shared/**"
       - "simulator/**"
       - "integrations/**"
+      - "assistant/**"
       - "tests/core/**"
       - "tests/simulator/**"
       - "tests/contract/**"
+      - "scripts/fake_perception.py"
+      - "scripts/core_command.py"
       - "requirements/p2-core.txt"
+      - "requirements/p3-assistant.txt"
+      - "pyproject.toml"
       - ".github/workflows/core.yml"
   workflow_dispatch:
 
@@ -49,12 +56,18 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: requirements/p2-core.txt
+          cache-dependency-path: |
+            requirements/p2-core.txt
+            requirements/p3-assistant.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements/p2-core.txt pytest-cov ruff
+          pip install -r requirements/p2-core.txt -r requirements/p3-assistant.txt pytest-cov ruff
+          pip check
+
+      - name: Verify core-assistant runtime imports
+        run: python -c "from core.main import create_app; from assistant.tts import speak_message; from assistant.client import AssistantClient"
 
       # Blocking: only what breaks at run time (syntax errors, undefined names). The style rules are reported below.
       - name: Ruff (runtime errors)

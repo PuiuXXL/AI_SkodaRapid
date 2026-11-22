@@ -17,11 +17,11 @@ if ($unknown) { Write-Host "unknown workflow(s): $($unknown -join ', ') (known: 
 
 # the "paths:" push filters of .github/workflows/<name>.yml, as path prefixes (keep in sync with the workflows)
 $filters = @{
-    perception  = @("perception/", "shared/", "tests/perception/", "tests/contract/", "scripts/", "requirements/p1-",
+    perception  = @("perception/", "shared/", "core/", "tests/perception/", "tests/contract/", "scripts/", "requirements/p1-", "requirements/p2-core.txt",
                     "pyproject.toml", ".github/workflows/perception.yml")
-    core        = @("core/", "shared/", "simulator/", "integrations/", "tests/core/", "tests/simulator/", "tests/contract/",
+    core        = @("core/", "shared/", "simulator/", "integrations/", "assistant/", "tests/core/", "tests/simulator/", "tests/contract/",
                     "scripts/fake_perception.py", "scripts/core_command.py", "requirements/p2-core.txt", "pyproject.toml",
-                    ".github/workflows/core.yml")
+                    "requirements/p3-assistant.txt", ".github/workflows/core.yml")
     assistant   = @("assistant/", "shared/", "integrations/", "tests/assistant/", "requirements/p3-assistant.txt",
                     "pyproject.toml", ".github/workflows/assistant.yml")
     integration = @("perception/", "core/", "shared/", "tests/contract/", "tests/integration/", "docs/perception.md",
@@ -40,11 +40,20 @@ if ($ChangedFile) {
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 $py = Join-Path $root ".venv\Scripts\python.exe"
+if (@($run | Where-Object { $_ -ne "dashboard" }).Count -and -not (Test-Path -LiteralPath $py)) {
+    Write-Error "Missing .venv/Scripts/python.exe. Follow README.md to install the Python environment."
+    exit 2
+}
 $failed = @()
 
-function Invoke-Step([string]$name, [scriptblock]$cmd) {
+function Invoke-Step([string]$name, [scriptblock]$cmd, [bool]$blocking = $true) {
     Write-Host "== $name" -ForegroundColor Cyan
-    & $cmd
+    $global:LASTEXITCODE = 0
+    try { & $cmd } catch { $global:LASTEXITCODE = 1; Write-Error $_ }
+    if (-not $blocking -and $LASTEXITCODE -ne 0) {
+        Write-Host "   $name : advisory (same as GitHub continue-on-error)" -ForegroundColor Yellow
+        return
+    }
     if ($LASTEXITCODE -ne 0) { $script:failed += $name; Write-Host "   $name : ROSU (exit $LASTEXITCODE)" -ForegroundColor Red }
     else { Write-Host "   $name : ok" -ForegroundColor Green }
 }
@@ -53,13 +62,14 @@ if ($run -contains "perception") {
     Invoke-Step "perception (ci_local.ps1)" { powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "ci_local.ps1") }
 }
 if ($run -contains "core") {
+    Invoke-Step "core: runtime imports" { & $py -c "from core.main import create_app; from assistant.tts import speak_message; from assistant.client import AssistantClient" }
     Invoke-Step "core: ruff errors" { & $py -m ruff check core shared integrations simulator tests/core tests/simulator tests/contract --isolated --target-version py311 --select E9,F63,F7,F821 }
-    Invoke-Step "core: ruff style" { & $py -m ruff check core shared integrations simulator --isolated --line-length 120 --target-version py311 --select E,F,W,I,UP,B,SIM,RUF }
+    Invoke-Step "core: ruff style" { & $py -m ruff check core shared integrations simulator --isolated --line-length 120 --target-version py311 --select E,F,W,I,UP,B,SIM,RUF } $false
     Invoke-Step "core: pytest" { & $py -m pytest tests/core tests/simulator tests/contract/test_core_reads_p1.py tests/contract/test_dashboard_route.py -q -p no:cacheprovider --cov=core --cov=shared --cov=simulator --cov-report=term:skip-covered --cov-fail-under=93 }
 }
 if ($run -contains "assistant") {
     Invoke-Step "assistant: ruff errors" { & $py -m ruff check assistant integrations tests/assistant --isolated --target-version py311 --select E9,F63,F7,F821 }
-    Invoke-Step "assistant: ruff style" { & $py -m ruff check assistant integrations --isolated --line-length 120 --target-version py311 --select E,F,W,I,UP,B,SIM,RUF }
+    Invoke-Step "assistant: ruff style" { & $py -m ruff check assistant integrations --isolated --line-length 120 --target-version py311 --select E,F,W,I,UP,B,SIM,RUF } $false
     Invoke-Step "assistant: pytest" { & $py -m pytest tests/assistant -q -p no:cacheprovider --cov=assistant --cov-report=term:skip-covered --cov-fail-under=70 }
 }
 if ($run -contains "integration") {
@@ -68,9 +78,9 @@ if ($run -contains "integration") {
 }
 if ($run -contains "dashboard") {
     Push-Location (Join-Path $root "dashboard")
-    if (-not (Test-Path node_modules)) { Invoke-Step "dashboard: npm ci" { npm ci } }
-    Invoke-Step "dashboard: build" { npm run build }
-    Invoke-Step "dashboard: test" { npm test }
+    if (-not (Test-Path node_modules)) { Invoke-Step "dashboard: npm ci" { npm.cmd ci } }
+    Invoke-Step "dashboard: build" { npm.cmd run build }
+    Invoke-Step "dashboard: test" { npm.cmd test }
     Pop-Location
 }
 
