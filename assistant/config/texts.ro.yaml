@@ -78,6 +78,21 @@ fallback:
   follow_up: "Te mai ajut cu ceva?"
   follow_up_yes: "Spune."
 
+  # Interaction preferences said by voice, recognised without the LLM (assistant.yaml -> driver_preferences
+  # .voice_commands). The change applies after "da" (core executes set_preference).
+  preference_confirm:
+    talkativeness:
+      low: "Intervin mai rar de acum. Bine?"
+      normal: "Intervin ca de obicei. Bine?"
+      high: "Îți propun mai des. Bine?"
+    answer_length:
+      short: "Răspund mai scurt. Bine?"
+      normal: "Răspund normal, mai pe larg. Bine?"
+    follow_up:
+      never: "Nu mai întreb asta. Bine?"
+      always: "Te întreb iar dacă mai vrei ceva. Bine?"
+  preference_already: "E deja așa."
+
   # Plain "pune muzică" without the LLM: a catalog track, after a "yes".
   music_offer: "Pun ceva din ce-ți place?"
 

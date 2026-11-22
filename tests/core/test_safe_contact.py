@@ -25,8 +25,11 @@ PROFILE = {"name": "Andrei", "music_genres": ["rock"], "safe_contact": {"name": 
 def write_profile(root: Path, **changes: Any) -> Path:
     path = root / "andrei" / "profile.json"
     path.parent.mkdir(parents=True, exist_ok=True)
+    previous = path.stat().st_mtime if path.exists() else 0.0
     path.write_text(json.dumps({**PROFILE, **changes}), encoding="utf-8")
-    stamp = path.stat().st_mtime + 10  # a new mtime even within the same second
+    # A new mtime even within the same second: past both the write time and the previous (already shifted) stamp,
+    # otherwise two quick writes could end with the same mtime and core would keep the cached profile.
+    stamp = max(path.stat().st_mtime, previous) + 10
     os.utime(path, (stamp, stamp))
     return path
 

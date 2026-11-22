@@ -33,7 +33,7 @@ llm:
   # model stay silent on a direct request; 0.2 is more consistent).
   temperature: 0.2
   # Upper bound for the generated JSON. Answers are tiny (<= 3 short actions).
-  max_output_tokens: 400
+  max_output_tokens: 1024
   # Gemini "thinking" control for the main model (LLM_MODEL). Gemini 3.x models
   # reject thinking_budget (HTTP 400) and some reject level "minimal"; set at most
   # one of them. A rejected value makes every call fail fast with "llm_error" and
@@ -244,6 +244,55 @@ preferences:
   volume: [0.0, 1.0]
   talkativeness: [low, normal, high]
   music_genre: [pop, rock, electronic, jazz, classical, lofi, acoustic, dance, hiphop, kids]
+  # "Te mai ajut cu ceva?" after a statement (see driver_preferences below).
+  follow_up: [always, never]
+  # How long the LLM's answers should be (see driver_preferences below).
+  answer_length: [short, normal]
+
+# -----------------------------------------------------------------------------
+# How the driver wants the assistant to interact (assistant/preferences.py)
+# -----------------------------------------------------------------------------
+# Value order, last wins: defaults below -> profiles/<driver>/profile.json "preferences"
+# (P4's file, edited by hand for now; permanent) -> a confirmed set_preference by voice (this trip only).
+# None of these touches safety: alarms, cause and fatigue interventions are unchanged.
+driver_preferences:
+  defaults:
+    talkativeness: normal
+    follow_up: always
+    answer_length: normal
+  # Events that talkativeness slows down or speeds up (comfort only, never safety / cause).
+  comfort_events: [disengagement_high]
+  # Minimum seconds between two comfort suggestions, per talkativeness. Other proactive
+  # events keep policies.proactive_min_interval_s.
+  comfort_interval_s:
+    low: 120
+    normal: 30
+    high: 15
+  # Words the LLM is asked to aim for, per answer_length (null = no extra target).
+  # The hard limit stays speech.max_words_to_driver, so a slightly longer LLM answer is
+  # still accepted instead of being replaced by a fixed text.
+  answer_words:
+    short: 12
+    normal: null
+  # Spoken commands recognised WITHOUT the LLM (like "mai încet" for the volume), so they work offline
+  # and at once: the driver still hears "... Bine?" (texts: fallback.preference_confirm) and the change
+  # applies after "da". Phrases are normalised (lower case, no diacritics, "-" = space) and must appear
+  # as consecutive words in an utterance of at most voice_max_words words; anything else goes to the LLM.
+  voice_max_words: 12
+  voice_commands:
+    - {key: answer_length, value: short, phrases: [raspunde mai scurt, raspunde mi mai scurt, raspunde scurt,
+        raspunsuri scurte, raspunsuri mai scurte, raspunsurile mai scurte, fii mai scurt]}
+    - {key: answer_length, value: normal, phrases: [raspunde normal, raspunsuri normale, raspunsuri mai lungi,
+        raspunde mai lung, raspunde mai detaliat, raspunde mi normal, raspunde mi mai lung]}
+    - {key: follow_up, value: never, phrases: [nu ma mai intreba daca mai vreau, nu ma mai intreba daca mai am,
+        nu mai intreba daca mai vreau, nu ma mai intreba asta, nu mai intreba asta, nu mai intreba daca ma ajuti]}
+    - {key: follow_up, value: always, phrases: [intreaba ma daca mai vreau, intreaba ma iar daca mai vreau,
+        poti sa ma intrebi daca mai vreau, intreaba ma din nou daca]}
+    - {key: talkativeness, value: low, phrases: [vorbeste mai rar, propune mai rar, intervino mai rar,
+        mai putine sugestii, nu mi mai propune atatea, nu mai propune atatea, sugestii mai rar]}
+    - {key: talkativeness, value: normal, phrases: [sugestii normale, propune normal, intervino normal]}
+    - {key: talkativeness, value: high, phrases: [propune mai des, intervino mai des, mai multe sugestii,
+        sugestii mai des, vorbeste mai des]}
 
 # -----------------------------------------------------------------------------
 # Phone bridge (integrations/phone_bridge.py; plan F1, F3, F8)

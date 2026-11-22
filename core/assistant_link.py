@@ -44,6 +44,7 @@ from shared.contracts import (
     Reminder,
     SendReply,
     State,
+    UiCommand,
     UiMedia,
     UiSpeakControl,
     UiSpeakDone,
@@ -72,7 +73,7 @@ class AssistantLink:
         self.clock = clock
         self.available = False
         try:
-            from assistant import music, tts
+            from assistant import music, preferences, tts
             from assistant.answers import InputEvent
             from assistant.client import get_client
             from assistant.dialog import DialogManager
@@ -84,6 +85,7 @@ class AssistantLink:
         else:
             self.available = True
             self._music, self._tts, self._input, self._is_refusal = music, tts, InputEvent, is_refusal
+            self._preferences = preferences
             self.client = client or get_client()
             self.dialog = DialogManager()
         self.queue: deque[Event] = deque()
@@ -112,6 +114,8 @@ class AssistantLink:
             self.dialog.reset()
         if self.client is not None and hasattr(self.client, "reset"):
             self.client.reset()
+        if self.available:
+            self._preferences.store.reset()  # a new trip: voice / panel preference changes are forgotten
         self.utterances: dict[str, dict[str, Any]] = {}  # the assistant's utterances not finished yet
         self.speaking: str | None = None
         self.paused = False
@@ -349,7 +353,36 @@ class AssistantLink:
             state.media.volume = volume
             self.engine.hub.broadcast_ui(to_wire(UiMedia(action="volume", volume=volume)))
             return f"Volum {volume:.0%}."
+        # P3's interaction preferences (talkativeness, follow_up, answer_length): recorded only here, after the C8
+        # check, so a change rejected by core (e.g. the level went to P3 before the "da") never applies.
+        if self._preferences.store.apply(action, state):
+            self._sync_preferences(state)
         return f"Preferință: {action.key} = {action.value}."
+
+    def _panel_preference(self, message: UiCommand, now: float) -> None:
+        """A preference chosen on the dashboard's control panel (the driver set it there: no "Bine?").
+
+        Same effect as a confirmed voice change: P3 keeps it for this trip (a reset forgets it). Only P3's keys with
+        an allowed value are taken (``assistant.yaml`` -> ``preferences``); anything else is logged as rejected.
+        """
+        value = message.value if isinstance(message.value, dict) else {}
+        action = Action(type="set_preference", key=str(value.get("key", "")), value=value.get("value"),
+                        source="RULE")
+        state = self.engine.state
+        if self._preferences.store.apply(action, state):
+            self._sync_preferences(state)
+            self.engine.log_event("assistant_action", now, source="RULE", action_type="set_preference",
+                                  text=f"Preferință din panou: {action.key} = {action.value}.")
+        else:
+            self.engine.log_event("action_rejected", now, source="RULE", text=f"Preferință necunoscută: {value}",
+                                  reason="unknown_preference", by="core")
+
+    def _sync_preferences(self, state: State) -> None:
+        """``state.assistant.preferences`` from P3 (profile.json + voice changes of this trip), for the dashboard."""
+        try:
+            state.assistant.preferences = self._preferences.effective(state)
+        except Exception:  # noqa: BLE001 - a preference bug must never stop the tick
+            log.exception("assistant preferences not available")
 
     def _read(self, action: Action, state: State, now: float) -> str:
         message = next((m for m in state.messages if m.id == action.msg_id), None)
@@ -424,6 +457,9 @@ class AssistantLink:
         if isinstance(message, UiSpeakDone):
             self._speak_done(message, now)
             return
+        if isinstance(message, UiCommand) and message.cmd == "assistant_preference":
+            self._panel_preference(message, now)
+            return
         if not isinstance(message, UiSpeech) or not message.final:
             return
         if not (message.addressed or self.engine.safety.dialog.is_open(now)) or self._sos_active(now):
@@ -489,6 +525,7 @@ class AssistantLink:
         self._messages(state, now)
         self._yield(state, now)
         self._retry(state, now)
+        self._sync_preferences(state)
         window = self.engine.safety.dialog.is_open(now)
         state.interaction.state = ("paused" if self.paused else "speaking" if self.speaking
                                    else "listening" if window else "idle")

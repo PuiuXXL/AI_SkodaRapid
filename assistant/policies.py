@@ -14,7 +14,9 @@ Rules, in order:
    comfort is skipped; safety and cause resolution still go through (plan G2).
 4. **Rate limit** - at most one PROACTIVE intervention every
    ``policies.proactive_min_interval_s`` seconds (plan: "cel mult o intervenție
-   proactivă la 30 s").
+   proactivă la 30 s"). Comfort events (``driver_preferences.comfort_events``) use the
+   interval of the driver's ``talkativeness`` instead (``assistant/preferences.py``):
+   rarer at ``low``, more often at ``high``. Cause and fatigue are never affected.
 
 Note: whether the LLM itself is switched off (director button, plan C6) is not a
 policy - in that case the fixed fallback texts are used (see client.py).
@@ -25,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from assistant import preferences
 from assistant.contract import Event, State
 from assistant.settings import cfg
 
@@ -85,6 +88,9 @@ class Policies:
             return PolicyDecision(False, "conversation")
 
         interval = float(cfg("policies", "proactive_min_interval_s", default=30))
+        if event.type in cfg("driver_preferences", "comfort_events", default=[]):
+            comfort = preferences.comfort_interval_s(state)
+            interval = comfort if comfort is not None else interval
         if self._last_proactive_ts is not None and now - self._last_proactive_ts < interval:
             return PolicyDecision(False, "rate_limited")
         return PolicyDecision(True)

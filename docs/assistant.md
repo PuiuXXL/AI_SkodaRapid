@@ -59,6 +59,7 @@ Privacy note for the slide (plan section 3): the LLM receives only the ~10-line 
 | `assistant/fallback.py` | Fixed answers per event type (no LLM, timeout, error, director switch). |
 | `assistant/summary.py` | State → ~10 lines of text for the LLM. |
 | `assistant/memory.py` | Last 3 utterances (short memory). |
+| `assistant/preferences.py` | How the driver wants the assistant to interact: `talkativeness`, `follow_up`, `answer_length` (section 3.6). Reads `profiles/<driver>/profile.json`; voice changes last one trip. |
 | `assistant/music.py` | Music candidates by taste / energy / cabin (plan D8), volume. |
 | `assistant/answers.py` | Multimodal yes / no / silence / refusal fusion (plan E3), and `parse_kss` for the KSS value 1–9 (plan D3). |
 | `assistant/dialog.py` | **Used by core.** `DialogManager`: holds actions waiting for "yes", resolves the answer (voice, nod or gesture), and drives the KSS answer and the quiz. |
@@ -196,8 +197,28 @@ To read a message after `read_message` is confirmed, core says the message text 
 1. Safety veto: `safety.level` in P0–P2 or `safety.llm_allowed = false` → `stay_silent("safety_veto")`.
 2. Muted (`assistant.muted_until` in the future) → no initiative. Exceptions in `policies.allowed_while_muted` (messages, contact reply, driver requests).
 3. `conversation = true` → comfort is skipped; `cause_detected` and `fatigue_high` still go through (plan G2).
-4. At most one **proactive** answer per 30 s (`policies.proactive_events`).
+4. At most one **proactive** answer per 30 s (`policies.proactive_events`). Comfort events (`driver_preferences.comfort_events`, now `disengagement_high`) use the interval of the driver's `talkativeness` instead (section 3.6).
 5. `safety.llm_enabled = false` (director button, plan C6) → fixed texts, same behaviour otherwise.
+
+### 3.6 Driver interaction preferences (`assistant/preferences.py`)
+
+Three preferences change **how** the assistant talks, never what is safe:
+
+| Key | Values | Effect |
+|---|---|---|
+| `talkativeness` | `low` / `normal` / `high` | Minimum time between two comfort suggestions (`driver_preferences.comfort_interval_s`: 120 / 30 / 15 s). Cause and fatigue keep the normal 30 s. Also in the LLM summary (less small talk at `low`). |
+| `follow_up` | `always` / `never` | Whether "Te mai ajut cu ceva?" is added after a statement (3.4). |
+| `answer_length` | `short` / `normal` | The LLM is asked to aim for `driver_preferences.answer_words.short` (12) words. The hard limit stays `speech.max_words_to_driver` (30), so a slightly longer answer is not replaced by a fixed text. |
+
+Where the value comes from, last one wins: `driver_preferences.defaults` in `assistant.yaml` → `preferences` in `profiles/<driver>/profile.json` (written by hand or by a future profile page: P4 removed the old one on 2026-11-22; the file is read again when it changes) → a confirmed `set_preference` by voice ("răspunde mai scurt" → "Răspund mai scurt. Bine?" → "da"), kept in memory until `AssistantClient.reset()` (new trip / director reset). Values not listed under `preferences:` in `assistant.yaml` are ignored at every level.
+
+**Voice, with or without the LLM.** Known phrases are recognised without the LLM, like the volume commands (`preferences.voice_command`, phrases in `driver_preferences.voice_commands`, utterances of at most `voice_max_words` = 12 words): "răspunde mai scurt", "răspunde normal", "nu mă mai întreba dacă mai vreau ceva", "întreabă-mă dacă mai vreau ceva", "vorbește mai rar", "nu-mi mai propune atâtea", "propune mai des". They get `set_preference` + the fixed question from `texts.ro.yaml` → `fallback.preference_confirm` ("Răspund mai scurt. Bine?"), or "E deja așa." when nothing would change. They work offline and never wait for Gemini. Any other wording goes to the LLM, which returns the same pair of actions (system prompt).
+
+**Core's part (agreed with P2):**
+- The voice change is recorded by **core**, in `AssistantLink._preference` (`preferences.store.apply(action, state)`), i.e. only after the C8 check: a change core rejects (e.g. the level went to P3 before the "da") never applies. `DialogManager` only releases the action. The dev voice server does the same in its `execute`.
+- The dashboard's settings page (menu "Setări", `#/setari`, `dashboard/src/driver/SettingsPage.tsx`) sends `{type: "command", cmd: "assistant_preference", value: {key, value}}` (`UI_COMMANDS`). Core (`AssistantLink._panel_preference`) applies it at once, without "Bine?" (the driver chose it there), for this trip like a voice change; an unknown key or value is logged as `action_rejected`. A reset (`AssistantLink.reset`) forgets voice and panel changes.
+- Core copies `preferences.effective(state)` into `state.assistant.preferences` (`shared/contracts.py`, `AssistantStatus`) every tick and right after a change, so the dashboard sees profile and voice changes.
+- Decisions: a voice change lasts one trip (not written to `profile.json`); the three keys still need "Bine?" (only `volume` is in `NO_CONFIRMATION_PREFERENCES`); `talkativeness` slows down only `disengagement_high`.
 
 ---
 
@@ -348,7 +369,7 @@ The Gemini answer schema has one branch per action type, with all of its fields 
 ## 8. Notes for the other roles
 
 - **P2:** read the header of `assistant/_TEMP_contract_DELETE_LATER.py`. Once `shared/contracts.py` exists, `assistant/contract.py` switches automatically. Run `pytest tests/assistant` and delete the temporary file. The event types (3.2) and the `/ws/ui` and `/ws/phone` messages (4.2, 4.3, 5) are P3 proposals: change them in the contract if needed and tell P3.
-- **P4:** see 4.1 for the voice. `profiles/<name>/profile.json` may contain `name`, `music_genres`, `safe_contact: {name}` and `emergency_contact: {name}`; P3 reads these fields. `simulator/stops.json` categories are used for reminders.
+- **P4:** see 4.1 for the voice. `profiles/<name>/profile.json` may contain `name`, `music_genres`, `safe_contact: {name}`, `emergency_contact: {name}` and `preferences: {talkativeness, follow_up, answer_length}`; P3 reads these fields (section 3.6). There is no profile page any more (removed by P4 on 2026-11-22): until a new one exists, the file is edited by hand; during a trip the preferences are changed by voice or on the dashboard's settings page (menu "Setări", `#/setari`). Core copies the current values into `state.assistant.preferences`, if the dashboard wants to show them. `simulator/stops.json` categories are used for reminders.
 - **P1:** the voice uses `driver.head.answer` and `driver.gesture` (MediaPipe names `Thumb_Up`, `Thumb_Down`, `Open_Palm`) through `assistant/answers.py`.
 - **YouTube (section 6.1), what the others need to do:** listed in `DriveMate-PLAN-FINAL.md` (section 4.D, D11) and in `roluri/P2…` / `roluri/P4…` ("Adăugat de P3: YouTube").
 
