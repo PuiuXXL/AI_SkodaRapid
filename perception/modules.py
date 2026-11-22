@@ -336,7 +336,7 @@ class HeadAnswerModule:
             eyes_open = None if not state.eyes.reliable else state.eyes.state != "CLOSED"
         res = self.detector.update(inp.t, yaw, pitch, eyes_open)
         inp.shared["head_answer"] = res
-        patch = (
+        patch: dict[str, Any] = (
             {"driver": {"head": {"answer": res.answer}}}
             if self.ctx.is_driver
             else {"passenger": {"answer": res.answer}}

@@ -29,6 +29,7 @@ on:
       - "docs/perception.md"
       - "requirements/p1-perception.txt"
       - "requirements/p2-core.txt"
+      - "pyproject.toml"
       - ".github/workflows/integration.yml"
   workflow_dispatch:
 
