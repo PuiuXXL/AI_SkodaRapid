@@ -94,6 +94,9 @@ assistant:                      # C: core <-> P3's assistant (core/assistant_lin
   # and dropped the question for good. false = the old behaviour (the conversation ends at every warning).
   resume_after_warning: true
   resume_within_s: 10
+  # No initiative (cause_detected, fatigue_high, disengagement_high) during a P0-P2 alert and this long after it: P2's
+  # own questions ("Facem o pauză?") come first. The initiative is sent when the quiet is over, if still true.
+  quiet_after_alert_s: 20
 
 # C8: thumbs down adjusts only P3-P4 thresholds, inside fixed limits. Microsleep, distraction, SOS: never.
 tuning:

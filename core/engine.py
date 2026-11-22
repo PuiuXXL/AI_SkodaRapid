@@ -59,6 +59,10 @@ CORE_PERF_FIELDS = ("alarm_ms_last", "llm_ttft_ms", "llm_total_ms", "stt_final_m
                     "msg_to_voice_ms")
 #: Director commands forwarded to P1 as a PerceptionCommand.
 PERCEPTION_COMMANDS = {"debug", "calibrate", "enroll"}
+#: ``UiSpeak.priority`` of core's own sentences, by the rule that says them (the ``prefix`` of ``Engine.say``):
+#: the SOS takes the floor at once, a distraction's warning / "Nu te mai văd" stop lower speech, every other rule
+#: sentence (a break, a reminder, the trusted contact, a deferred message) waits for the end of the current sentence.
+SAY_PRIORITY: dict[str, str] = {"sos": "critical", "dis": "urgent", "mon": "urgent"}
 #: Director commands handled by the simulator.
 SIMULATOR_COMMANDS = {"scene", "speed", "time_scale", "start", "pause", "stop_at_next_poi", "reset"}
 FIRST_DECLARED_ID = 3  # 1 = driver camera, 2 = passenger camera (P1), 3+ = declared rear occupants
@@ -126,8 +130,10 @@ class Engine:
     # --- voice ---------------------------------------------------------------------------------------------------
 
     def say(self, clip_id: str | None, text: str, *, to: str = "driver", is_question: bool = False,
-            expects: str | None = None, prefix: str = "c") -> str:
+            expects: str | None = None, prefix: str = "c", priority: str | None = None) -> str:
         """Play a fixed text through P3's voice. Returns the utterance id (it comes back in ``speak_done``).
+
+        ``priority`` (``UiSpeak.priority``): by default from the rule that speaks (``SAY_PRIORITY``, by ``prefix``).
 
         The pre-generated clip when it exists (local, instant). Otherwise the text as sentences for P3's TTS
         (``/tts/<id>.mp3``, edge-tts); P3's player falls back to the browser's own voice when a sentence cannot be
@@ -138,7 +144,8 @@ class Engine:
         self._utterance_counter += 1
         utterance_id = f"{prefix}{self._utterance_counter}"
         message: dict[str, Any] = {"id": utterance_id, "to": to, "is_question": is_question, "expects": expects,
-                                   "text": text, "clip_url": None, "sentences": []}
+                                   "text": text, "clip_url": None, "sentences": [],
+                                   "priority": priority or SAY_PRIORITY.get(prefix, "important")}
         if clip_id and clips.exists(clip_id):
             message["clip_url"] = clips.clip_url(clip_id)
         else:

@@ -127,6 +127,10 @@ class AssistantLink:
         self.interrupted: list[Action] = []  # unfinished sentences stopped by a distraction's warning (to resume)
         self.interrupted_at = 0.0
         self.interrupted_alarms = 0  # alarms sent when it happened: an alarm afterwards cancels the resume
+        self.interrupted_started = False  # the kept sentences had started (resumed with "Cum ziceam, ...")
+        self.serious_interrupts = 0  # alerts that ended the conversation (SOS, microsleep, camera lost, ...)
+        self.submitted_epoch: dict[int, int] = {}  # id(event) -> serious_interrupts when it was queued
+        self.last_alert_at: float | None = None  # last tick with a P0-P2 alert (quiet_after_alert_s)
         self.greeted = False
         self.driver_seen_since: float | None = None
         self.offered: set[str] = set()  # messages handed to the assistant
@@ -146,11 +150,14 @@ class AssistantLink:
         now = self.clock()
         keep = rule in RESUMABLE_RULES and bool(th("assistant", "resume_after_warning"))
         if keep:
-            self.interrupted = [u["action"] for u in self.utterances.values() if u.get("action") is not None]
+            stopped = [u["action"] for u in self.utterances.values() if u.get("action") is not None]
+            if stopped or not self.interrupted:
+                self.interrupted, self.interrupted_started = stopped, bool(stopped)
             self.interrupted_at = now
             self.interrupted_alarms = self.engine.safety.alarms.sent
         else:
             self.interrupted = []
+            self.serious_interrupts += 1  # answers still on their way belong to a conversation that is over
             if self.dialog is not None:
                 self.dialog.reset()
         self.utterances.clear()  # the browser drops its queue; only the current sentence reports speak_done
@@ -203,8 +210,27 @@ class AssistantLink:
         """Queue one event for ``handle_event`` (processed in order by :meth:`run`)."""
         if not self.available:
             return
-        self.queue.append(Event(type=type_, ts=now, data=data))
+        if type_ in RETRY_EVENTS and self._quiet(now):
+            # Right after an alert no initiative (a cause to remove, the fatigue talk, music): P2's own questions
+            # ("Facem o pauză?") come first and the driver needs a moment. Sent again when the quiet is over.
+            quiet_end = (self.last_alert_at or now) + float(th("assistant", "quiet_after_alert_s"))
+            attempt = int(data.get("retry", 0))
+            self.retries[type_] = (quiet_end, attempt, {k: v for k, v in data.items() if k != "retry"})
+            return
+        event = Event(type=type_, ts=now, data=data)
+        self.submitted_epoch[id(event)] = self.serious_interrupts
+        self.queue.append(event)
         self._wake.set()
+
+    def _quiet(self, now: float) -> bool:
+        """An alert is on, or ended less than ``assistant.quiet_after_alert_s`` ago."""
+        quiet = float(th("assistant", "quiet_after_alert_s"))
+        return self.last_alert_at is not None and now - self.last_alert_at < quiet
+
+    def _distraction_on(self) -> bool:
+        """The top alert is a distraction (P2): the assistant's sentences wait and are said after it (resume)."""
+        top = self.engine.safety.arbiter.top()
+        return top is not None and top[0] in RESUMABLE_RULES and bool(th("assistant", "resume_after_warning"))
 
     async def run(self) -> None:
         """The background worker (started by core/main.py)."""
@@ -227,11 +253,17 @@ class AssistantLink:
         if event.data.get("once_while_muted"):  # C10: the one stop proposal after the contact's answer
             snapshot.assistant.muted_until, snapshot.assistant.mute_reason = None, None
 
+        epoch = self.submitted_epoch.pop(id(event), self.serious_interrupts)
+        early_sent: set[str] = set()
+
         def on_early(action: Action) -> None:
             now = self.clock()
+            if self._distraction_on():
+                return  # kept with the final answer below and said after the distraction (resume)
             reason = validator.check(action, self.engine.state, confirmed=False)
             if reason is None:
                 self._send_speech(action, now)
+                early_sent.add(str(action.text or action.question))
 
         # the assistant's policies (one initiative per 30 s) run on core's clock
         actions: list[Action] = await self.client.handle_event(event, snapshot, on_early_speech=on_early,
@@ -240,7 +272,23 @@ class AssistantLink:
         self.processed += 1
         self._record(event, now)
         self._schedule_retry(event, now)
+        if epoch != self.serious_interrupts and any(a.type != "stay_silent" for a in actions):
+            # An SOS / microsleep / lost camera happened while the LLM was answering: that conversation is over.
+            self.engine.log_event("assistant_action", now, source="RULE", action_type="stale_dropped",
+                                  text="Răspuns renunțat: între timp a fost o alertă.", event_type=event.type)
+            actions = [a for a in actions if a.type == "stay_silent"]
         immediate = self.dialog.register(actions, now)
+        if self._distraction_on():
+            # The answer arrived during a distraction alert: its sentences wait and are said once the driver looks
+            # back (as after a warning, assistant.resume_*), instead of being rejected at P2 and lost.
+            keep = [a for a in immediate if a.type in ("speak", "ask")
+                    and not (a.streamed and str(a.text or a.question) in early_sent)]
+            if keep:
+                if not self.interrupted:
+                    self.interrupted_at, self.interrupted_started = now, False
+                    self.interrupted_alarms = self.engine.safety.alarms.sent
+                self.interrupted.extend(a.model_copy(update={"streamed": False}) for a in keep)
+            immediate = [a for a in immediate if all(a is not k for k in keep)]
         held = [a for a in actions if a.needs_confirmation]
         if held:
             self.engine.log_event("assistant_action", now, source=held[0].source,
@@ -590,6 +638,8 @@ class AssistantLink:
                                   text="Fără răspuns: anulat " + ", ".join(a.type for a in expired.cancelled))
         self._greet(state, now)
         self._messages(state, now)
+        if (state.safety.level or "P4") in ("P0", "P1", "P2"):
+            self.last_alert_at = now
         self._yield(state, now)
         self._resume(state, now)
         self._retry(state, now)
@@ -662,7 +712,7 @@ class AssistantLink:
         said = []
         for index, action in enumerate(actions):
             text = action.text if action.type == "speak" else action.question
-            if index == 0 and text:
+            if index == 0 and text and self.interrupted_started:
                 text = f"{prefix} {text}"
             again = action.model_copy(update={"text": text} if action.type == "speak" else {"question": text})
             if validator.check(again, state, confirmed=False) is None:

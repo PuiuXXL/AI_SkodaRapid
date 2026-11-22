@@ -210,3 +210,54 @@ async def test_a_serious_alert_still_ends_the_conversation() -> None:
     assert not rig.link.dialog.has_pending(rig.t) and not rig.link.interrupted
     rig.run(2.0)
     assert not any(text.startswith("Cum ziceam") for text in said(rig))
+
+
+# --- steps 5 and 6: who gets the floor, answers that come too late, quiet after an alert ----------------------------
+
+
+async def test_every_sentence_says_who_gets_the_floor() -> None:
+    rig = Rig(scene=5, assistant=FakeClient({"driver_speech": [speak(ANSWER)]}))
+    rig.run(1.0)
+    await answering(rig)
+    rig.engine.say(None, "Ești bine?", prefix="sos")
+    rig.engine.say(None, "Andrei, facem o pauză?", prefix="drw")
+    rig.engine.say(None, "Andrei, fii atent la drum, te rog.", prefix="dis")
+    priorities = {s["text"]: s["priority"] for s in rig.speaks()}
+    assert priorities[ANSWER] == "normal"
+    assert priorities["Ești bine?"] == "critical"
+    assert priorities["Andrei, facem o pauză?"] == "important"
+    assert priorities["Andrei, fii atent la drum, te rog."] == "urgent"
+
+
+async def test_an_answer_that_arrives_after_an_sos_is_dropped() -> None:
+    rig = Rig(scene=5, assistant=FakeClient({"driver_speech": [speak(ANSWER)]}))
+    rig.run(1.0)
+    rig.say("copilot, cât mai am?")  # queued for the LLM ...
+    rig.link.on_safety_interrupt("sos")  # ... and the SOS starts before the answer is back
+    await rig.link.drain()
+    assert ANSWER not in said(rig)
+    assert rig.hub.events("assistant_action")[-1]["data"]["action_type"] == "stale_dropped"
+
+
+async def test_an_answer_that_arrives_during_a_distraction_waits_for_it() -> None:
+    rig = Rig(scene=5, assistant=FakeClient({"driver_speech": [speak(ANSWER)]}))
+    rig.run(1.0)
+    rig.patch = glance(rig.t, LIMIT_HIGH + 0.6)
+    rig.run(LIMIT_HIGH + 0.2)  # the cue is on (P2)
+    rig.say("copilot, cât mai am?")
+    await rig.link.drain()
+    assert ANSWER not in said(rig) and not rig.hub.events("action_rejected")
+    rig.run(1.0)  # the gaze is back
+    assert said(rig)[-1] == ANSWER  # said now, without "Cum ziceam" (it had not started)
+
+
+async def test_no_initiative_right_after_an_alert() -> None:
+    rig = Rig(scene=5, assistant=FakeClient())
+    rig.run(1.0)
+    rig.link.last_alert_at = rig.t  # an alert just ended
+    rig.link.submit("cause_detected", rig.t, label="passenger_talk")
+    assert not rig.link.queue
+    due, attempt, data = rig.link.retries["cause_detected"]
+    assert due == pytest.approx(rig.t + th("assistant", "quiet_after_alert_s")) and data == {"label": "passenger_talk"}
+    rig.link.submit("driver_speech", rig.t, text="cât mai am?")  # the driver may always talk
+    assert [e.type for e in rig.link.queue] == ["driver_speech"]

@@ -150,21 +150,33 @@ class ScriptedPerception(FakePerception):
 # --- the browser player ------------------------------------------------------------------------------------------------
 
 
+RANK = {"normal": 0, "important": 1, "urgent": 2, "critical": 3}  # dashboard/src/voice/speech_queue.js
+STALE_NORMAL_S = 8.0  # speech_queue.js staleNormalMs
+
+
 @dataclass
 class Utterance:
     id: str
     text: str
     source: str  # "assistant" (P3, ids u<n>) or "P2:<prefix>" (core's fixed sentences: dis, drw, sos, ...)
     is_question: bool
-    duration: float
+    priority: str
+    sentences: list[float]  # duration of each sentence (the player cuts only at a sentence end)
     arrived: float
     start: Optional[float] = None
-    end: Optional[float] = None
-    remaining: Optional[float] = None  # set while paused
+    index: int = 0
+    sentence_end: Optional[float] = None
+    remaining: Optional[float] = None  # set while paused: what is left of the current sentence
     finished: Optional[float] = None
     interrupted: bool = False
+    unsaid: bool = False  # dropped before it started (stale, or below a higher priority)
+    held_since: Optional[float] = None  # a normal one held up by higher speech since (speech_queue.js _heldSince)
     resumed: int = 0
     paused_count: int = 0
+
+    @property
+    def rank(self) -> int:
+        return RANK.get(self.priority, 0)
 
 
 def utterance_source(utterance_id: str) -> str:
@@ -173,18 +185,19 @@ def utterance_source(utterance_id: str) -> str:
     return "assistant" if name == "u" else f"P2:{name}"
 
 
-def duration_of(text: str) -> float:
-    sentences = max(1, len(re.findall(r"[.!?]", text)))
-    return word_count(text) * WORD_S + (sentences - 1) * SENTENCE_GAP_S + 0.3
+def sentence_durations(text: str) -> list[float]:
+    parts = [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s] or [text]
+    return [word_count(s) * WORD_S + (0.3 if i == 0 else SENTENCE_GAP_S) for i, s in enumerate(parts)]
 
 
 class FakeBrowser:
-    """The voice player of dashboard/src/voice/player.js, in fake time: one queue, alarms stop speech."""
+    """dashboard/src/voice/player.js + speech_queue.js in fake time: priorities, cuts at sentence ends, alarms."""
 
     def __init__(self, sim: Sim) -> None:
         self.sim = sim
-        self.queue: list[Utterance] = []
+        self.queue: list[Utterance] = []  # highest priority first, arrival order inside a priority
         self.current: Optional[Utterance] = None
+        self.cut_at_sentence_end = False
         self.done: list[Utterance] = []
         self.alarm_until = 0.0
         self.alarms: list[float] = []
@@ -200,60 +213,114 @@ class FakeBrowser:
         while self.read < len(sent):
             self._message(sent[self.read], t)
             self.read += 1
-        if self.current is not None and self.current.remaining is None and self.current.end is not None \
-                and t >= self.current.end:
-            self._finish(self.current, t, interrupted=False)
-        if self.current is None and self.queue:
-            self._start(self.queue.pop(0), t)
+        current = self.current
+        if current is not None and current.remaining is None and current.sentence_end is not None \
+                and t >= current.sentence_end:
+            last = current.index + 1 >= len(current.sentences)
+            if last:
+                self._finish(current, t, interrupted=False)
+            elif self.cut_at_sentence_end:
+                self.sim.log(t, "player", "   sentence over: the important one takes the floor")
+                self._finish(current, t, interrupted=True)
+                self._drop([u for u in self.queue if u.rank < RANK["important"]], t)
+            else:
+                current.index += 1
+                current.sentence_end = t + current.sentences[current.index]
+        if self.current is None:
+            self._start_next(t)
+
+    def _insert(self, utterance: Utterance) -> None:
+        index = next((i for i, u in enumerate(self.queue) if u.rank < utterance.rank), len(self.queue))
+        self.queue.insert(index, utterance)
 
     def _message(self, message: dict[str, Any], t: float) -> None:
         kind = message.get("type")
         if kind == "speak":
-            utterance = Utterance(id=message["id"], text=message.get("text") or "",
-                                  source=utterance_source(message["id"]),
+            text = message.get("text") or ""
+            utterance = Utterance(id=message["id"], text=text, source=utterance_source(message["id"]),
                                   is_question=bool(message.get("is_question")),
-                                  duration=duration_of(message.get("text") or ""), arrived=t)
-            self.sim.log(t, utterance.source, f"<- speak{'?' if utterance.is_question else ''} {utterance.text!r}")
-            if self.current is None:
-                self._start(utterance, t)
+                                  priority=message.get("priority") or "normal",
+                                  sentences=sentence_durations(text), arrived=t)
+            self.sim.log(t, utterance.source,
+                         f"<- speak{'?' if utterance.is_question else ''} [{utterance.priority}] {text!r}")
+            if utterance.rank == RANK["normal"] and self.current is not None and self.current.rank > 0:
+                utterance.held_since = t
+            if utterance.rank >= RANK["urgent"]:
+                critical = utterance.rank == RANK["critical"]
+                self._drop([u for u in self.queue if critical or u.rank < utterance.rank], t)
+            self._insert(utterance)
+            current = self.current
+            if current is None:
+                self._start_next(t)
+            elif utterance.rank > current.rank and utterance.rank >= RANK["urgent"]:
+                self._finish(current, t, interrupted=True)
+                self._start_next(t)
+            elif utterance.rank > current.rank:
+                self.cut_at_sentence_end = True
             else:
                 self.queued_behind += 1
-                self.queue.append(utterance)
         elif kind == "speak_control":
             action = message.get("action")
             self.sim.log(t, "core", f"speak_control {action}")
             current = self.current
             if action == "stop":
-                self.queue.clear()
+                self._drop(list(self.queue), t)
                 if current is not None:
                     self._finish(current, t, interrupted=True)
-            elif action == "pause" and current is not None and current.remaining is None and current.end:
-                current.remaining, current.end = max(0.0, current.end - t), None
+            elif action == "pause" and current is not None and current.remaining is None and current.sentence_end:
+                current.remaining, current.sentence_end = max(0.0, current.sentence_end - t), None
                 current.paused_count += 1
             elif action == "resume" and current is not None and current.remaining is not None:
-                current.end, current.remaining = t + RESUME_CLIP_S + current.remaining, None
+                current.sentence_end, current.remaining = t + RESUME_CLIP_S + current.remaining, None
                 current.resumed += 1
         elif kind == "alarm":
             self.sim.log(t, "core", f"ALARM {message.get('alert')} ({message.get('level')})")
-            self.queue.clear()
+            self._drop(list(self.queue), t)
             if self.current is not None:
                 self._finish(self.current, t, interrupted=True)
             self.alarm_until = t + ALARM_CLIP_S
             self.alarms.append(t)
             self.sim.browser_message({"type": "alarm_played", "id": message["id"], "ts": t})
 
-    def _start(self, utterance: Utterance, t: float) -> None:
-        if t < self.alarm_until:
-            self.speech_over_alarm += 1
-        utterance.start, utterance.end = t, t + utterance.duration
-        self.current = utterance
+    def _start_next(self, t: float) -> None:
+        while self.queue:
+            utterance = self.queue.pop(0)
+            if (utterance.rank == RANK["normal"] and utterance.held_since is not None
+                    and t - utterance.held_since > STALE_NORMAL_S):
+                self._drop([utterance], t, why="held up too long")
+                continue
+            for waiting in self.queue:
+                if waiting.rank != RANK["normal"]:
+                    continue
+                if utterance.rank > RANK["normal"]:
+                    waiting.held_since = waiting.held_since if waiting.held_since is not None else t
+                else:
+                    waiting.held_since = None  # the assistant has the floor again
+            if t < self.alarm_until:
+                self.speech_over_alarm += 1
+            utterance.start, utterance.index = t, 0
+            utterance.sentence_end = t + utterance.sentences[0]
+            self.current = utterance
+            self.cut_at_sentence_end = False
+            return
+
+    def _drop(self, utterances: list[Utterance], t: float, why: str = "lower priority") -> None:
+        for utterance in utterances:
+            if utterance in self.queue:
+                self.queue.remove(utterance)
+            utterance.finished, utterance.interrupted, utterance.unsaid = t, True, True
+            self.done.append(utterance)
+            self.sim.log(t, utterance.source, f"   DROPPED unsaid ({why}): {utterance.text!r}")
+            self.sim.browser_message({"type": "speak_done", "id": utterance.id, "is_question": utterance.is_question,
+                                      "interrupted": True, "ts": t})
 
     def _finish(self, utterance: Utterance, t: float, interrupted: bool) -> None:
         utterance.finished, utterance.interrupted = t, interrupted
         self.done.append(utterance)
         self.current = None
+        self.cut_at_sentence_end = False
         if interrupted:
-            self.sim.log(t, utterance.source, f"   STOPPED mid-sentence: {utterance.text!r}")
+            self.sim.log(t, utterance.source, f"   STOPPED mid-utterance: {utterance.text!r}")
         self.sim.browser_message({"type": "speak_done", "id": utterance.id, "is_question": utterance.is_question,
                                   "interrupted": interrupted, "ts": t})
 
@@ -452,14 +519,16 @@ class Sim:
         warnings = [u for u in done if any(w in normalize(u.text) for w in ROAD_WARNINGS)]
         first_turn = min((turn.sent for turn in self.turns if turn.sent is not None), default=float("inf"))
         # answers to the driver: after the first question, without the automatic "Te mai ajut cu ceva?"
-        answers = [u for u in assistant if u.arrived >= first_turn and "te mai ajut" not in normalize(u.text)]
+        answers = [u for u in assistant if u.arrived >= first_turn and "te mai ajut" not in normalize(u.text)
+                   and not u.unsaid]
         return {
             "scenario": self.scenario.name,
             "driver_turns": len(self.turns),
             "driver_turns_said": sum(1 for turn in self.turns if turn.sent is not None),
             "driver_turns_given_up": sum(1 for turn in self.turns if turn.lost),
             "assistant_utterances": len(assistant),
-            "assistant_cut_mid_sentence": sum(1 for u in assistant if u.interrupted),
+            "assistant_cut_mid_sentence": sum(1 for u in assistant if u.interrupted and not u.unsaid),
+            "assistant_dropped_unsaid": sum(1 for u in assistant if u.unsaid),
             "assistant_answers_completed": sum(1 for u in answers if not u.interrupted),
             "assistant_answers": len(answers),
             "pending_questions_dropped": self.interrupts_with_pending,
@@ -469,12 +538,16 @@ class Sim:
             "p2_visual_cues": len(self._events("visual_cue")),
             "p2_alarms": len(self.browser.alarms),
             "speech_queued_behind_other_speech": self.browser.queued_behind,
+            # How long P2's own questions ("Facem o pauză?", reminders) waited for the floor (max, seconds).
+            "p2_questions_waited_s": round(max((u.start - u.arrived for u in done if u.source.startswith("P2")
+                                                and u.is_question and u.start is not None), default=0.0), 1),
             "speech_started_over_an_alarm": self.browser.speech_over_alarm,
             "cause_events_to_assistant": sum(1 for _, kind, _ in self.client.events if kind == "cause_detected"),
             "sos_reached": self.engine.safety.sos.state,
             "timeline": self.lines,
-            "utterances": [asdict(u) | {"start": _rel(u.start), "end": _rel(u.end), "finished": _rel(u.finished),
-                                        "arrived": _rel(u.arrived)} for u in done],
+            "utterances": [asdict(u) | {"start": _rel(u.start), "finished": _rel(u.finished),
+                                        "arrived": _rel(u.arrived), "sentence_end": _rel(u.sentence_end)}
+                           for u in done],
         }
 
 
@@ -511,8 +584,10 @@ SCENARIOS: list[Scenario] = [
 COLUMNS = [
     ("assistant_answers_completed", "answers heard to the end"),
     ("assistant_cut_mid_sentence", "assistant cut mid-sentence"),
+    ("assistant_dropped_unsaid", "assistant dropped unsaid"),
     ("pending_questions_dropped", "questions dropped"),
     ("driver_turns_given_up", "driver turns lost"),
+    ("p2_questions_waited_s", "P2 question waited (s)"),
     ("road_warnings_by_P2", "'look at the road' by P2"),
     ("road_warnings_by_assistant", "... by the LLM"),
     ("cause_events_to_assistant", "cause events"),

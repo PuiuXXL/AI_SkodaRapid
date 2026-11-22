@@ -251,6 +251,7 @@ def speak_message(action: Action, utterance_id: str | None = None) -> dict[str, 
           "id": "u12",                 # utterance id, echoed back in speak_done
           "to": "driver",
           "is_question": true,         # true for ask -> core opens the dialog window
+          "priority": "normal",        # who gets the floor (critical / urgent / important / normal)
           "expects": "yes_no",         # for ask only
           "text": "Pare monoton. Pun ceva mai energic?",
           "clip_url": null,            # pre-generated clip that replaces TTS, if any
@@ -285,6 +286,7 @@ def speak_message(action: Action, utterance_id: str | None = None) -> dict[str, 
         "id": utterance_id,
         "to": action.to or "driver",
         "is_question": action.type == "ask",
+        "priority": "normal",  # the assistant always waits its turn (shared/contracts.py SpeakPriority)
         "expects": action.expects,
         "text": text,
         "clip_url": f"{CLIP_URL_PREFIX}/{action.clip_id}.mp3" if action.clip_id else None,

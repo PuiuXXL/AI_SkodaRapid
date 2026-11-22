@@ -100,8 +100,10 @@ async def test_no_llm_speech_during_a_safety_alert() -> None:
     assert rig.state.safety.level == "P2"
     rig.link.submit("driver_speech", rig.t, text="spune o glumă")
     await rig.link.drain()
-    assert "Sigur, uite o glumă." not in spoken(rig)
-    assert rejected(rig) == ["level:P2"]
+    assert "Sigur, uite o glumă." not in spoken(rig)  # nothing from the assistant during the alert...
+    rig.press("1")  # ... the phone is put down
+    rig.run(1.0)
+    assert spoken(rig)[-1] == "Sigur, uite o glumă."  # ... and the answer comes after it, not lost (resume)
 
 
 # --- confirmations (E3) ----------------------------------------------------------------------------------------------

@@ -678,6 +678,12 @@ ASSISTANT_INTERNAL_ACTIONS: frozenset[str] = frozenset({"search_media"})
 Addressee = Literal["driver", "passenger", "rear", "all"]
 #: ``choice`` (D11) only comes from the assistant's rules, never from the LLM, and always with ``options``.
 Expects = Literal["yes_no", "kss", "free", "choice"]
+#: Who gets the floor in the browser's voice player (``UiSpeak.priority``, dashboard/src/voice/speech_queue.js):
+#: ``critical`` (SOS) stops everything at once; ``urgent`` (a distraction's warning, camera lost) stops lower speech at
+#: once; ``important`` (P2's own questions: a break, a reminder, the trusted contact) waits for the end of the current
+#: sentence, then cuts the rest of a lower utterance; ``normal`` (the assistant) waits in line and is dropped when it
+#: waited too long. Alarms are a separate message (``UiAlarm``) and stop everything.
+SpeakPriority = Literal["critical", "urgent", "important", "normal"]
 MediaKind = Literal["music", "podcast"]
 
 _ANY_LEVEL: frozenset[str] = frozenset(SAFETY_LEVELS)
@@ -1038,6 +1044,7 @@ class UiSpeak(ContractModel):
     is_question: bool = False
     expects: Expects | None = None
     text: str = ""
+    priority: SpeakPriority = "normal"  # P2 addition (2026-11-22): who gets the floor, see SpeakPriority
     clip_url: str | None = None  # a pre-generated clip replaces TTS
     sentences: list[SpeakSentence] = Field(default_factory=list)
 

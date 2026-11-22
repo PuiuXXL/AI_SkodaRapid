@@ -11,6 +11,11 @@
  * - **Ducking (plan 4.D).** Music volume is lowered while the assistant speaks.
  * - **Alarms interrupt everything (plan C1).** `alarm()` stops speech and music and
  *   plays a pre-generated, pre-loaded clip immediately (target < 300 ms end to end).
+ * - **Who gets the floor (`speech_queue.js`).** Each `speak` has a `priority`: the SOS
+ *   (critical) and a distraction's warning (urgent) stop lower speech at once; P2's own
+ *   questions (important) wait for the end of the current sentence, then cut the rest of
+ *   the assistant's utterance; the assistant (normal) waits in line and is dropped when it
+ *   waited too long. Dropped utterances report `speak_done` with `interrupted: true`.
  * - **Fallback voice (plan C9).** If a TTS file cannot be loaded (no internet), the
  *   browser's local `speechSynthesis` says the sentence instead. It prefers a male
  *   voice (`fallbackVoiceNames`), matching edge-tts `ro-RO-EmilNeural`, so the voice
@@ -19,6 +24,8 @@
  * Browsers block audio until the user interacts with the page: create the player
  * (or call `unlock()`) from a click handler.
  */
+
+import { PRIORITY_RANK, SpeechQueue } from "./speech_queue.js";
 
 const nowSeconds = () => (performance.timeOrigin + performance.now()) / 1000;
 
@@ -35,6 +42,7 @@ export class VoicePlayer {
    * @param {(utterance: object, info: {interrupted: boolean, ts: number}) => void} [options.onSpeakDone]
    *        Utterance finished (or was stopped).
    * @param {(alarm: object, ts: number) => void} [options.onAlarmPlayed] Alarm audio actually started.
+   * @param {number} [options.staleNormalMs=8000] The assistant's speech that waited longer than this is dropped.
    */
   constructor({
     lang = "ro-RO",
@@ -44,6 +52,7 @@ export class VoicePlayer {
     onSpeakStart = () => {},
     onSpeakDone = () => {},
     onAlarmPlayed = () => {},
+    staleNormalMs = 8000,
   } = {}) {
     this.lang = lang;
     this.fallbackVoiceNames = fallbackVoiceNames.map((name) => name.toLowerCase());
@@ -53,8 +62,9 @@ export class VoicePlayer {
     this.onSpeakDone = onSpeakDone;
     this.onAlarmPlayed = onAlarmPlayed;
 
-    this.queue = [];        // utterances waiting to be spoken
+    this.queue = new SpeechQueue({ staleNormalMs }); // utterances waiting to be spoken, by priority
     this.current = null;    // utterance being spoken
+    this.cutAtSentenceEnd = false; // an important utterance waits for the current sentence to end
     this.index = 0;         // sentence index inside the current utterance
     this.audio = null;      // HTMLAudioElement of the current sentence
     this.paused = false;
@@ -96,8 +106,11 @@ export class VoicePlayer {
    * @param {{id: string, sentences: {id: string, text: string, url: string}[], clip_url?: string, is_question?: boolean}} utterance
    */
   speak(utterance) {
-    this.queue.push(utterance);
-    if (!this.current) this._next();
+    const { action, dropped } = this.queue.arrive(utterance, this.current);
+    this._reportDropped(dropped);
+    if (action === "start") this._next();
+    else if (action === "stop_now") this._interruptCurrent();
+    else if (action === "cut_at_sentence_end") this.cutAtSentenceEnd = true;
   }
 
   /** Stop mid-sentence (plan D4). */
@@ -118,12 +131,14 @@ export class VoicePlayer {
   /** Stop speaking and forget queued utterances. */
   stop() {
     const utterance = this.current;
-    this.queue = [];
+    const waiting = this.queue.clear();
     this._cleanupAudio();
     this.current = null;
     this.paused = false;
+    this.cutAtSentenceEnd = false;
     this._unduck();
     if (utterance) this.onSpeakDone(utterance, { interrupted: true, ts: nowSeconds() });
+    this._reportDropped(waiting);
   }
 
   /**
@@ -172,8 +187,25 @@ export class VoicePlayer {
 
   // --- internals --------------------------------------------------------------
 
-  _next() {
-    this.current = this.queue.shift() || null;
+  /** Stop the current utterance (a higher priority takes the floor) and go on with the queue. */
+  _interruptCurrent(cutRank = null) {
+    const utterance = this.current;
+    this._cleanupAudio();
+    this.current = null;
+    this.paused = false;
+    this.cutAtSentenceEnd = false;
+    if (utterance) this.onSpeakDone(utterance, { interrupted: true, ts: nowSeconds() });
+    this._next(cutRank);
+  }
+
+  _reportDropped(utterances) {
+    for (const utterance of utterances) this.onSpeakDone(utterance, { interrupted: true, ts: nowSeconds() });
+  }
+
+  _next(cutRank = null) {
+    const { next, dropped } = this.queue.next(cutRank);
+    this._reportDropped(dropped);
+    this.current = next;
     this.index = 0;
     if (!this.current) {
       this._unduck();
@@ -200,6 +232,12 @@ export class VoicePlayer {
     if (nextSentence?.url) new Audio(nextSentence.url).preload = "auto"; // warm the HTTP cache
     const advance = () => {
       if (this.current !== utterance || this.paused) return;
+      const last = this.index + 1 >= utterance.sentences.length;
+      if (this.cutAtSentenceEnd && !last) {
+        // an important utterance waits: the rest of this one (and what waits below it) is dropped
+        this._interruptCurrent(PRIORITY_RANK.important);
+        return;
+      }
       this.index += 1;
       this._playSentence();
     };
@@ -251,6 +289,7 @@ export class VoicePlayer {
     const utterance = this.current;
     this._cleanupAudio();
     this.current = null;
+    this.cutAtSentenceEnd = false;
     this.onSpeakDone(utterance, { interrupted: false, ts: nowSeconds() });
     this._next();
   }
