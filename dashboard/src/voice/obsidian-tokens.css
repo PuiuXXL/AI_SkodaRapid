@@ -1,7 +1,24 @@
-/* Shared by the React application and the standalone voice development page. */
+/* The contact sheet loads once across the dashboard and standalone voice console. */
+.card-art {
+  display:block; flex:none; width:var(--art-size,76px); aspect-ratio:1;
+  object-fit:contain; height:auto; background:none; border-radius:0;
+  filter:drop-shadow(0 5px 5px rgb(12 18 25 / 12%));
+}
 :root {
   color-scheme: dark;
   --ui-bg: #151515;
+  --ui-cta: #72e3ed;
+  --ui-cta-hover: #a0f1f5;
+  --ui-on-cta: #12353a;
+  --ui-focus: #83aaff;
+  --ui-graph: #8baaff;
+  --ui-graph-secondary: #89bbb9;
+  --ui-graph-tertiary: #c6b4e6;
+  --ui-photo-ink: #171a21;
+  --ui-photo-text: #f1f3f7;
+  --ui-photo-muted: #c5cbd5;
+  --ui-rule: color-mix(in srgb, currentColor 15%, transparent);
+  --ui-panel-space: clamp(16px, 2vw, 30px);
   --ui-bg-raised: #1b1b1b;
   --ui-surface-1: #202020;
   --ui-surface-2: #292929;
@@ -57,6 +74,10 @@
 
 [data-workspace-theme="light"] {
   color-scheme:light;
+  --ui-focus:#2855bf;
+  --ui-graph:#325fb5;
+  --ui-graph-secondary:#286d71;
+  --ui-graph-tertiary:#755995;
   --ui-bg:#e7e8e6; --ui-bg-raised:#eeefed; --ui-inset:#e4e5e3;
   --ui-surface-1:#f6f6f3;
   --ui-surface-2:#ededeb; --ui-glass:rgba(241,242,239,.94); --ui-glass-heavy:#f2f2ef;

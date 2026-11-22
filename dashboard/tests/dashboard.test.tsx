@@ -18,11 +18,11 @@ const empty: SessionData = {state:{},history:[],log:[],socket:null,cue:0,speech:
 test("dashboard exposes every instrument and its details without tabs or a details dialog",()=>{
  const session={data:empty,fresh:true} as unknown as DriverContextValue;
  const html=renderToStaticMarkup(<DriverContext.Provider value={session}><MonitorPage/></DriverContext.Provider>);
- for(const label of ["Scoruri","Privire","Reacție","Cabină","Fișă","Sistem","Jurnal","Control","Unde privește","PERCLOS · 60 s","Scene demonstrative","Percepție · camere","Calitatea semnalului ocular","Modele · p50 / p95","Mesaje, muzică și mementouri","Răspunsuri și canale"])assert(html.includes(label),label);
- assert.doesNotMatch(html,/<dialog|Alege instrumentul|Detalii ↗|NaN|Infinity|undefined/);
+ for(const label of ["Scores","Gaze","Response","Cabin","Trip report","System","Journal","Control","Gaze distribution","PERCLOS · 60 s","Demo scenarios","Perception · cameras","Eye signal quality","Models · p50 / p95","Messages, music & reminders","Responses & channels"])assert(html.includes(label.replaceAll("&","&amp;")),label);
+ assert.doesNotMatch(html,/<dialog|Select instrumentul|Detalii ↗|NaN|Infinity|undefined/);
  assert.equal((html.match(/class="instrument-card"/g)??[]).length,8);
  // Live only: no simulated source, placeholder camera or illustrative eye is offered anywhere.
- assert.doesNotMatch(html,/Simulat|SIMULAT|Sursa sesiunii|Camera în așteptare|Schemă ilustrativă|optic-art/);
+ assert.doesNotMatch(html,/Simulated source|Session source selector|Illustrative camera feed|optic-art/);
  assert.equal((html.match(/<img src="[^"]*\/video\/(driver|passenger)"/g)??[]).length,2);
 });
 
@@ -37,14 +37,14 @@ test("dashboard journal paginates long sessions and keeps event explanations vis
 test("score charts retain separate traces across missing telemetry and label empty series",()=>{
  const html=renderToStaticMarkup(<ScoreHistory points={[{attention:.5,ts:1},null,{attention:.8,ts:3}]}/>);
  assert.equal((html.match(/vector-effect="non-scaling-stroke"/g)??[]).length,2);
- assert(html.includes("În așteptarea datelor"));
+ assert(html.includes("Waiting for data"));
  assert.doesNotMatch(html,/NaN|Infinity/);
 });
 
 test("partial live state renders all dashboard modules without fabricated values", () => {
  const html=renderToStaticMarkup(<MotionConfig reducedMotion="always"><General s={{}} points={[]}/><Eyes s={{}}/><Reaction s={{}}/><Cabin s={{}}/><Scorecard s={{}}/><Performance s={{}}/><Assistant s={{}} data={empty}/></MotionConfig>);
- assert.match(html,/Direcție nedeterminată/);
- assert.match(html,/Decupaj ocular indisponibil/);
+ assert.match(html,/Gaze direction unknown/);
+ assert.match(html,/Eye crop unavailable/);
  assert.match(html,/—/);
  assert.doesNotMatch(html,/NaN|Infinity|undefined/);
 });
@@ -54,7 +54,7 @@ test("zero readings and false flags survive display formatting", () => {
  assert.equal(fmt(null),"—");
  const s: DashboardState={assessment:{attention:0,fatigue:0,disengagement:0},phone:{connected:false},occupants:[],messages:[]};
  const html=renderToStaticMarkup(<><General s={s} points={[]}/><Cabin s={s}/></>);
- assert.match(html,/Telefon conectat<b>Nu/);
+ assert.match(html,/Phone connected<b>No/);
  assert.doesNotMatch(html,/NaN|Infinity/);
 });
 
@@ -70,16 +70,16 @@ test("a connected core without camera frames exposes the reason and masks defaul
    driver:{monitoring_ok:false,monitoring_reason:"no_frames",eyes:{reliable:false,perclos_60s:0,closed_ms:0}},
    perf:{cameras:{driver:{available:false,age_ms:630,dropped_results:0}}},
  };
- const html=renderToStaticMarkup(<><VisionDiagnostics s={state} connection="Live · conectat"/><Eyes s={state}/></>);
+ const html=renderToStaticMarkup(<><VisionDiagnostics s={state} connection="Live · connected"/><Eyes s={state}/></>);
  assert.match(html,/no_frames/);
  assert.match(html,/630 ms/);
- assert.match(html,/Rezultate pierdute<\/dt><dd>0/);
+ assert.match(html,/Dropped results<\/dt><dd>0/);
  assert.match(html,/PERCLOS · 60 s<b>—/);
 });
 
 test("unknown gaze and unreliable eyes never render an eye image", () => {
  const html=renderToStaticMarkup(<Eyes s={{driver:{eyes:{reliable:false},gaze:{zone:"unknown",off_road_ms:1000}}}}/>);
- assert.match(html,/Semnal ocular nesigur/);
+ assert.match(html,/Unreliable eye signal/);
  assert.doesNotMatch(html,/class="optic-art"|<img/);
 });
 
@@ -144,9 +144,9 @@ test("charts keep gaps as gaps and never draw a missing value",()=>{
  assert.equal(smoothPath([]),"");
  assert.match(smoothPath([[0,0],[10,5]]),/^M0 0 C/);
  const html=renderToStaticMarkup(<><Spark values={[.2,null,.4,.5]} label="s"/><MiniBars values={[null,.5]} label="b"/><Gauge value={null} label="g"/><Ring value={undefined} label="r"/>
-   <RankBars items={[{label:"Drum",value:.7},{label:"Fără",value:null}]}/><StackBar parts={[{label:"A",value:0},{label:"B",value:0}]} label="st"/><RangeBars items={[{label:"x",lo:null,hi:undefined}]}/></>);
+   <RankBars items={[{label:"Road",value:.7},{label:"Fără",value:null}]}/><StackBar parts={[{label:"A",value:0},{label:"B",value:0}]} label="st"/><RangeBars items={[{label:"x",lo:null,hi:undefined}]}/></>);
  assert.doesNotMatch(html,/NaN|Infinity|undefined/);
- assert.match(html,/Fără măsurători încă/);
+ assert.match(html,/No measurements yet/);
  assert.equal((html.match(/stroke-dasharray/g)??[]).length,0);  // an unknown gauge / ring draws only its track
 });
 
@@ -154,18 +154,18 @@ test("status, KPIs, overview and the control panel render an empty state without
  const session={data:empty,fresh:false} as unknown as DriverContextValue;
  const html=renderToStaticMarkup(<DriverContext.Provider value={session}><StatusStrip s={{}} connection="Live · conectare"/><KpiStrip s={{}} history={[]} samples={[]}/><Overview s={{}} samples={[]}/><ControlPanel/></DriverContext.Provider>);
  assert.doesNotMatch(html,/NaN|Infinity|undefined/);
- assert.match(html,/Direcție nedeterminată/);
- assert.match(html,/Nicio cauză de distragere raportată/);
- assert.doesNotMatch(html,/P4 · Normal|<b>100%<\/b>|Telefon<\/dt><dd>Nu/);  // nothing looks measured without data
+ assert.match(html,/Gaze direction unknown/);
+ assert.match(html,/No distraction cause reported/);
+ assert.doesNotMatch(html,/P4 · Normal|<b>100%<\/b>|Phone<\/dt><dd>No/);  // nothing looks measured without data
  // with data, a null level means "nothing active" (shared/contracts.py Safety.level)
  assert.match(renderToStaticMarkup(<StatusStrip s={{safety:{level:null}}} connection="c"/>),/P4 · Normal/);
  assert.equal((html.match(/<button[^>]*disabled/g)??[]).length,(html.match(/<button/g)??[]).length);  // no session: nothing is clickable
 });
 
 test("the status strip shows a camera failure, an SOS countdown and a degraded pipeline from the contract fields",()=>{
- const html=renderToStaticMarkup(<StatusStrip connection="Live · conectat" s={{safety:{level:"P0",alert:"no_response",sos:{state:"countdown",countdown_s:7.2}},
+ const html=renderToStaticMarkup(<StatusStrip connection="Live · connected" s={{safety:{level:"P0",alert:"no_response",sos:{state:"countdown",countdown_s:7.2}},
    driver:{monitoring_ok:false,monitoring_reason:"occluded"},perf:{degrade_level:2,cameras:{passenger:{available:false}}},integrations:{twilio:"down",phone_bridge:"ok"}}}/>);
- for(const text of ["P0 · Urgență","Numărătoare SOS · 8 s","Obiectiv acoperit","Indisponibilă","Treapta 2","căzut"])assert(html.includes(text),text);
+ for(const text of ["P0 · Emergency","SOS countdown · 8 s","Lens covered","Unavailable","Level 2","down"])assert(html.includes(text),text);
 });
 
 test("trip phase and the driver's name come only from core's state",()=>{
@@ -229,9 +229,9 @@ test("the location simulator page sends to core and drives nothing until core fo
    sights:[{id:"wiki-ro-1",name:"Salina Turda",kind:"attraction",lat:46.58,lon:23.79,source:"wikipedia",selected:true,km:null,detour:7.2}],add:async()=>{},edit:()=>{},send:async()=>{},clear:async()=>{},seek:async()=>{},refresh:async()=>{},rename:()=>{},setCategory:()=>{},retry:()=>{}} as unknown as RoutePlanner;
  const session={data:empty,fresh:false,can:()=>false,command:async()=>false} as unknown as DriverContextValue;
  const html=renderToStaticMarkup(<DriverContext.Provider value={session}><Simulator planner={planner}/></DriverContext.Provider>);
- for(const text of ["Trimite la core","Descarcă JSON","Deplasarea mașinii","Benzinărie · Gilău","Plecare","Destinație","Trimite traseul la core pentru a-l parcurge",
-   "Ce e de văzut pe drum","Salina Turda","Atracție","Prea departe de drum","Adaugă obiectiv pe hartă"])assert(html.includes(text),text);
- assert.match(html,/<button class="primary-action" disabled="">Trimite la core/);
+ for(const text of ["Send to core","Download JSON","Trip playback","Fuel station · Gilău","Start","Destination","Send your route to core to start driving.",
+   "Discover along the way","Salina Turda","Attraction","Too far from the route","Add a place on the map"])assert(html.includes(text),text);
+ assert.match(html,/<button class="primary-action" disabled="">Send to core/);
  assert.match(html,/<fieldset class="simulator-controls" disabled="">/);
  assert.doesNotMatch(html,/NaN|Infinity|undefined/);
 });
@@ -273,7 +273,7 @@ test("tourist sights from Wikipedia: places dropped, sights ranked, chosen by de
  assert.equal(shortDescription("Salina Turda este o salină. Se află în Turda. "+"x".repeat(300)+"."),"Salina Turda este o salină. Se află în Turda.");
 });
 
-// --- Setări copilot (#/setari): P3's interaction preferences --------------------------------------------------------
+// --- Copilot preferences (#/setari): P3's interaction preferences --------------------------------------------------------
 import {SettingsPage,copilotSettings} from "../src/driver/SettingsPage";
 import {readPage} from "../src/driver/routes";
 

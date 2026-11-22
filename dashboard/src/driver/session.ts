@@ -8,7 +8,7 @@ export const uiSocketUrl=import.meta.env.VITE_UI_WS||"ws://localhost:8000/ws/ui"
 /** P1's MJPEG server (perception/stream.py): /video/driver, /video/passenger. */
 export const videoOrigin=import.meta.env.VITE_VIDEO_ORIGIN||"http://localhost:8001";
 
-const empty:SessionData={state:{},history:[],log:[],socket:null,cue:0,speech:"",connection:"Se conectează la core"};
+const empty:SessionData={state:{},history:[],log:[],socket:null,cue:0,speech:"",connection:"Connecting to core"};
 const STALE_MS=2500,RETRY_MS=1800;
 
 export function useDriverSession() {
@@ -23,7 +23,7 @@ export function useDriverSession() {
       if(packet.type==="state"){
         if(!packet.state||typeof packet.state!=="object"||Array.isArray(packet.state))return;
         last=Date.now();setFresh(true);
-        setData(old=>({...withState(old,packet.state),socket:ws??null,connection:"Conectat la core"}));
+        setData(old=>({...withState(old,packet.state),socket:ws??null,connection:"Connected to core"}));
       }else if(["event","alarm","speak","media","speak_control"].includes(packet.type)){
         const raw=typeof packet.event==="object"?packet.event:packet;
         const event:DashboardEvent={...raw.data,...raw,type:typeof packet.event==="string"?packet.event:raw.type,ts:raw.ts??Date.now()/1000};
@@ -32,21 +32,21 @@ export function useDriverSession() {
     }
     function connect(){
       ws=new WebSocket(uiSocketUrl);
-      ws.onopen=()=>{if(!disposed)setData(old=>({...old,socket:ws!,connection:"Conectat · așteaptă date"}));};
+      ws.onopen=()=>{if(!disposed)setData(old=>({...old,socket:ws!,connection:"Connected · waiting for data"}));};
       ws.onmessage=event=>{try{receive(JSON.parse(event.data))}catch{/* Ignore malformed packets, keep the connection. */}};
-      ws.onclose=()=>{if(disposed)return;setFresh(false);setData(old=>({...old,socket:null,connection:"Core indisponibil · reconectare"}));retry=setTimeout(connect,RETRY_MS);};
+      ws.onclose=()=>{if(disposed)return;setFresh(false);setData(old=>({...old,socket:null,connection:"Core unavailable · reconnecting"}));retry=setTimeout(connect,RETRY_MS);};
     }
     connect();
     const watchdog=setInterval(()=>{
-      if(last&&Date.now()-last>STALE_MS){setFresh(false);setData(old=>old.socket?{...old,connection:"Date neactualizate"}:old);}
+      if(last&&Date.now()-last>STALE_MS){setFresh(false);setData(old=>old.socket?{...old,connection:"Live data is stale"}:old);}
     },500);
     return ()=>{disposed=true;clearTimeout(retry);clearInterval(watchdog);ws?.close();};
   },[]);
   /** Send a dashboard action to core; false (with a visible reason) when it could not be sent. */
   const command=useCallback(async(name:string,args:Record<string,unknown>={})=>{
     const {data}=current.current,socket=data.socket,message=liveMessage(name,args,data.state);
-    if(!socket||socket.readyState!==1){setError("Core nu este conectat. Comanda nu a fost trimisă.");return false;}
-    if(!message){setError("Această acțiune se face prin voce, cu copilotul.");return false;}
+    if(!socket||socket.readyState!==1){setError("Core is disconnected. Command could not be sent.");return false;}
+    if(!message){setError("Ask your copilot to perform this action.");return false;}
     setError("");socket.send(JSON.stringify(message));return true;
   },[]);
   /** Whether a button for ``name`` can act right now: core connected and the action exists in the contract. */

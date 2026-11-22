@@ -23,8 +23,9 @@
 .dm-premiere h1 span { display:block; padding-top:.12em; color:var(--ui-accent); }
 .dm-intro { margin-top:clamp(8px,3vh,48px); }
 .dm-intro p { font-size:clamp(14px,1.1vw,18px); line-height:1.5; max-width:33ch; margin:0 0 20px; }
-.dm-premiere .dm-connect,.dm-premiere .dm-connect:hover { min-width:156px; padding:5px 6px 5px 20px; color:var(--ui-bg); background:var(--ui-text); }
-.dm-connect span { display:grid; place-items:center; height:32px; width:32px; border-radius:100%; color:var(--ui-text); background:var(--ui-bg); font-size:20px; }
+.dm-premiere .dm-connect,.dm-premiere .dm-connect:hover { min-width:156px; padding:5px 6px 5px 20px; color:var(--ui-on-cta); background:var(--ui-cta); border-color:transparent; }
+.dm-premiere .dm-connect:hover { background:var(--ui-cta-hover); }
+.dm-connect span { display:grid; place-items:center; height:32px; width:32px; border-radius:100%; color:var(--ui-cta); background:var(--ui-on-cta); font-size:20px; }
 .dm-film-footer { padding:16px 0; border-top:1px solid var(--ui-stroke-strong); }
 .dm-chapter,.dm-transport { display:flex; align-items:center; gap:14px; }
 .dm-chapter small { color:var(--ui-accent); }

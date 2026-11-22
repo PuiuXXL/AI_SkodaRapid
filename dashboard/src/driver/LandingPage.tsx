@@ -39,24 +39,24 @@ export function LandingPage(){
       onDurationChange={e=>{const d=e.currentTarget.duration;if(Number.isFinite(d)&&d>0)setDuration(d);}}/>
     <div className="dm-premiere-shade" aria-hidden="true"/>
     <header className="dm-mast">
-      <div className="dm-wordmark"><BrandLogo/><span>Copilot<br/>personal</span></div>
+      <div className="dm-wordmark"><BrandLogo/><span>Personal<br/>copilot</span></div>
       
     </header>
     <div className="dm-premiere-story">
-      <small className="dm-film-label">DriveMate / Copilot de drum</small>
-      <h1 lang="en">for you <span>safety</span></h1>
-      <div className="dm-intro"><p>Tu privești drumul. DriveMate îți urmărește atenția și te avertizează când ai nevoie de o pauză.</p>
+      <small className="dm-film-label">DriveMate / Your driving companion</small>
+      <h1 lang="en">four your <span>safety</span></h1>
+      <div className="dm-intro"><p>Keep your eyes on the road. DriveMate watches your attention and lets you know when it is time for a break.</p>
         <a className="dm-connect" href="#/salut">Connect <span aria-hidden="true">↗</span></a>
       </div>
     </div>
     <footer className="dm-film-footer">
-      <div className="dm-chapter"><small>DriveMate</small><span>Film de prezentare</span></div>
-      {unavailable?<small>Cadru din film</small>:<div className="dm-transport">
-        <button type="button" onClick={toggleFilm} aria-label={playing?"Pune filmul pe pauză":"Redă filmul"}>
+      <div className="dm-chapter"><small>DriveMate</small><span>The DriveMate film</span></div>
+      {unavailable?<small>Film still</small>:<div className="dm-transport">
+        <button type="button" onClick={toggleFilm} aria-label={playing?"Pause film":"Play film"}>
           <span aria-hidden="true">{playing?"Ⅱ":"▶"}</span>
         </button>
         <div><span>{clock(elapsed)} / {duration?clock(duration):"—"}</span>
-          <progress value={elapsed} max={duration||1} aria-label="Progres film"/></div>
+          <progress value={elapsed} max={duration||1} aria-label="Film progress"/></div>
       </div>}
     </footer>
   </main>;

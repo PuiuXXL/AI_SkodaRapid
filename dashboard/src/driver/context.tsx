@@ -7,4 +7,4 @@ export interface DriverContextValue extends ReturnType<typeof useDriverSession> 
   audio:ReturnType<typeof useDriverAudio>;
 }
 export const DriverContext=createContext<DriverContextValue|null>(null);
-export function useDriver(){const value=useContext(DriverContext);if(!value)throw new Error("Sesiune DriveMate lipsă");return value;}
+export function useDriver(){const value=useContext(DriverContext);if(!value)throw new Error("DriveMate session missing");return value;}

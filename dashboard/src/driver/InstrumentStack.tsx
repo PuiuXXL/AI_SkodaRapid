@@ -2,9 +2,9 @@ import {useEffect,useRef,useState} from "react";
 import type {ReactNode} from "react";
 import {motion,useMotionValue,useReducedMotion,useTransform} from "motion/react";
 import type {MotionValue} from "motion/react";
-import {Icon} from "../App";
+import {CardArt, type ArtSubject} from "../CardArt";
 
-export interface Instrument {label:string;icon:string;description:string;body:ReactNode}
+export interface Instrument {label:string;icon:ArtSubject;description:string;body:ReactNode}
 
 const MIN_STAGE=560; // below this viewport height the cards use ordinary document flow
 const BAND=104;      // px under the cards: docked camera preview, progress, previous / next
@@ -21,8 +21,8 @@ function StackCard({card,index,count,position,stacked,active}:{card:Instrument;i
   return <motion.article className="instrument-card" aria-label={card.label} data-instrument={card.icon}
     inert={stacked&&index!==active} aria-hidden={stacked&&index!==active?true:undefined}
     style={stacked?{x,scale,opacity:dim,visibility,zIndex:index+1}:{zIndex:index+1}}>
-    <header className="instrument-label"><span className="instrument-icon"><Icon name={card.icon}/></span>
-      <div><small>MONITOR DE BORD · {String(index+1).padStart(2,"0")} / {String(count).padStart(2,"0")}</small><h2>{card.label}</h2><p>{card.description}</p></div>
+    <header className="instrument-label"><CardArt subject={card.icon}/>
+      <div><small>ONBOARD MONITOR · {String(index+1).padStart(2,"0")} / {String(count).padStart(2,"0")}</small><h2>{card.label}</h2><p>{card.description}</p></div>
     </header>
     <div className="instrument-body">{card.body}</div>
   </motion.article>;
@@ -49,7 +49,7 @@ export function InstrumentStack({cards,dock=false}:{cards:Instrument[];dock?:boo
       // Narrow or very short screens and reduced motion use ordinary document flow. All cards share the height of
       // the tallest one (a card must cover the previous one); a card taller than the stage scrolls inside its own
       // body (fluid.css), so the stack never falls apart because of one long card.
-      const stacked=!reduced&&page.clientWidth>=900&&stage>=MIN_STAGE;
+      const stacked=!reduced&&track.clientWidth>=760&&stage>=MIN_STAGE;
       const tallest=Math.ceil(Math.max(0,...Array.from(track.children,card=>{
         const head=card.querySelector<HTMLElement>(".instrument-label"),body=card.querySelector<HTMLElement>(".instrument-body");
         return (head?.offsetHeight??0)+(body?.scrollHeight??0)+2;
@@ -60,6 +60,7 @@ export function InstrumentStack({cards,dock=false}:{cards:Instrument[];dock?:boo
     }
     const observer=new ResizeObserver(measure);
     observer.observe(page);
+    observer.observe(track);
     track.querySelectorAll(".instrument-label,.instrument-body").forEach(el=>observer.observe(el));
     const offset=()=>page.getBoundingClientRect().top-area.getBoundingClientRect().top;
     function sync(){
@@ -96,17 +97,17 @@ export function InstrumentStack({cards,dock=false}:{cards:Instrument[];dock?:boo
   return <div ref={scene} className={"instrument-scene"+(layout.stacked?" is-stacked":" is-flow")+(dock?" has-dock":"")}
     style={layout.stacked?{height:layout.stage+(count-1)*layout.step}:undefined}>
     <div className="instrument-stage" style={layout.stacked?{height:layout.stage,gridTemplateRows:`${layout.rail}px ${BAND}px`}:undefined}>
-      <div ref={rail} className="instrument-rail" role="region" aria-label="Instrumente de monitorizare">
+      <div ref={rail} className="instrument-rail" role="region" aria-label="Monitoring instruments">
         {cards.map((card,index)=><StackCard key={card.label} {...{card,index,count,position,stacked:layout.stacked,active}}/>)}
       </div>
       {layout.stacked&&<div className="instrument-band">
         <div className="camera-slot" data-camera-slot="stack" aria-hidden="true"/>
         <div className="instrument-controls">
           <span aria-live="polite"><b>{String(active+1).padStart(2,"0")}</b> / {String(count).padStart(2,"0")}<strong>{cards[active].label}</strong></span>
-          <div className="instrument-progress" role="tablist" aria-label="Instrumentele monitorului">{cards.map((card,i)=>
+          <div className="instrument-progress" role="tablist" aria-label="Monitor instruments">{cards.map((card,i)=>
             <button key={card.label} role="tab" aria-selected={i===active} aria-label={card.label} title={card.label} data-active={i<=active} onClick={()=>select(i)}/>)}</div>
-          <button className="instrument-step" aria-label="Cardul anterior" disabled={active===0} onClick={()=>select(active-1)}>←</button>
-          <button className="instrument-step" aria-label="Cardul următor" disabled={active===count-1} onClick={()=>select(active+1)}>→</button>
+          <button className="instrument-step" aria-label="Previous card" disabled={active===0} onClick={()=>select(active-1)}>←</button>
+          <button className="instrument-step" aria-label="Next card" disabled={active===count-1} onClick={()=>select(active+1)}>→</button>
         </div>
       </div>}
     </div>

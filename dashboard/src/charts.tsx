@@ -47,6 +47,7 @@ export function Spark({values,max,tone="ink",height=44,label}: {values: Value[];
   const segments=runs(values,x,y);
   return <svg className={"fx-spark tone-"+tone} viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" role="img" aria-label={label}>
     <defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop stopColor="currentColor" stopOpacity=".34"/><stop offset="1" stopColor="currentColor" stopOpacity="0"/></linearGradient></defs>
+    {[.25,.75].map(level=><line key={level} className="fx-track" x1="0" x2={w} y1={y(top*level)} y2={y(top*level)} strokeWidth="0.7"/>)}
     {segments.map((segment,i)=>{
       const line=smoothPath(segment);
       return <g key={i}>
@@ -64,7 +65,7 @@ export function MiniBars({values,max,tone="ink",count=22,label}: {values: Value[
   return <div className={"fx-minibars tone-"+tone} role="img" aria-label={label}>
     {Array.from({length:count},(_,i)=>{
       const value=recent[i-(count-recent.length)];
-      return <i key={i} data-empty={!known(value)||undefined} style={known(value)?{height:Math.max(6,clamp(value/top)*100)+"%",opacity:.35+.65*(i+1)/count}:undefined}/>;
+      return <i key={i} data-empty={!known(value)||undefined} style={known(value)?{height:clamp(value/top)*100+"%",opacity:.35+.65*(i+1)/count}:undefined}/>;
     })}
   </div>;
 }
@@ -81,6 +82,7 @@ export function Gauge({value,tone="ink",children,label}: {value: Value; tone?: T
   return <div className={"fx-gauge tone-"+tone} role="img" aria-label={label}>
     <svg viewBox="0 0 120 68" aria-hidden="true">
       <defs><linearGradient id={id} x1="0" x2="1" y1="0" y2="0"><stop stopColor="currentColor" stopOpacity=".35"/><stop offset="1" stopColor="currentColor"/></linearGradient></defs>
+      {Array.from({length:11},(_,i)=><line key={i} x1="60" x2="60" y1="1" y2={i%5===0?"7":"4"} stroke="currentColor" strokeOpacity=".65" transform={`rotate(${i*18-90} 60 62)`}/>)}
       <path className="fx-track" d={arc(60,62,50,180,360)} fill="none" strokeWidth="11" strokeLinecap="round"/>
       {share!==null&&share>0&&<path d={arc(60,62,50,180,360)} fill="none" stroke={`url(#${id})`} strokeWidth="11" strokeLinecap="round" pathLength={100} strokeDasharray={`${share*100} 100`}/>}
     </svg>
@@ -103,12 +105,12 @@ export function Ring({value,max=1,tone="ink",size=92,children,label}: {value: Va
 
 export interface RankItem {label: string; value: Value; display?: ReactNode; tone?: Tone; hint?: string}
 /** Ranked horizontal bars on a dotted track (label left, reading right), scaled to `max` or to the largest value. */
-export function RankBars({items,max,empty="Fără date încă"}: {items: RankItem[]; max?: number; empty?: string}){
+export function RankBars({items,max,empty="No data yet"}: {items: RankItem[]; max?: number; empty?: string}){
   const top=known(max)&&max>0?max:Math.max(1e-9,...items.map(item=>item.value).filter(known));
   if(!items.length)return <p className="fx-empty">{empty}</p>;
   return <div className="fx-rank">{items.map(item=><div key={item.label} className={"fx-rank-row tone-"+(item.tone??"ink")}>
     <span>{item.label}{item.hint&&<small>{item.hint}</small>}</span><output>{item.display??(known(item.value)?item.value:"—")}</output>
-    <div className="fx-rank-track" aria-hidden="true">{known(item.value)&&item.value>0&&<i style={{width:Math.max(1.5,clamp(item.value/top)*100)+"%"}}/>}</div>
+    <div className="fx-rank-track" aria-hidden="true">{known(item.value)&&item.value>0&&<i style={{width:clamp(item.value/top)*100+"%"}}/>}</div>
   </div>)}</div>;
 }
 
@@ -117,18 +119,18 @@ export interface Share {label: string; value: number; tone?: Tone}
 export function StackBar({parts,unit="%",label}: {parts: Share[]; unit?: string; label: string}){
   const total=parts.reduce((sum,part)=>sum+Math.max(0,part.value),0);
   return <div className="fx-stack" role="img" aria-label={label}>
-    <div className="fx-stack-bar">{total>0?parts.filter(part=>part.value>0).map((part,i)=><i key={part.label} className={"tone-"+(part.tone??"ink")} style={{flexGrow:part.value,opacity:part.tone?1:Math.max(.22,1-i*.2)}}/>):<i className="fx-stack-empty"/>}</div>
+    <div className="fx-stack-bar">{total>0?parts.map((part,i)=>part.value>0&&<i key={part.label} className={"tone-"+(part.tone??"ink")} style={{flexGrow:part.value,opacity:part.tone?1:Math.max(.22,1-i*.2)}}/>):<i className="fx-stack-empty"/>}</div>
     <ul>{parts.map((part,i)=><li key={part.label} className={"tone-"+(part.tone??"ink")}><i style={{opacity:part.tone?1:Math.max(.22,1-i*.2)}}/>{part.label}<b>{total>0?Math.round(part.value/total*100)+unit:"—"}</b></li>)}</ul>
   </div>;
 }
 
 export interface Range {label: string; lo: Value; hi: Value}
 /** p50..p95 style ranges: a solid bar to `lo` and a lighter extension to `hi`, on a shared scale. */
-export function RangeBars({items,unit=" ms",empty="Fără măsurători încă"}: {items: Range[]; unit?: string; empty?: string}){
+export function RangeBars({items,unit=" ms",empty="No measurements yet"}: {items: Range[]; unit?: string; empty?: string}){
   const measured=items.filter(item=>known(item.lo)||known(item.hi));
   const top=Math.max(1e-9,...measured.flatMap(item=>[item.lo,item.hi]).filter(known));
   if(!measured.length)return <p className="fx-empty">{empty}</p>;
-  const text=(v: Value)=>known(v)?v.toLocaleString("ro-RO",{maximumFractionDigits:1}):"—";
+  const text=(v: Value)=>known(v)?v.toLocaleString("en-GB",{maximumFractionDigits:1}):"—";
   return <div className="fx-range">{measured.map(item=><div key={item.label} className="fx-range-row">
     <span>{item.label}</span><output>{text(item.lo)} / {text(item.hi)}{unit}</output>
     <div className="fx-range-track" aria-hidden="true">
@@ -164,5 +166,5 @@ export function PoseDial({yaw,pitch,roll,range=40,label}: {yaw: Value; pitch: Va
 
 /** Small state chip: an icon-less pill that is "on" (true), quiet (false) or unknown (undefined). */
 export function Flag({label,on,tone="ink"}: {label: string; on: boolean | undefined; tone?: Tone}){
-  return <span className={"fx-flag"+(on?" is-on tone-"+tone:"")} data-unknown={on===undefined||undefined}>{label}<b>{on===true?"Da":on===false?"Nu":"—"}</b></span>;
+  return <span className={"fx-flag"+(on?" is-on tone-"+tone:"")} data-unknown={on===undefined||undefined}>{label}<b>{on===true?"Yes":on===false?"No":"—"}</b></span>;
 }
