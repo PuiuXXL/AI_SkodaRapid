@@ -153,6 +153,8 @@ eyes:                          # docs/perception.md §3.2; values from docs/eval
   perclos_closure: 0.80
   perclos_window_s: 60
   min_eye_width_px: 18         # eye corner distance below this -> that eye is unreliable
+  unreliable_when_face_small: true  # face < face.min_face_width_px -> eyes unreliable (state UNKNOWN, no closure /
+                               # PERCLOS): at ~212 px squint / smile read as closed 6/6 and 6 false closures / 60 s
   cnn:                         # second opinion from the pixels for what EAR cannot separate (hard squint vs closed)
     enabled: false             # OFF after the live test of 2026-11-21 (docs/eval/eyes-laptop-closures-2026-11-21.md):
                                # in one session class "open" was ~1.0 also for shut eyes (EAR 0.06), so its veto hid
@@ -325,11 +327,14 @@ demo:                          # demo switches (docs/perception.md "Mod demo"): 
   posture_driver: true         # driver.posture vs. the calibration reference
   posture_passenger: false     # passenger.posture: not in the scenario, 4 false events / 60 s live (auto reference)
   nodding_triggers: true       # AS4: driver.head.nodding may be true (false: always false)
-  rear_seat: true              # AS13: face lost after a large right yaw -> zone rear_seat for at most 3 s
+  rear_seat: false             # AS13 (S, extra): NO-GO 2026-11-22 demo_check: 4 false rear_seat in 60 s of normal
+                               # driving (3/3 on real turns); off until the rule ignores ordinary glances
 
 passenger:
   open_reset_frames: 3         # the closed time resets only after this many open frames in a row (one noisy OPEN
                                # frame reset it live: asleep never reached in 16 s on 2026-11-21)
+  closed_ratio: 0.50           # eye ratio (EAR / open reference) below this = closed, even without the blink
+                               # detector's CLOSED (a slow sleepy close has no fast fall: asleep never fired live)
   asleep_closed_s: 8           # AP2: eyes closed this long -> awake = false (target < 10 s); the head is not required
   asleep_closed_head_s: 5      # ... the dropped head is a reinforcer: this long is enough with the head dropped
   head_drop_deg: 15            # pitch this far below the passenger's upright pitch = head dropped

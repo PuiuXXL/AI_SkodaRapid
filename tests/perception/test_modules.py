@@ -103,6 +103,28 @@ def test_isolated_open_frames_do_not_wake_a_sleeping_passenger() -> None:
     assert out["awake"]
 
 
+def test_slow_close_without_a_closed_state_still_puts_the_passenger_to_sleep() -> None:
+    """AP2: the eye ratio deep down counts as closed even while the blink detector says OPEN (slow close)."""
+    cfg = load_config().passenger
+    mod = PassengerStateModule(_ctx(), None)
+    t, _ = _play(mod, 0.0, 3.0)
+    out: dict[str, Any] = {}
+    for _ in range(round((cfg.asleep_closed_s + 1.0) * FPS)):
+        st = _state(eyes="OPEN")
+        st.eyes.ratio = cfg.closed_ratio * 0.5
+        out = mod.update(_ff(t), _inp(t, st))["passenger_state"]
+        t += 1.0 / FPS
+    assert not out["awake"] and out["eyes_closed_s"] >= cfg.asleep_closed_s
+
+
+def test_contact_rule_is_for_the_drivers_phone_only() -> None:
+    from perception.modules import PhoneTrackerModule
+
+    assert PhoneTrackerModule(_ctx("driver"), None).tracker.cfg.owned_needs_contact is True
+    passenger = PhoneTrackerModule(_ctx("passenger"), None)
+    assert passenger.tracker.cfg.owned_needs_contact is False  # AP4: a phone held up = holding
+
+
 def test_frozen_passenger_camera_is_not_present() -> None:
     mod = PassengerStateModule(_ctx(), None)
     out = mod.update(_ff(0.0), _inp(0.0, _state(), SimpleNamespace(reason="frozen")))["passenger_state"]

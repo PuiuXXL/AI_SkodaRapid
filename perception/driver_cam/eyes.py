@@ -312,6 +312,10 @@ class EyeTracker:
             and ears[side][1] >= self.cfg.unilateral_width_ratio * widest
             for side in _SIDES
         }
+        if self.cfg.unreliable_when_face_small and face.too_small:
+            # R-FL3 + AS14: below face.min_face_width_px a squint / smile has the EAR of a closed eye (live 2026-11-22,
+            # ~212 px: 6/6 squints and 6 false closures in 60 s); too few pixels -> no eye verdict, no false alarm
+            reliable = dict.fromkeys(_SIDES, False)
         out.reliable = any(reliable.values())
         if not out.reliable:
             return self._gap_or_lose(t, out)
