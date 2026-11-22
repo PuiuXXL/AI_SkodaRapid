@@ -100,6 +100,15 @@ RESPONSE_SCHEMA: dict[str, Any] = {
 }
 
 
+def _finish_reason(chunk: Any) -> Optional[str]:
+    """``"STOP"`` / ``"MAX_TOKENS"`` / ... from a streamed chunk (only the last chunk has one)."""
+    candidates = getattr(chunk, "candidates", None) or []
+    reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+    if reason is None:
+        return None
+    return getattr(reason, "name", None) or str(reason)
+
+
 class GeminiProvider(LLMProvider):
     """LLM provider backed by a Gemini model."""
 
@@ -187,12 +196,14 @@ class GeminiProvider(LLMProvider):
         """Stream one answer from ``model`` (shared by :meth:`generate` and :meth:`generate_retry`)."""
         started = time.perf_counter()
         ttft_ms: Optional[float] = None
+        finish: Optional[str] = None
         parts: list[str] = []
         try:
             stream = await self._client.aio.models.generate_content_stream(
                 model=model, contents=user, config=config,
             )
             async for chunk in stream:
+                finish = _finish_reason(chunk) or finish
                 piece = chunk.text or ""
                 if not piece:
                     continue
@@ -208,7 +219,9 @@ class GeminiProvider(LLMProvider):
         except Exception as exc:  # noqa: BLE001 - network/HTTP library errors vary; all mean "fall back"
             raise LLMError(f"Gemini call failed: {type(exc).__name__}: {exc}") from exc
         total_ms = (time.perf_counter() - started) * 1000
-        return LLMResult(text="".join(parts), ttft_ms=ttft_ms, total_ms=total_ms)
+        if finish == "MAX_TOKENS":
+            log.warning("Gemini answer cut at max_output_tokens (%s); raise llm.max_output_tokens.", model)
+        return LLMResult(text="".join(parts), ttft_ms=ttft_ms, total_ms=total_ms, finish_reason=finish)
 
     async def warm_up(self) -> None:
         """Send one tiny request so the first real answer is not slowed by TLS setup."""

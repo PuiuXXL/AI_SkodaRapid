@@ -255,10 +255,36 @@ def media_command(text: str, state: State) -> bool:
     return stop_media_request(text, state) or volume_request(text, state) is not None
 
 
-def _speech(event: Event, state: State) -> list[dict]:
-    """Free request without the LLM: stop / volume, a music / podcast request (YouTube search), else 'n-am înțeles'."""
+_THANKS = frozenset({"multumesc", "multumim", "mersi", "merci", "ms", "multam"})
+#: Words that may come with a thank-you without turning it into a request.
+_THANKS_FILLERS = frozenset({"mult", "frumos", "foarte", "iti", "va", "tie", "drivemate", "bine", "ok", "okay",
+                             "super", "perfect", "bravo", "si", "pentru", "tot", "asta"})
+
+
+def thanks(text: str) -> bool:
+    """ "Mulțumesc mult." / "Mersi, DriveMate!": only thanks, no request (answered without the LLM).
+
+    The baseline evaluation showed the LLM often returns stay_silent to a plain thank-you, which
+    then became "n-am înțeles". "Mulțumesc, cât mai am?" still goes to the LLM.
+    """
+    tokens = normalize(text).split()
+    return bool(tokens) and bool(_THANKS & set(tokens)) and set(tokens) <= (_THANKS | _THANKS_FILLERS)
+
+
+#: LLM failures on a request that was understood: the driver hears "mi-a scăpat", not "n-am înțeles".
+LLM_FAILURES = frozenset({"timeout", "llm_error", "invalid_json", "truncated"})
+
+
+def _speech(event: Event, state: State, reason: str | None = None) -> list[dict]:
+    """Free request without the LLM: stop / volume, a music / podcast request (YouTube search), else 'n-am înțeles'.
+
+    ``reason`` is why the LLM did not answer (``assistant/client.py``): after an LLM failure the
+    request was understood, so the driver is asked to repeat with ``llm_hiccup`` instead.
+    """
     ok = _speak(get_texts().get("clips", {}).get("confirm_ok", "Ok."), clip_id="confirm_ok")
     text = str(event.data.get("text", ""))
+    if thanks(text):
+        return [{**_speak(_t("thanks")), "reason": "closing"}]
     if stop_media_request(text, state):
         return [{"type": "stop_media"}, ok]
     volume = volume_request(text, state)
@@ -272,6 +298,8 @@ def _speech(event: Event, state: State) -> list[dict]:
         track = music.pick_track(state, "request")
         if track is not None:
             return [_ask(_t("music_offer")), {"type": "suggest_media", "track_id": track.id, "reason": "driver_request"}]
+    if reason in LLM_FAILURES:
+        return [_speak(_t("llm_hiccup"))]
     return _not_understood(event, state)
 
 
@@ -295,19 +323,55 @@ BUILDERS: dict[str, Callable[[Event, State], list[dict]]] = {
 }
 
 
-def build_fallback(event: Event, state: State) -> list[dict]:
+def build_fallback(event: Event, state: State, reason: str | None = None) -> list[dict]:
     """Return the raw fixed actions for ``event`` (not validated yet).
 
     Args:
         event: The event from core.
         state: Current state.
+        reason: Why the fixed text is used (``AnswerInfo.reason``); changes only the
+            answer to a direct request after an LLM failure.
 
     Returns:
         Raw action dicts; validate them with ``assistant.actions.validate_actions``
         (``source="RULE"``). Empty list when there is nothing sensible to say.
     """
+    if event.type in ("driver_speech", "passenger_speech"):
+        return _speech(event, state, reason)
     builder = BUILDERS.get(event.type)
     return builder(event, state) if builder else []
+
+
+def confirmation_question(action: Action, state: State) -> str:
+    """The question for an action that needs a "yes" when the LLM forgot to ask it.
+
+    Seen in the baseline evaluation: "Citește-mi mesajele" with a passenger on board ->
+    the LLM returns ``read_message`` alone; it is held for a "yes" that nobody asked for,
+    and the driver heard "n-am înțeles".
+    """
+    t = action.type
+    if t == "read_message":
+        return fill(_t("confirm_read"), sender=_message_sender(state, action.msg_id))
+    if t == "suggest_stop":
+        poi = state.trip.next_poi
+        name = poi.name if poi is not None and poi.id == action.poi_id and poi.name else None
+        for sight in (state.trip.model_extra or {}).get("attractions_ahead") or []:
+            if isinstance(sight, dict) and sight.get("id") == action.poi_id:
+                name = sight.get("name") or name
+        return fill(_t("confirm_stop"), poi=name or action.poi_id)
+    if t == "create_reminder" and action.trigger is not None:
+        places = _t("reminder_places") or {}
+        place = places.get(action.trigger.category or "") or places.get("default")
+        return fill(_t("confirm_reminder"), task=action.task, place=place)
+    if t == "reply_message":
+        return fill(_t("confirm_reply"), text=(action.text or "").strip().rstrip(".!?… "))
+    if t == "suggest_media":
+        track = music.get_track(action.track_id)
+        return fill(_t("confirm_media"), title=track.title if track else action.track_id)
+    if t == "complete_reminder":
+        task = next((r.task for r in state.reminders if r.id == action.reminder_id), None)
+        return fill(_t("confirm_complete"), task=task)
+    return _t("confirm_generic")
 
 
 def silent(reason: str) -> Action:

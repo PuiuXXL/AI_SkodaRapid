@@ -92,6 +92,7 @@ class AnswerInfo:
         source: ``"LLM"`` or ``"RULE"`` (fallback / policy / deterministic).
         reason: Why RULE was used (``"policy:muted"``, ``"timeout"``, ``"no_llm"``,
             ``"llm_disabled"``, ``"all_rejected"``, ``"llm_error"``, ``"invalid_json"``,
+            ``"truncated"`` (the JSON was cut at ``llm.max_output_tokens``),
             ``"deterministic"``, ``"silent_on_request"``) or ``"ok"``.
         latency_ms: Total time spent in :meth:`AssistantClient.handle_event`.
         llm_ttft_ms: Time to the first LLM chunk (plan J1 ``llm_ttft_ms``).
@@ -223,9 +224,11 @@ class AssistantClient:
             info.reason = f"policy:{decision.reason}"
             result = [fallback.silent(decision.reason)]
         elif event.type in DETERMINISTIC_EVENTS or (
-            event.type in SPEECH_EVENTS and fallback.media_command(str(event.data.get("text", "")), state)
+            event.type in SPEECH_EVENTS and (fallback.media_command(str(event.data.get("text", "")), state)
+                                             or fallback.thanks(str(event.data.get("text", ""))))
         ):
-            # "Oprește muzica" / "mai încet" are answered at once, without waiting for the LLM (like the refusal).
+            # "Oprește muzica" / "mai încet" / "mulțumesc" are answered at once, without waiting for the LLM
+            # (like the refusal).
             info.reason = "deterministic"
             result = self._fallback(event, state, info)
         elif not self.provider.available:
@@ -303,12 +306,14 @@ class AssistantClient:
             payload = json.loads(llm.text)
             raw_actions = payload.get("actions", []) if isinstance(payload, dict) else []
         except ValueError:
-            info.reason = "invalid_json"
-            log.warning("LLM returned invalid JSON on %s: %r", event.type, llm.text[:200])
+            # MAX_TOKENS = the model ran out of llm.max_output_tokens (its thinking counts too).
+            info.reason = "truncated" if llm.finish_reason == "MAX_TOKENS" else "invalid_json"
+            log.warning("LLM returned %s JSON on %s: %r", info.reason, event.type, llm.text[:200])
             return self._fallback(event, state, info)
 
         checked = actions_mod.validate_actions(raw_actions, state, event, source="LLM")
         info.rejected = [(r.raw, r.reason) for r in checked.rejected]
+        self._ask_for_held(checked, state, event)
         answers = ("speak", "ask", "search_media")  # a search becomes a spoken question (see _resolve_media_search)
         acted = [a for a in checked.accepted if a.type not in ("stay_silent",) and not a.needs_confirmation]
         if event.type in SPEECH_EVENTS and acted and not any(a.type in answers for a in checked.accepted):
@@ -343,6 +348,26 @@ class AssistantClient:
         return checked.accepted
 
     @staticmethod
+    def _ask_for_held(checked: actions_mod.ValidationResult, state: State, event: Event) -> None:
+        """An action held for a "yes" with no question in the answer gets its confirmation question.
+
+        Without it the action waited for a "yes" nobody asked for, and on a direct request
+        the answer counted as silence ("n-am înțeles"): 100% of "Am mesaje noi?" /
+        "Citește-mi mesajele" with a passenger on board in the baseline evaluation.
+        """
+        held = [a for a in checked.accepted if a.needs_confirmation]
+        if not held or any(a.type == "ask" for a in checked.accepted):
+            return
+        raw = {"type": "ask", "to": "driver", "question": fallback.confirmation_question(held[0], state),
+               "expects": "yes_no"}
+        added = actions_mod.validate_actions([raw], state, event, source="RULE")
+        if added.accepted:
+            checked.accepted.append(added.accepted[0])
+            checked.accepted_indexes.append(-1)
+        else:  # never expected (fixed texts); logged so it can be fixed
+            log.warning("confirmation question rejected: %s", [r.reason for r in added.rejected])
+
+    @staticmethod
     def _with_follow_up(event: Event, result: list[Action]) -> list[Action]:
         """Add "Te mai ajut cu ceva?" after a statement that answers the driver (``speech.follow_up``).
 
@@ -356,8 +381,8 @@ class AssistantClient:
             return result
         if not any(a.type == "speak" and a.to in (None, "driver", "all") for a in result):
             return result
-        if any(a.type in ("ask", "stay_silent") or a.needs_confirmation for a in result):
-            return result
+        if any(a.type in ("ask", "stay_silent") or a.needs_confirmation or a.reason == "closing" for a in result):
+            return result  # "closing": the driver ended the exchange ("mulțumesc" -> "Cu plăcere!")
         question = get_texts().get("fallback", {}).get("follow_up") or "Te mai ajut cu ceva?"
         return [*result, Action(type="ask", to="driver", question=question, expects="free",
                                 reason="follow_up", source="RULE")]
@@ -433,7 +458,7 @@ class AssistantClient:
                 timeout; spoken fallback actions are then dropped to avoid repeating.
         """
         info.source = "RULE"
-        raw = fallback.build_fallback(event, state)
+        raw = fallback.build_fallback(event, state, info.reason)
         checked = actions_mod.validate_actions(raw, state, event, source="RULE")
         info.rejected.extend((r.raw, r.reason) for r in checked.rejected)
         result = checked.accepted

@@ -13,8 +13,9 @@
  *   Echo cancellation of getUserMedia does not apply to the Web Speech API, so
  *   without this the assistant would hear itself (plan E6);
  * - an utterance is **addressed** to the assistant when it contains a wake word
- *   (the assistant's name) or when the dialog window is open (6 s after a question,
- *   plan E1). Only addressed final results should be acted upon by core.
+ *   (the assistant's name) or when the dialog window is open (plan E1; see
+ *   dialog_window.js: 15 s after the last word / question). Only addressed final
+ *   results should be acted upon by core.
  */
 
 /** Text normalisation used to look for wake words (lower-case, no diacritics). */
@@ -181,7 +182,7 @@ export class SpeechInput {
       const raw = result[0].transcript.trim();
       if (!raw) continue;
       // Remember whether the dialog window was open when this utterance STARTED: Chrome
-      // may publish the final text 1-3 s later, after the 6 s window has closed.
+      // may publish the final text 1-3 s later, after the window has closed.
       if (!this._dialogAtStart.has(i)) this._dialogAtStart.set(i, this.isDialogOpen());
       const startedInDialog = this._dialogAtStart.get(i);
       const { addressed, text } = this.addressing(raw, startedInDialog);

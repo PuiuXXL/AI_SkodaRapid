@@ -32,8 +32,11 @@ llm:
   # Sampling temperature. Low = predictable, short answers (0.4 sometimes made the
   # model stay silent on a direct request; 0.2 is more consistent).
   temperature: 0.2
-  # Upper bound for the generated JSON. Answers are tiny (<= 3 short actions).
-  max_output_tokens: 400
+  # Upper bound for the generated tokens. Gemini counts its "thinking" tokens here too:
+  # with 400 the model thought ~300-380 tokens and the JSON was cut (finish MAX_TOKENS) in
+  # 12% of free driver requests -> "n-am înțeles" (docs/eval/llm-baseline-2026-11-22.md).
+  # 1024 leaves room for any answer (<= 3 short actions, ~40-80 tokens).
+  max_output_tokens: 1024
   # Gemini "thinking" control for the main model (LLM_MODEL). Gemini 3.x models
   # reject thinking_budget (HTTP 400) and some reject level "minimal"; set at most
   # one of them. A rejected value makes every call fail fast with "llm_error" and
@@ -41,8 +44,11 @@ llm:
   # Tested 2026-11-21 with the real prompt (paid tier): gemini-3.5-flash-lite with
   # the default (null) timed out or took ~8 s; with level "low" it answered in
   # 0.7-1.6 s, all answers correct.
+  # Measured 2026-11-22 with assistant/dev/eval_llm.py (41 requests x 2, gemini-3.5-flash-lite,
+  # max_output_tokens 1024): level "low" -> 84% correct, 2% timeouts, p95 2.3 s (the model
+  # thinks ~360 tokens); level "minimal" -> 90% correct, 0 cut / 0 timeouts, p95 1.2 s.
   thinking_budget: null
-  thinking_level: low
+  thinking_level: minimal
   # One retry on a temporary Gemini error (503 = Google overloaded, 429 = rate limit,
   # 500/502/504), inside the SAME timeout_s deadline: only if nothing was spoken yet
   # and at least min_remaining_s is left; otherwise the fixed texts are used as before.
@@ -82,7 +88,11 @@ speech:
     enabled: true
   # Dialog window after a question, in seconds: voice is accepted without the
   # assistant's name while it is open (plan E1). Core opens it on speak_done.
-  dialog_window_s: 6
+  # 15 s since 2026-11-22 (was 6: answers such as "șapte" to the KSS question came too late in
+  # the first voice test). The browser keeps its own window, restarted while the driver speaks
+  # (dashboard/src/voice/dialog_window.js: dialogWindowMs, same value); this one is used by the
+  # voice test server (assistant/dev/voice_server.py). Core's window is P2's dialog.window_s.
+  dialog_window_s: 15
   # Seconds a question with pending actions ("Trimit?", "Bine?", KSS, quiz) waits for an
   # answer before the pending actions are cancelled silently (assistant/dialog.py).
   # Longer than the dialog window because the question itself must be spoken first.

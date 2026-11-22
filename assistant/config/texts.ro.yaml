@@ -97,6 +97,28 @@ fallback:
   # Free request the assistant could not handle without the LLM.
   not_understood: "Scuze, n-am înțeles. Poți repeta?"
   llm_unavailable: "Acum nu pot face asta. Încearcă puțin mai târziu."
+  # The driver was understood, but the LLM failed this time (timeout, cut answer, network):
+  # say it is our fault, not theirs, and let them repeat without the wake word (ends with "?").
+  llm_hiccup: "Scuze, mi-a scăpat. Mai spune o dată?"
+  # "Mulțumesc" / "mersi": answered at once, without the LLM and without "Te mai ajut cu ceva?".
+  thanks: "Cu plăcere!"
+
+  # Confirmation question added when the LLM proposes an action that needs a "yes" but
+  # forgets to ask for it (assistant/client.py). {place} comes from reminder_places.
+  confirm_read: "Mesaj de la {sender}. Îl citesc tare?"
+  confirm_stop: "Oprim la {poi}?"
+  confirm_reminder: "Notat: {task}, la {place}. Bine?"
+  confirm_reply: "Îi scriu: {text}. Trimit?"
+  confirm_media: "Pun {title}?"
+  confirm_complete: "Bifez {task}?"
+  confirm_generic: "Fac asta?"
+  reminder_places:
+    fuel: "prima benzinărie"
+    cafe: "prima cafenea"
+    pharmacy: "prima farmacie"
+    supermarket: "primul supermarket"
+    auto_parts: "primul magazin auto"
+    default: "următoarea oprire potrivită"
 
 clips:
   # C3: alarm with the driver's name (one clip per name).

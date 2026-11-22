@@ -45,11 +45,14 @@ class LLMResult:
         text: The generated JSON text.
         ttft_ms: Milliseconds until the first chunk (plan J1: ``llm_ttft_ms``).
         total_ms: Milliseconds until the answer was complete (``llm_total_ms``).
+        finish_reason: Why the model stopped, when the provider says it (Gemini:
+            ``"STOP"``, ``"MAX_TOKENS"``...). ``"MAX_TOKENS"`` = the JSON was cut.
     """
 
     text: str
     ttft_ms: Optional[float] = None
     total_ms: Optional[float] = None
+    finish_reason: Optional[str] = None
 
 
 class LLMProvider(ABC):

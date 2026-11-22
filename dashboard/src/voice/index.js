@@ -14,12 +14,17 @@
  * - **received**: `speak`, `speak_control` (pause / resume / stop), `alarm`, `media`,
  *   `state` (only `interaction.dialog_window_open` is read);
  * - **sent**: `speech` (recognised text), `speech_onset` (voice start, for P2's
- *   verbal reaction time), `speak_done` (utterance finished; core opens the 6 s
- *   dialog window after a question), `alarm_played` (for the alarm latency, plan J1).
+ *   verbal reaction time), `speak_done` (utterance finished; core opens its dialog
+ *   window after a question), `alarm_played` (for the alarm latency, plan J1).
+ *
+ * Dialog window (`dialog_window.js`): 15 s after a question or the wake word, kept open
+ * while the driver speaks and while the assistant answers inside the conversation;
+ * closed at once by "nu" / "gata" / "mersi". After that the wake word is needed again.
  *
  * Works the same from plain JS or React (wrap `initVoice` in a `useEffect`).
  */
 
+import { DialogWindow } from "./dialog_window.js";
 import { OnsetDetector } from "./onset.js";
 import { VoicePlayer } from "./player.js";
 import { SpeechInput, normalizeText } from "./stt.js";
@@ -44,7 +49,10 @@ const nowSeconds = () => (performance.timeOrigin + performance.now()) / 1000;
 export const DEFAULT_OPTIONS = {
   lang: "ro-RO",
   wakeWords: ["drivemate", "drive mate", "copilot"],
-  dialogWindowMs: 6000,          // plan E1: voice accepted without the name for 6 s
+  // Plan E1: voice accepted without the name. Was a fixed 6 s after a question; the first voice
+  // test (2026-11-22) showed answers like "șapte" ignored after it. Now 15 s after the LAST
+  // activity (question, driver's words, assistant's answer), see dialog_window.js.
+  dialogWindowMs: 15000,
   onsetThreshold: 0.035,
   preloadClips: [],              // e.g. ["/sounds/clips/alarm_andrei.mp3", ...]
   clipsManifestUrl: "/sounds/clips/clips.json",
@@ -62,11 +70,14 @@ class VoiceController {
     this.options = { ...DEFAULT_OPTIONS, ...options };
     this.transcriptListeners = new Set();
     this.dialogFromState = false;   // dialog window as reported by core
-    this.localDialogUntil = 0;      // local copy (works with a fake core too)
+    this.dialog = new DialogWindow({ windowMs: this.options.dialogWindowMs });  // the browser's own window
 
     this.player = new VoicePlayer({
       lang: this.options.lang,
-      onSpeakStart: () => this._setHearing(false),
+      onSpeakStart: () => {
+        this.dialog.speakStarted();
+        this._setHearing(false);
+      },
       onSpeakDone: (utterance, info) => this._speakDone(utterance, info),
       onAlarmPlayed: (alarm, ts) => this._send({ type: "alarm_played", id: alarm.id, ts }),
     });
@@ -114,7 +125,12 @@ class VoiceController {
   }
 
   isDialogOpen() {
-    return this.dialogFromState || performance.now() < this.localDialogUntil;
+    return this.dialogFromState || this.dialog.isOpen();
+  }
+
+  /** Milliseconds left in the browser's dialog window (0 = closed; core's own window is not counted). */
+  dialogRemainingMs() {
+    return this.dialog.remainingMs();
   }
 
   async _preloadClips() {
@@ -167,9 +183,8 @@ class VoiceController {
 
   _speakDone(utterance, info) {
     if (!utterance) return;
-    if (utterance.is_question && !info.interrupted) {
-      this.localDialogUntil = performance.now() + this.options.dialogWindowMs;
-    }
+    this.dialog.speakDone({ isQuestion: Boolean(utterance.is_question), interrupted: info.interrupted,
+                            stillSpeaking: this.player.isSpeaking() });
     this._send({ type: "speak_done", id: utterance.id, is_question: Boolean(utterance.is_question), interrupted: info.interrupted, ts: info.ts });
     if (!this.player.isSpeaking()) this._setHearing(true);
   }
@@ -179,8 +194,13 @@ class VoiceController {
     if (result.final && result.addressed && NO_MORE_ANSWERS.has(normalizeText(result.text))) {
       // "Nu" / "nimic" / "gata": the conversation is over, stop listening without the wake word.
       // The next question of the assistant opens a new window (speak_done).
-      this.localDialogUntil = 0;
+      this.dialog.close();
       this.dialogFromState = false;
+    } else {
+      // The driver is talking to the assistant (wake word, or inside the window): keep it open
+      // until windowMs after the last word. Interim results count, so a long sentence never
+      // loses the window halfway.
+      this.dialog.heard(result);
     }
     if (result.final) {
       // early: null (Chrome's final), "quick" (short answer) or "stable" (unchanged text);
@@ -223,6 +243,11 @@ export function onTranscript(callback) {
 /** True while the assistant is speaking (e.g. to animate an avatar). */
 export function isSpeaking() {
   return controller ? controller.player.isSpeaking() : false;
+}
+
+/** Milliseconds left in the dialog window (0 = closed, the wake word is needed), e.g. for a countdown. */
+export function dialogRemainingMs() {
+  return controller ? controller.dialogRemainingMs() : 0;
 }
 
 /** Stop microphone, speech and music (e.g. when the dashboard unmounts). */

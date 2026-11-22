@@ -137,6 +137,11 @@ def llm_settings() -> LLMSettings:
     api_key = (os.getenv("LLM_API_KEY") or "").strip()
     model = (os.getenv("LLM_MODEL") or cfg("llm", "default_model", default="") or "").strip()
     backup_model = (os.getenv("LLM_BACKUP_MODEL") or cfg("llm", "backup_model", default="") or "").strip()
+    if os.getenv("PYTEST_CURRENT_TEST") and not os.getenv("DRIVEMATE_LLM_LIVE"):
+        # Tests never call the real LLM, even with a key in .env: the answers would depend on the
+        # network and on the model (tests/core/test_assistant_link.py failed that way). Tests that
+        # need an LLM inject a fake provider; DRIVEMATE_LLM_LIVE=1 allows real calls on purpose.
+        provider = "offline"
     return LLMSettings(provider=provider, api_key=api_key, model=model, backup_model=backup_model)
 
 

@@ -133,6 +133,26 @@ def _media_line(state: State) -> str:
     return f"{now}. {youtube}. No track available to suggest."
 
 
+def _alerts_line(state: State) -> str:
+    """The active safety alert and the last eyes-closed episode (P2's rules), for "de ce m-ai alertat?".
+
+    Without this line the LLM invented a reason ("o clipă de neatenție") in the baseline evaluation.
+    Only what the state really holds: P2 does not keep alerts that already ended (except the
+    drowsiness episodes), so "none recorded" is said explicitly.
+    """
+    safety = state.safety
+    parts = [f"active {safety.alert} ({safety.level or 'P4'})" if safety.alert else "none active"]
+    drowsy = safety.drowsiness
+    if drowsy.last_episode_ts and drowsy.last_episode_ms:
+        now = state.ts or time.time()
+        ago = max(0.0, now - drowsy.last_episode_ts)
+        parts.append(f"last eyes closed {drowsy.last_episode_ms / 1000.0:.1f} s, {ago:.0f} s ago "
+                     f"({drowsy.episodes_10min} such closures in 10 min)")
+    elif not safety.alert:
+        parts.append("none recorded in this trip")
+    return ", ".join(parts)
+
+
 def summarize(state: State, event: Event, turns: Iterable[Turn] = ()) -> str:
     """Build the ~10-line text the LLM receives for one event.
 
@@ -160,6 +180,7 @@ def summarize(state: State, event: Event, turns: Iterable[Turn] = ()) -> str:
     lines = [
         f"EVENT: {event.type} ({data}). Local time {clock}.",
         f"Safety: level {state.safety.level or 'P4'}, risk {a.risk}/3, monitoring {'ok' if state.safety.monitoring_ok else 'LOST'}.",
+        f"Alerts: {_alerts_line(state)}.",
         f"Driver state: attention {_pct(a.attention)}, fatigue F {_pct(a.fatigue)}, disengagement D {_pct(a.disengagement)}, gaze {state.driver.gaze.zone}.",
         f"Distraction cause: {cause_text}.",
         f"Cabin: {_cabin_line(state)}.",

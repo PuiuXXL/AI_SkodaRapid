@@ -311,10 +311,13 @@ def validate_actions(
         if len(result.accepted) >= max_actions:
             result.rejected.append(Rejected(raw, "over_max_actions"))
             continue
-        action = action.model_copy(update={
-            "source": source,
-            "needs_confirmation": needs_confirmation(action, state),
-        })
+        update: dict[str, Any] = {"source": source, "needs_confirmation": needs_confirmation(action, state)}
+        if action.type == "set_preference" and _is_numeric_range(cfg("preferences", action.key or "", default=None)):
+            # Gemini's response schema sends every value as a string ("0.3"); core applies the
+            # volume only for a number (core/assistant_link.py _preference). check_action
+            # already proved float() works and the value is in range.
+            update["value"] = float(action.value)
+        action = action.model_copy(update=update)
         result.accepted.append(action)
         result.accepted_indexes.append(index)
 

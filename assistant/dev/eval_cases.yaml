@@ -1,0 +1,136 @@
+# =============================================================================
+# DriveMate - P3 assistant evaluation set (assistant/dev/eval_llm.py)
+# =============================================================================
+# Free driver requests sent through the REAL assistant (policies -> LLM -> validation
+# -> fallback), on top of tests/assistant/fixtures/state_example.json:
+#   Andrei driving, Maria (front passenger) awake, highway 118 km/h, ETA 20 min,
+#   next stop OMV (fuel) in 12 km, one pending WhatsApp m17 from Mihai, reminder r1
+#   "lichid de parbriz" at fuel, nothing playing, safety P4.
+#
+# Each case:
+#   id:        unique, used with --only
+#   group:     trip / messages / reminders / media / stops / alerts / talk
+#   text:      what the driver says (event driver_speech)
+#   overrides: optional named presets (see `presets`) and/or a raw state patch (`state`)
+#   expect:
+#     source:     LLM (default) or RULE (answered without the LLM on purpose)
+#     any_types:  at least one of these action types must be in the answer
+#     all_types:  every one of these action types must be in the answer
+#     none_types: none of these may be in the answer
+#     mentions:   at least one of these words must be SAID (diacritics / case ignored)
+#     review:     true = the content can only be judged by a human (printed in the report)
+# "In the answer" = the actions the LLM proposed OR the final actions (the automatic
+# "Te mai ajut cu ceva?" follow-up is ignored).
+# =============================================================================
+
+presets:
+  no_passenger:
+    occupants:
+      - {id: 1, seat: driver, source: cam_driver, profile: andrei, role: adult}
+    passenger: {present: false}
+  music_playing:
+    media: {playing: true, track_id: rock1, title: "Rock 1", volume: 0.6, reason: driver_request}
+  map_route:
+    trip:
+      place: {after: Lugoj, after_km: 8, before: Caransebeș, before_km: 35, destination: Deva, destination_km: 95}
+      attractions_ahead:
+        - {id: cetatea_deva, name: Cetatea Devei, kind: castle, dist_km: 90, detour_km: 1.5,
+           description: "Cetate medievală pe un deal vulcanic, cu telecabină."}
+
+cases:
+  # --- trip info ---------------------------------------------------------------
+  - {id: eta, group: trip, text: "Cât mai am până la destinație?",
+     expect: {any_types: [speak], mentions: ["20"]}}
+  - {id: where_are_we, group: trip, text: "Unde suntem acum?", overrides: {presets: [map_route]},
+     expect: {any_types: [speak], mentions: [lugoj, caransebes]}}
+  - {id: next_town, group: trip, text: "Ce oraș urmează?", overrides: {presets: [map_route]},
+     expect: {any_types: [speak], mentions: [caransebes]}}
+  - {id: next_town_no_map, group: trip, text: "Ce oraș urmează?",
+     expect: {any_types: [speak, ask], review: true}}
+  - {id: dist_fuel, group: trip, text: "Câți kilometri mai sunt până la benzinărie?",
+     expect: {any_types: [speak, ask], mentions: ["12"]}}
+  - {id: next_stop, group: trip, text: "Care e următoarea oprire?",
+     expect: {any_types: [speak, ask, suggest_stop], mentions: [omv]}}
+  - {id: sights, group: trip, text: "Ce e de văzut pe drum?", overrides: {presets: [map_route]},
+     expect: {any_types: [speak, ask], mentions: [deva, devei]}}
+  - {id: time_driving, group: trip, text: "De cât timp conduc?",
+     expect: {any_types: [speak], mentions: ["74", "o ora", "ora si", "1 ora"]}}
+  - {id: speed, group: trip, text: "Cu cât merg acum?",
+     expect: {any_types: [speak], mentions: ["118"]}}
+
+  # --- messages -----------------------------------------------------------------
+  - {id: read_msgs_passenger, group: messages, text: "Citește-mi mesajele.",
+     expect: {any_types: [read_message], all_types: [ask]}}
+  - {id: read_msgs_alone, group: messages, text: "Citește-mi mesajele.", overrides: {presets: [no_passenger]},
+     expect: {all_types: [read_message]}}
+  - {id: any_msgs, group: messages, text: "Am mesaje noi?",
+     expect: {any_types: [speak, ask], mentions: [mihai]}}
+  - {id: who_wrote, group: messages, text: "Cine mi-a scris?",
+     expect: {any_types: [speak, ask], mentions: [mihai]}}
+  - {id: reply_mihai, group: messages, text: "Răspunde-i lui Mihai că ajung în 20 de minute.",
+     expect: {all_types: [reply_message, ask]}}
+
+  # --- reminders ----------------------------------------------------------------
+  - {id: reminder_cafe, group: reminders, text: "Amintește-mi să iau o cafea la următoarea cafenea.",
+     expect: {all_types: [create_reminder, ask]}}
+  - {id: reminder_time, group: reminders, text: "Amintește-mi peste 30 de minute să o sun pe mama.",
+     expect: {any_types: [speak, ask], none_types: [create_reminder]}}
+  - {id: reminder_list, group: reminders, text: "Ce mementouri am?",
+     expect: {any_types: [speak, ask], mentions: [parbriz]}}
+  - {id: reminder_exists, group: reminders, text: "Amintește-mi să iau lichid de parbriz la benzinărie.",
+     expect: {any_types: [speak, ask], none_types: [create_reminder]}}
+  - {id: reminder_done, group: reminders, text: "Am luat lichidul de parbriz, poți să-l bifezi.",
+     expect: {all_types: [complete_reminder]}}
+
+  # --- media --------------------------------------------------------------------
+  - {id: rock, group: media, text: "Pune ceva rock.",
+     expect: {any_types: [search_media, suggest_media]}}
+  - {id: music_plain, group: media, text: "Pune muzică.",
+     expect: {any_types: [search_media, suggest_media]}}
+  - {id: podcast, group: media, text: "Caută un podcast despre istoria României.",
+     expect: {all_types: [search_media]}}
+  - {id: stop_music, group: media, text: "Oprește muzica.", overrides: {presets: [music_playing]},
+     expect: {source: RULE, all_types: [stop_media]}}
+  - {id: quieter, group: media, text: "Mai încet.", overrides: {presets: [music_playing]},
+     expect: {source: RULE, all_types: [set_preference]}}
+  - {id: volume_30, group: media, text: "Dă volumul la 30 la sută.", overrides: {presets: [music_playing]},
+     expect: {source: RULE, all_types: [set_preference]}}
+  - {id: what_song, group: media, text: "Ce melodie e asta?", overrides: {presets: [music_playing]},
+     expect: {any_types: [speak], mentions: ["rock 1", "rock"]}}
+
+  # --- stops / needs ------------------------------------------------------------
+  - {id: hungry, group: stops, text: "Mi-e foame, unde pot opri?",
+     expect: {any_types: [speak, ask, suggest_stop], mentions: [omv]}}
+  - {id: need_fuel, group: stops, text: "Am nevoie de benzină.",
+     expect: {any_types: [suggest_stop, speak, ask], mentions: [omv]}}
+  - {id: want_break, group: stops, text: "Vreau să fac o pauză.",
+     expect: {any_types: [suggest_stop, ask, speak]}}
+  - {id: pharmacy, group: stops, text: "Unde e cea mai apropiată farmacie?",
+     expect: {any_types: [speak, ask], review: true}}
+  - {id: stop_omv, group: stops, text: "Hai să oprim la OMV.",
+     expect: {all_types: [suggest_stop]}}
+
+  # --- alerts / state -----------------------------------------------------------
+  - {id: why_alert, group: alerts, text: "De ce m-ai alertat adineauri?",
+     expect: {any_types: [speak, ask], review: true}}
+  - {id: tired, group: alerts, text: "Sunt cam obosit.",
+     expect: {any_types: [ask, speak, suggest_stop]}}
+  - {id: how_am_i, group: alerts, text: "Cum mă descurc la condus?",
+     expect: {any_types: [speak, ask]}}
+  - {id: are_you_there, group: alerts, text: "Ești acolo?",
+     expect: {any_types: [speak, ask]}}
+
+  # --- small talk / control -----------------------------------------------------
+  - {id: joke, group: talk, text: "Spune-mi o glumă.",
+     expect: {any_types: [speak, ask]}}
+  - {id: hello, group: talk, text: "Salut DriveMate!",
+     expect: {any_types: [speak, ask]}}
+  # Answered without the LLM since 2026-11-22 ("Cu plăcere!"): the LLM often stayed silent here.
+  - {id: thanks, group: talk, text: "Mulțumesc mult.",
+     expect: {source: RULE, any_types: [speak]}}
+  - {id: who_are_you, group: talk, text: "Cine ești tu?",
+     expect: {any_types: [speak, ask]}}
+  - {id: what_time, group: talk, text: "Cât e ceasul?",
+     expect: {any_types: [speak], review: true}}
+  - {id: leave_me, group: talk, text: "Lasă-mă în pace.",
+     expect: {any_types: [stay_silent, speak]}}

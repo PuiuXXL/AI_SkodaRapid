@@ -252,7 +252,7 @@ Build `speak` with `assistant.tts.speak_message(action)`. It also starts synthes
 
   Chrome's later final for the same result is ignored. If the driver kept talking after the early send, the full sentence is sent too. `wait_ms` is the time since the last change of the text. Both delays are options of `initVoice` (0 disables).
 - **Streamed TTS.** `/tts/<id>.mp3` is streamed while edge-tts is still generating it: the browser starts playing at the first chunk (~0.9–1.5 s) instead of waiting for the whole file. The next sentences are already being synthesized in the background, so they usually start instantly.
-- After `speak_done` for a question, core opens the 6 s dialog window (plan E1). The voice also keeps a local copy, so it works with a fake core.
+- After `speak_done` for a question, core opens its dialog window (plan E1, P2's `dialog.window_s`). The voice keeps its own window (`dashboard/src/voice/dialog_window.js`, `dialogWindowMs` = 15 s): opened by a question or the wake word, restarted by every addressed word of the driver and by the end of an answer given inside the conversation, closed at once by "nu" / "gata" / "mersi". After it closes, the wake word is needed again. It works with a fake core too.
 - Half-duplex (plan E6): recognition and onset detection are off while the assistant speaks.
 
 ### 4.4 Pre-generated clips (`integrations/audio_clips.py`)
@@ -333,7 +333,7 @@ Core:     media play, url = music.track_url(track_id) = /media/yt/6fVE8kSM43I.m4
 
 ## 7. Configuration (`assistant/config/assistant.yaml`)
 
-Main keys: `language`, `llm.*` (timeout 2.5 s, max 3 actions, temperature, thinking), `speech.*` (30 words per text, raised from the plan's 15 on 2026-11-21; 6 s window), `policies.*`, `memory.turns`, `tts.*` (voices, rates), `clips.*`, `music.*`, `youtube.*` (section 6.1), `reminders.poi_categories` (**temporary**: replaced by the categories in `simulator/stops.json` once P4 creates it), `preferences.*`, `phone.*`.
+Main keys: `language`, `llm.*` (timeout 2.5 s, max 3 actions, temperature, thinking), `speech.*` (30 words per text, raised from the plan's 15 on 2026-11-21; 15 s window since 2026-11-22), `policies.*`, `memory.turns`, `tts.*` (voices, rates), `clips.*`, `music.*`, `youtube.*` (section 6.1), `reminders.poi_categories` (**temporary**: replaced by the categories in `simulator/stops.json` once P4 creates it), `preferences.*`, `phone.*`.
 
 Secrets are only in `.env`: `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BACKUP_MODEL` (optional, overrides `llm.backup_model`), `YOUTUBE_API_KEY` (optional, section 6.1), `SAFE_CONTACT_NUMBER`, `EMERGENCY_NUMBER`, `KDECONNECT_DEVICE_ID`, `CORE_URL`.
 

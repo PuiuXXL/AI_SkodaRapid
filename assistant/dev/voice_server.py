@@ -117,7 +117,7 @@ def create_app(scene: str | None = None) -> FastAPI:
             await send({"type": "dev_log", "text": text})
 
         async def open_dialog_window() -> None:
-            """Plan E1: after a question, accept voice without the wake word for 6 s."""
+            """Plan E1: after a question, accept voice without the wake word for speech.dialog_window_s."""
             window = float(cfg("speech", "dialog_window_s", default=6))
             state.interaction.dialog_window_open = True
             await send({"type": "state", "state": {"interaction": {"dialog_window_open": True}}})

@@ -59,7 +59,7 @@
       <button data-event="disengagement_high">disengagement_high</button>
       <button data-event="message_received" data-data='{"msg_id":"m17","delivery":"ask"}'>message_received</button>
       <button data-event="stop_suggested" data-data='{"poi_id":"omv_km42","poi_name":"OMV","dist_km":12,"task":"lichidul de parbriz"}'>stop_suggested</button>
-      <p style="color:var(--muted);font-size:13px">Vorbește cu „copilot …” sau „DriveMate …”. După o întrebare ai 6 s fără nume.</p>
+      <p style="color:var(--muted);font-size:13px">Vorbește cu „copilot …” sau „DriveMate …”. După o întrebare sau după „copilot” poți vorbi fără nume cât timp vorbești și încă 15 s după ultimul cuvânt.</p>
     </section>
     <section class="card">
       <h2>Voce și audio</h2>
@@ -92,7 +92,7 @@
   </div>
 
   <script type="module">
-    import { initVoice, onTranscript, isSpeaking } from "/voice/index.js";
+    import { initVoice, onTranscript, isSpeaking, dialogRemainingMs } from "/voice/index.js";
 
     const $ = (id) => document.getElementById(id);
     /** True when the panel is scrolled to (or within a few px of) its bottom. */
@@ -105,6 +105,7 @@
     };
     const log = (text) => appendFollowing($("log"), () => { $("log").textContent += text + "\n"; });
     let ws;
+    let serverDialog = false;  // the dev server's own window (state messages)
 
     function connect() {
       ws = new WebSocket(`ws://${location.host}/ws/ui`);
@@ -113,7 +114,7 @@
       ws.addEventListener("message", (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "dev_log") log(message.text);
-        else if (message.type === "state") $("dialog").classList.toggle("on", Boolean(message.state?.interaction?.dialog_window_open));
+        else if (message.type === "state") serverDialog = Boolean(message.state?.interaction?.dialog_window_open);
         else if (message.type === "speak") log(`▶ speak ${message.is_question ? "(întrebare) " : ""}${message.text}`);
       });
       return new Promise((resolve) => ws.addEventListener("open", resolve, { once: true }));
@@ -145,7 +146,14 @@
         const speed = r.final ? (r.early ? ` ⚡${r.waitMs} ms` : ` (${r.waitMs} ms)`) : "";
         line.textContent = `${r.final ? "✓" : "…"} ${r.text}${r.final ? (r.addressed ? "  [adresat]" : "  [ignorat]") : ""}${speed}`;
       }));
-      setInterval(() => $("speaking").classList.toggle("on", isSpeaking()), 150);
+      setInterval(() => {
+        $("speaking").classList.toggle("on", isSpeaking());
+        // Countdown of the browser's window (15 s after the last word / question); the server's own
+        // window (speech.dialog_window_s) also keeps it open while it lasts.
+        const left = Math.ceil(dialogRemainingMs() / 1000);
+        $("dialog").classList.toggle("on", left > 0 || serverDialog);
+        $("dialog").textContent = left > 0 ? `fereastră dialog · ${left} s` : (serverDialog ? "fereastră dialog" : "fereastră închisă · spune „copilot”");
+      }, 150);
       $("start").disabled = true;
       log("voce pornită");
     });
