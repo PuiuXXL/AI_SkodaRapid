@@ -98,6 +98,10 @@ sos:                            # P0 (C4, C5): alarm -> "Ești bine?" -> countdo
   realarm_s: 3                  # during the countdown, after the instructions, the alarm is replayed this often
   # After a microsleep / a falling head answered with "da": ask the awake front passenger to talk with the driver.
   passenger_wake: true
+  # After the SOS was sent the driver can still cancel it (voice without the wake word, nod, thumbs up): the dialog
+  # window stays open (refreshed before it ends) and the driver is told how, every sent_reask_s.
+  sent_window_s: 30
+  sent_reask_s: 20
 
 dialog:
   window_s: 6                   # E1: dialog window opened at speak_done of a question (interaction.dialog_window_open)

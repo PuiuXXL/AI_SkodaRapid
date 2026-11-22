@@ -9,7 +9,11 @@
   countdown. A bare "nu" is unclear and asks again too.
 * **countdown** (P0): no answer, or a clear no ("nu sunt bine", "ajutor", 👎): the passenger instructions by name,
   then ``sos.countdown_s``; the alarm is replayed every ``sos.realarm_s`` once the instructions are over.
-* **sos_sent** (P0): the report from ``templates.yaml`` goes to every SOS channel.
+* **sos_sent** (P0): the report from ``templates.yaml`` goes to every SOS channel. The dialog window STAYS open
+  (``sent_window_s``, refreshed) and every ``sent_reask_s`` the driver is asked again how to cancel ("Andrei, dacă ești
+  bine, spune «sunt bine» sau arată degetul mare."). Before 2026-11-22 the window was closed here: a spoken "sunt bine"
+  without the wake word was ignored and P1 stopped looking for nods / thumbs up, so nothing could end the SOS and the
+  car stayed at P0 (assistant silent) for good.
 
 Any yes (voice, nod, 👍) cancels, even after the report ("Șoferul a răspuns după SOS."); the drowsiness rule then
 proposes a break. A head shake is ignored here: a driver who just woke up shakes the head, and that is no "no".
@@ -74,6 +78,7 @@ class SosMachine:
         self.alarm_id: str | None = None
         self.question_id: str | None = None
         self.instructions_id: str | None = None
+        self.next_sent_ask = 0.0  # sos_sent: when the driver is next asked to cancel
         self.last_report: SosReport | None = None
         self.consumed_at: float | None = None  # when an input last answered the SOS (not for the assistant then)
 
@@ -221,7 +226,10 @@ class SosMachine:
     def _send(self, now: float) -> None:
         self.state, self.since = "sos_sent", now
         self.arbiter.raise_alert(RULE, "P0", "sos_sent", now)
-        self.dialog.close(now)
+        # the driver can still answer: voice without the wake word, a nod or a thumbs up (P1 looks for them only in
+        # an open window)
+        self.dialog.open(now, _s("sent_window_s"), "driver", reason="sos")
+        self.next_sent_ask = now + _s("sent_reask_s")
         report = self.build_report(now)
         self.last_report = report
         results: dict[str, str] = {}
@@ -254,11 +262,24 @@ class SosMachine:
             elif now >= self.next_realarm:
                 self.alarms.send(now, "unresponsive", "P0")
                 self.next_realarm = now + _s("realarm_s")
+        elif self.state == "sos_sent":
+            if now >= self.next_sent_ask:
+                self._sent_ask(now)
+            if not self.dialog.is_open(now) or (self.dialog.until or 0.0) - now < 2.0:
+                self.dialog.open(now, _s("sent_window_s"), "driver", reason="sos")  # never let it close
         left = max(0.0, self.countdown_deadline - now) if self.state == "countdown" else None
         state.safety.sos = SosStatus.model_validate({
             "state": self.state, "since_ts": self.since, "countdown_s": round(left, 1) if left is not None else None,
             "trigger": self.trigger, "reasked": self.reasked,
         })
+
+    def _sent_ask(self, now: float) -> None:
+        """SOS sent and no answer yet: tell the driver how to cancel it, by name."""
+        driver, _ = clips.person_names(self.engine.state)
+        text = render("sos", "sent_ask", driver_name=clips.display(driver))
+        self.question_id = self.engine.say(None, text, is_question=True, expects="yes_no", prefix="sos")
+        self.next_sent_ask = now + _s("sent_reask_s")
+        self.engine.log_event("sos_sent_ask", now, text=text)
 
     # --- report --------------------------------------------------------------------------------------------------
 

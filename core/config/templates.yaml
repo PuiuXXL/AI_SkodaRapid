@@ -23,6 +23,8 @@ sos:                            # C5, F6: driver not responding
   # After a microsleep the driver answered "da": the awake front passenger helps (clip passenger_wake_<p>_<d>).
   # Fields: passenger_name, driver_name
   passenger_wake: "{passenger_name}, te rog, vorbește puțin cu {driver_name}, să rămână treaz."
+  # SOS sent, no answer yet: how to cancel it (repeated every sos.sent_reask_s). Fields: driver_name
+  sent_ask: "{driver_name}, am chemat ajutor. Dacă ești bine, spune «sunt bine» sau arată degetul mare."
   passenger_state:
     awake: treaz
     asleep: adormit
