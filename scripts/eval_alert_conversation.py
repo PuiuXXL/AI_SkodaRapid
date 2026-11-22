@@ -47,6 +47,7 @@ from assistant.client import AssistantClient  # noqa: E402
 from assistant.llm import make_provider  # noqa: E402
 from assistant.llm.base import LLMProvider, LLMResult, TextCallback  # noqa: E402
 from assistant.textutil import normalize, word_count  # noqa: E402
+from core import clips  # noqa: E402
 from core.assistant_link import AssistantLink  # noqa: E402
 from core.engine import Engine  # noqa: E402
 from core.hub import Hub  # noqa: E402
@@ -278,7 +279,9 @@ class FakeBrowser:
             self._drop(list(self.queue), t)
             if self.current is not None:
                 self._finish(self.current, t, interrupted=True)
-            self.alarm_until = t + ALARM_CLIP_S
+            # the real clip length (P3's clips.json) + the browser's beep, like core counts it
+            clip_id = Path(str(message.get("clip_url") or "")).stem
+            self.alarm_until = t + max(ALARM_CLIP_S, (clips.duration_s(clip_id) or 0.0) + 0.2)
             self.alarms.append(t)
             self.sim.browser_message({"type": "alarm_played", "id": message["id"], "ts": t})
 

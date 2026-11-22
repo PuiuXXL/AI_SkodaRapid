@@ -175,3 +175,11 @@ cases:
      overrides: {presets: [cause_passenger_talk]},
      expect: {any_types: [speak], mentions: ["20"], none_mentions: [ochii pe drum, atent la drum, uita te la drum]}}
 
+
+  # --- after an alarm (P2's alert_explain): calm, personal, says what happened, no alarm words ----------------------
+  - {id: explain_phone, group: alerts, text: "[alert_explain phone]",
+     event: {type: alert_explain, data: {alert: phone, explanation: "Telefon în mână 4,2 s la 100 km/h."}},
+     expect: {any_types: [speak, ask], mentions: [telefon], none_mentions: [ochii pe drum, atent la drum]}}
+  - {id: explain_off_road, group: alerts, text: "[alert_explain off_road]",
+     event: {type: alert_explain, data: {alert: off_road, explanation: "Ai privit spre telefon 4,6 s la 100 km/h."}},
+     expect: {any_types: [speak], mentions: [privit, uitat], none_mentions: [ochii pe drum, atent la drum, tinut telefonul]}}

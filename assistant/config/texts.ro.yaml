@@ -138,8 +138,24 @@ fallback:
     default: "următoarea oprire potrivită"
 
 clips:
-  # C3: alarm with the driver's name (one clip per name).
+  # C3: alarm with the driver's name (one clip per name): the fallback when a clip of the alert below is missing.
   alarm_name: "{NAME}!"
+  # C3 (2026-11-22): the alarm says what to do. Short on purpose (name + 2-3 words): the explanation comes after,
+  # once the driver reacted. Several variants per alert, used in turn (core/clips.py), so it never sounds canned.
+  # Clip ids: alarm_<alert>_<n>_<name>. nodding uses microsleep's clips.
+  alarm_alert:
+    microsleep: ["{NAME}! Trezește-te!", "{NAME}! Deschide ochii!"]
+    off_road: ["{NAME}! Ochii pe drum!", "{NAME}! Uită-te la drum!"]
+    phone: ["{NAME}! Lasă telefonul!", "{NAME}! Telefonul jos!"]
+    unresponsive: ["{NAME}! Răspunde-mi!", "{NAME}! Mă auzi?"]
+  # The same alert again within safety.alarms.repeat_window_min: firmer. Clip ids: alarm_repeat_<alert>_<name>.
+  alarm_repeat:
+    microsleep: "{NAME}! A doua oară! Hai să oprim."
+    off_road: "{NAME}! Din nou! Ochii pe drum!"
+    phone: "{NAME}! Iar telefonul! Lasă-l jos!"
+  # After a microsleep the driver answered "da": the passenger (awake, front seat) helps keep them awake.
+  # Clip ids: passenger_wake_<passenger>_<driver>.
+  passenger_wake: "{passenger}, te rog, vorbește puțin cu {driver}, să rămână treaz."
   # C4
   are_you_ok: "Ești bine?"
   # C5: fixed instructions for the passenger, by name. Never "grab the wheel".

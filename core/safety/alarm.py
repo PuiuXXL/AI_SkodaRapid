@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from core import clips
-from core.settings import th
+from core.settings import template, th
 from shared.contracts import UiAlarm, to_wire
 
 if TYPE_CHECKING:
@@ -30,6 +30,9 @@ class Alarms:
         self.engine = engine
         self.pending: dict[str, PendingAlarm] = {}
         self.sent = 0
+        self.by_alert: dict[str, int] = {}  # alarms per alert (the clip variant used in turn)
+        self.last_at: dict[str, float] = {}  # alert -> when its alarm last played (the firmer repeat clip)
+        self.last_clip_s = float(th("sos", "alarm_clip_s"))  # length of the last alarm (beep + clip)
 
     def send(self, now: float, alert: str, level: str, *, capture_ts: float | None = None,
              explanation: str | None = None) -> str:
@@ -37,7 +40,18 @@ class Alarms:
         self.sent += 1
         alarm_id = f"a{self.sent}"
         driver, _ = clips.person_names(self.engine.state)
-        clip_id = clips.alarm_clip(driver)
+        key = (template("clips", "alarm_aliases") or {}).get(alert, alert)
+        last = self.last_at.get(key)
+        repeat = key != "unresponsive" and last is not None and now - last <= float(
+            th("safety", "alarms", "repeat_window_min")) * 60.0
+        variant = self.by_alert.get(key, 0)
+        self.by_alert[key], self.last_at[key] = variant + 1, now
+        clip_id = clips.alarm_clip(driver, alert, variant=variant, repeat=repeat)
+        # "Ești bine?" must not start over a longer clip: its real length (P3's index) plus the browser's beep,
+        # never shorter than the configured fallback.
+        length = clips.duration_s(clip_id)
+        self.last_clip_s = max(float(th("sos", "alarm_clip_s")),
+                               (length or 0.0) + float(th("safety", "alarms", "beep_s")))
         message = UiAlarm.model_validate({"id": alarm_id, "clip_url": clips.clip_url(clip_id), "level": level,
                                           "alert": alert})
         self.engine.hub.broadcast_ui(to_wire(message))
@@ -63,3 +77,5 @@ class Alarms:
 
     def reset(self, now: float) -> None:
         self.pending.clear()
+        self.by_alert.clear()
+        self.last_at.clear()

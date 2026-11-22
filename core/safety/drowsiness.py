@@ -86,6 +86,8 @@ class DrowsinessRule:
         self.last_frame: float | None = None
         self.episodes: deque[float] = deque()  # end times of the closures >= checkin_min_ms
         self.last_episode_ms: float | None = None
+        self.alarm_alert: str | None = None  # microsleep / nodding: the last SOS this rule started
+        self.alarm_speed_kmh: float | None = None  # the speed at that alarm (for the check-in text)
         self.last_episode_ts: float | None = None
         self.due: DueCheckin | None = None
         self.last_checkin: float | None = None
@@ -159,10 +161,13 @@ class DrowsinessRule:
             self.pending_until, self.due = None, None
             if closure.nodding:
                 alert, explanation = "nodding", render("explanations", "nodding", speed_kmh=round(speed))
+                self.alarm_alert = "nodding"
             else:
                 alert = "microsleep"
                 explanation = render("explanations", "microsleep", s=seconds(shut_ms / 1000.0),
                                      speed_kmh=round(speed))
+                self.alarm_alert = "microsleep"
+            self.alarm_speed_kmh = speed
             self.sos.start(alert, explanation, frame.ts, now)
         elif shut_ms >= _cfg("warn_ms") and not closure.warned and self.sos.state == "normal":
             closure.warned = True
@@ -251,8 +256,7 @@ class DrowsinessRule:
             return
         self.due = None
         driver, _ = clips.person_names(state)
-        key = "checkin" if due.reason == "closure" else "checkin_after_sos"
-        text = render("drowsiness", key, driver_name=clips.display(driver))
+        text = self._checkin_text(due.reason, clips.display(driver), state)
         self.engine.say(None, text, is_question=True, expects="yes_no", prefix="drw")
         window_s = _checkin("window_s")
         self.dialog.open(now, window_s, "driver", reason="drowsy_check")
@@ -260,6 +264,28 @@ class DrowsinessRule:
         self.last_checkin = now
         self.engine.log_event("drowsy_check", now, text=text, reason=due.reason,
                               episodes_10min=self._episodes(now), last_episode_ms=self.last_episode_ms)
+
+    def _checkin_text(self, reason: str, name: str, state: State) -> str:
+        """The check-in question. After an SOS: what happened (seconds, speed) and the stop ahead, by name."""
+        if reason == "closure":
+            return render("drowsiness", "checkin", driver_name=name)
+        from core.reminders import pick_stop  # here: core.reminders imports core.safety.answers
+
+        speed = self.alarm_speed_kmh or state.trip.speed_kmh
+        if speed < _cfg("min_speed_kmh"):
+            return render("drowsiness", "checkin_after_sos", driver_name=name)
+        nodding = self.alarm_alert == "nodding"
+        if not nodding and not self.last_episode_ms:
+            return render("drowsiness", "checkin_after_sos", driver_name=name)
+        fields: dict[str, Any] = {"driver_name": name, "speed_kmh": round(speed)}
+        if not nodding:
+            fields["s"] = seconds((self.last_episode_ms or 0) / 1000.0)
+        stop = pick_stop(state)
+        key = "checkin_after_sos_nodding" if nodding else "checkin_after_sos_context"
+        if stop is not None:
+            key = "checkin_after_sos_nodding_stop" if nodding else "checkin_after_sos_stop"
+            fields.update(poi_name=stop["poi_name"], dist_km=km_text(stop.get("dist_km")))
+        return render("drowsiness", key, **fields)
 
     # --- the answer ----------------------------------------------------------------------------------------------
 

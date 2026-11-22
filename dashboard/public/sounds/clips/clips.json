@@ -1,110 +1,417 @@
 {
   "alarm_andrei": {
     "file": "alarm_andrei.mp3",
-    "text": "ANDREI!"
+    "text": "ANDREI!",
+    "duration_s": 1.87
+  },
+  "alarm_microsleep_1_andrei": {
+    "file": "alarm_microsleep_1_andrei.mp3",
+    "text": "ANDREI! Trezește-te!",
+    "duration_s": 2.88
+  },
+  "alarm_microsleep_2_andrei": {
+    "file": "alarm_microsleep_2_andrei.mp3",
+    "text": "ANDREI! Deschide ochii!",
+    "duration_s": 3.05
+  },
+  "alarm_off_road_1_andrei": {
+    "file": "alarm_off_road_1_andrei.mp3",
+    "text": "ANDREI! Ochii pe drum!",
+    "duration_s": 2.9
+  },
+  "alarm_off_road_2_andrei": {
+    "file": "alarm_off_road_2_andrei.mp3",
+    "text": "ANDREI! Uită-te la drum!",
+    "duration_s": 2.98
+  },
+  "alarm_phone_1_andrei": {
+    "file": "alarm_phone_1_andrei.mp3",
+    "text": "ANDREI! Lasă telefonul!",
+    "duration_s": 3.17
+  },
+  "alarm_phone_2_andrei": {
+    "file": "alarm_phone_2_andrei.mp3",
+    "text": "ANDREI! Telefonul jos!",
+    "duration_s": 3.12
+  },
+  "alarm_unresponsive_1_andrei": {
+    "file": "alarm_unresponsive_1_andrei.mp3",
+    "text": "ANDREI! Răspunde-mi!",
+    "duration_s": 2.93
+  },
+  "alarm_unresponsive_2_andrei": {
+    "file": "alarm_unresponsive_2_andrei.mp3",
+    "text": "ANDREI! Mă auzi?",
+    "duration_s": 2.88
+  },
+  "alarm_repeat_microsleep_andrei": {
+    "file": "alarm_repeat_microsleep_andrei.mp3",
+    "text": "ANDREI! A doua oară! Hai să oprim.",
+    "duration_s": 4.54
+  },
+  "alarm_repeat_off_road_andrei": {
+    "file": "alarm_repeat_off_road_andrei.mp3",
+    "text": "ANDREI! Din nou! Ochii pe drum!",
+    "duration_s": 4.27
+  },
+  "alarm_repeat_phone_andrei": {
+    "file": "alarm_repeat_phone_andrei.mp3",
+    "text": "ANDREI! Iar telefonul! Lasă-l jos!",
+    "duration_s": 4.73
   },
   "alarm_maria": {
     "file": "alarm_maria.mp3",
-    "text": "MARIA!"
+    "text": "MARIA!",
+    "duration_s": 1.87
+  },
+  "alarm_microsleep_1_maria": {
+    "file": "alarm_microsleep_1_maria.mp3",
+    "text": "MARIA! Trezește-te!",
+    "duration_s": 2.95
+  },
+  "alarm_microsleep_2_maria": {
+    "file": "alarm_microsleep_2_maria.mp3",
+    "text": "MARIA! Deschide ochii!",
+    "duration_s": 3.12
+  },
+  "alarm_off_road_1_maria": {
+    "file": "alarm_off_road_1_maria.mp3",
+    "text": "MARIA! Ochii pe drum!",
+    "duration_s": 2.95
+  },
+  "alarm_off_road_2_maria": {
+    "file": "alarm_off_road_2_maria.mp3",
+    "text": "MARIA! Uită-te la drum!",
+    "duration_s": 3.07
+  },
+  "alarm_phone_1_maria": {
+    "file": "alarm_phone_1_maria.mp3",
+    "text": "MARIA! Lasă telefonul!",
+    "duration_s": 3.22
+  },
+  "alarm_phone_2_maria": {
+    "file": "alarm_phone_2_maria.mp3",
+    "text": "MARIA! Telefonul jos!",
+    "duration_s": 3.17
+  },
+  "alarm_unresponsive_1_maria": {
+    "file": "alarm_unresponsive_1_maria.mp3",
+    "text": "MARIA! Răspunde-mi!",
+    "duration_s": 3.0
+  },
+  "alarm_unresponsive_2_maria": {
+    "file": "alarm_unresponsive_2_maria.mp3",
+    "text": "MARIA! Mă auzi?",
+    "duration_s": 2.93
+  },
+  "alarm_repeat_microsleep_maria": {
+    "file": "alarm_repeat_microsleep_maria.mp3",
+    "text": "MARIA! A doua oară! Hai să oprim.",
+    "duration_s": 4.63
+  },
+  "alarm_repeat_off_road_maria": {
+    "file": "alarm_repeat_off_road_maria.mp3",
+    "text": "MARIA! Din nou! Ochii pe drum!",
+    "duration_s": 4.3
+  },
+  "alarm_repeat_phone_maria": {
+    "file": "alarm_repeat_phone_maria.mp3",
+    "text": "MARIA! Iar telefonul! Lasă-l jos!",
+    "duration_s": 4.8
   },
   "alarm_ioana": {
     "file": "alarm_ioana.mp3",
-    "text": "IOANA!"
+    "text": "IOANA!",
+    "duration_s": 1.87
+  },
+  "alarm_microsleep_1_ioana": {
+    "file": "alarm_microsleep_1_ioana.mp3",
+    "text": "IOANA! Trezește-te!",
+    "duration_s": 2.9
+  },
+  "alarm_microsleep_2_ioana": {
+    "file": "alarm_microsleep_2_ioana.mp3",
+    "text": "IOANA! Deschide ochii!",
+    "duration_s": 3.05
+  },
+  "alarm_off_road_1_ioana": {
+    "file": "alarm_off_road_1_ioana.mp3",
+    "text": "IOANA! Ochii pe drum!",
+    "duration_s": 2.9
+  },
+  "alarm_off_road_2_ioana": {
+    "file": "alarm_off_road_2_ioana.mp3",
+    "text": "IOANA! Uită-te la drum!",
+    "duration_s": 3.02
+  },
+  "alarm_phone_1_ioana": {
+    "file": "alarm_phone_1_ioana.mp3",
+    "text": "IOANA! Lasă telefonul!",
+    "duration_s": 3.14
+  },
+  "alarm_phone_2_ioana": {
+    "file": "alarm_phone_2_ioana.mp3",
+    "text": "IOANA! Telefonul jos!",
+    "duration_s": 3.1
+  },
+  "alarm_unresponsive_1_ioana": {
+    "file": "alarm_unresponsive_1_ioana.mp3",
+    "text": "IOANA! Răspunde-mi!",
+    "duration_s": 2.95
+  },
+  "alarm_unresponsive_2_ioana": {
+    "file": "alarm_unresponsive_2_ioana.mp3",
+    "text": "IOANA! Mă auzi?",
+    "duration_s": 2.86
+  },
+  "alarm_repeat_microsleep_ioana": {
+    "file": "alarm_repeat_microsleep_ioana.mp3",
+    "text": "IOANA! A doua oară! Hai să oprim.",
+    "duration_s": 4.56
+  },
+  "alarm_repeat_off_road_ioana": {
+    "file": "alarm_repeat_off_road_ioana.mp3",
+    "text": "IOANA! Din nou! Ochii pe drum!",
+    "duration_s": 4.25
+  },
+  "alarm_repeat_phone_ioana": {
+    "file": "alarm_repeat_phone_ioana.mp3",
+    "text": "IOANA! Iar telefonul! Lasă-l jos!",
+    "duration_s": 4.75
   },
   "alarm_mihai": {
     "file": "alarm_mihai.mp3",
-    "text": "MIHAI!"
+    "text": "MIHAI!",
+    "duration_s": 1.87
+  },
+  "alarm_microsleep_1_mihai": {
+    "file": "alarm_microsleep_1_mihai.mp3",
+    "text": "MIHAI! Trezește-te!",
+    "duration_s": 2.93
+  },
+  "alarm_microsleep_2_mihai": {
+    "file": "alarm_microsleep_2_mihai.mp3",
+    "text": "MIHAI! Deschide ochii!",
+    "duration_s": 3.1
+  },
+  "alarm_off_road_1_mihai": {
+    "file": "alarm_off_road_1_mihai.mp3",
+    "text": "MIHAI! Ochii pe drum!",
+    "duration_s": 2.93
+  },
+  "alarm_off_road_2_mihai": {
+    "file": "alarm_off_road_2_mihai.mp3",
+    "text": "MIHAI! Uită-te la drum!",
+    "duration_s": 3.02
+  },
+  "alarm_phone_1_mihai": {
+    "file": "alarm_phone_1_mihai.mp3",
+    "text": "MIHAI! Lasă telefonul!",
+    "duration_s": 3.19
+  },
+  "alarm_phone_2_mihai": {
+    "file": "alarm_phone_2_mihai.mp3",
+    "text": "MIHAI! Telefonul jos!",
+    "duration_s": 3.14
+  },
+  "alarm_unresponsive_1_mihai": {
+    "file": "alarm_unresponsive_1_mihai.mp3",
+    "text": "MIHAI! Răspunde-mi!",
+    "duration_s": 2.98
+  },
+  "alarm_unresponsive_2_mihai": {
+    "file": "alarm_unresponsive_2_mihai.mp3",
+    "text": "MIHAI! Mă auzi?",
+    "duration_s": 2.9
+  },
+  "alarm_repeat_microsleep_mihai": {
+    "file": "alarm_repeat_microsleep_mihai.mp3",
+    "text": "MIHAI! A doua oară! Hai să oprim.",
+    "duration_s": 4.56
+  },
+  "alarm_repeat_off_road_mihai": {
+    "file": "alarm_repeat_off_road_mihai.mp3",
+    "text": "MIHAI! Din nou! Ochii pe drum!",
+    "duration_s": 4.32
+  },
+  "alarm_repeat_phone_mihai": {
+    "file": "alarm_repeat_phone_mihai.mp3",
+    "text": "MIHAI! Iar telefonul! Lasă-l jos!",
+    "duration_s": 4.78
   },
   "passenger_instructions_andrei_maria": {
     "file": "passenger_instructions_andrei_maria.mp3",
-    "text": "Andrei, Maria nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Andrei, Maria nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.18
+  },
+  "passenger_wake_andrei_maria": {
+    "file": "passenger_wake_andrei_maria.mp3",
+    "text": "Andrei, te rog, vorbește puțin cu Maria, să rămână treaz.",
+    "duration_s": 4.46
   },
   "passenger_instructions_andrei_ioana": {
     "file": "passenger_instructions_andrei_ioana.mp3",
-    "text": "Andrei, Ioana nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Andrei, Ioana nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.1
+  },
+  "passenger_wake_andrei_ioana": {
+    "file": "passenger_wake_andrei_ioana.mp3",
+    "text": "Andrei, te rog, vorbește puțin cu Ioana, să rămână treaz.",
+    "duration_s": 4.44
   },
   "passenger_instructions_andrei_mihai": {
     "file": "passenger_instructions_andrei_mihai.mp3",
-    "text": "Andrei, Mihai nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Andrei, Mihai nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.08
+  },
+  "passenger_wake_andrei_mihai": {
+    "file": "passenger_wake_andrei_mihai.mp3",
+    "text": "Andrei, te rog, vorbește puțin cu Mihai, să rămână treaz.",
+    "duration_s": 4.44
   },
   "passenger_instructions_maria_andrei": {
     "file": "passenger_instructions_maria_andrei.mp3",
-    "text": "Maria, Andrei nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Maria, Andrei nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.15
+  },
+  "passenger_wake_maria_andrei": {
+    "file": "passenger_wake_maria_andrei.mp3",
+    "text": "Maria, te rog, vorbește puțin cu Andrei, să rămână treaz.",
+    "duration_s": 4.49
   },
   "passenger_instructions_maria_ioana": {
     "file": "passenger_instructions_maria_ioana.mp3",
-    "text": "Maria, Ioana nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Maria, Ioana nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.13
+  },
+  "passenger_wake_maria_ioana": {
+    "file": "passenger_wake_maria_ioana.mp3",
+    "text": "Maria, te rog, vorbește puțin cu Ioana, să rămână treaz.",
+    "duration_s": 4.54
   },
   "passenger_instructions_maria_mihai": {
     "file": "passenger_instructions_maria_mihai.mp3",
-    "text": "Maria, Mihai nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Maria, Mihai nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.1
+  },
+  "passenger_wake_maria_mihai": {
+    "file": "passenger_wake_maria_mihai.mp3",
+    "text": "Maria, te rog, vorbește puțin cu Mihai, să rămână treaz.",
+    "duration_s": 4.54
   },
   "passenger_instructions_ioana_andrei": {
     "file": "passenger_instructions_ioana_andrei.mp3",
-    "text": "Ioana, Andrei nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Ioana, Andrei nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.08
+  },
+  "passenger_wake_ioana_andrei": {
+    "file": "passenger_wake_ioana_andrei.mp3",
+    "text": "Ioana, te rog, vorbește puțin cu Andrei, să rămână treaz.",
+    "duration_s": 4.37
   },
   "passenger_instructions_ioana_maria": {
     "file": "passenger_instructions_ioana_maria.mp3",
-    "text": "Ioana, Maria nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Ioana, Maria nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.08
+  },
+  "passenger_wake_ioana_maria": {
+    "file": "passenger_wake_ioana_maria.mp3",
+    "text": "Ioana, te rog, vorbește puțin cu Maria, să rămână treaz.",
+    "duration_s": 4.42
   },
   "passenger_instructions_ioana_mihai": {
     "file": "passenger_instructions_ioana_mihai.mp3",
-    "text": "Ioana, Mihai nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Ioana, Mihai nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.03
+  },
+  "passenger_wake_ioana_mihai": {
+    "file": "passenger_wake_ioana_mihai.mp3",
+    "text": "Ioana, te rog, vorbește puțin cu Mihai, să rămână treaz.",
+    "duration_s": 4.42
   },
   "passenger_instructions_mihai_andrei": {
     "file": "passenger_instructions_mihai_andrei.mp3",
-    "text": "Mihai, Andrei nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Mihai, Andrei nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.15
+  },
+  "passenger_wake_mihai_andrei": {
+    "file": "passenger_wake_mihai_andrei.mp3",
+    "text": "Mihai, te rog, vorbește puțin cu Andrei, să rămână treaz.",
+    "duration_s": 4.42
   },
   "passenger_instructions_mihai_maria": {
     "file": "passenger_instructions_mihai_maria.mp3",
-    "text": "Mihai, Maria nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Mihai, Maria nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.2
+  },
+  "passenger_wake_mihai_maria": {
+    "file": "passenger_wake_mihai_maria.mp3",
+    "text": "Mihai, te rog, vorbește puțin cu Maria, să rămână treaz.",
+    "duration_s": 4.49
   },
   "passenger_instructions_mihai_ioana": {
     "file": "passenger_instructions_mihai_ioana.mp3",
-    "text": "Mihai, Ioana nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor."
+    "text": "Mihai, Ioana nu răspunde. Pornește avariile. Rămâi pe linie, chem ajutor.",
+    "duration_s": 7.13
+  },
+  "passenger_wake_mihai_ioana": {
+    "file": "passenger_wake_mihai_ioana.mp3",
+    "text": "Mihai, te rog, vorbește puțin cu Ioana, să rămână treaz.",
+    "duration_s": 4.44
   },
   "notify_contact_mihai": {
     "file": "notify_contact_mihai.mp3",
-    "text": "Îi dau de veste lui Mihai."
+    "text": "Îi dau de veste lui Mihai.",
+    "duration_s": 2.35
   },
   "are_you_ok": {
     "file": "are_you_ok.mp3",
-    "text": "Ești bine?"
+    "text": "Ești bine?",
+    "duration_s": 1.87
   },
   "monitoring_lost": {
     "file": "monitoring_lost.mp3",
-    "text": "Nu te mai văd. Monitorizarea e întreruptă."
+    "text": "Nu te mai văd. Monitorizarea e întreruptă.",
+    "duration_s": 3.89
   },
   "refusal_ack": {
     "file": "refusal_ack.mp3",
-    "text": "Ok, te las în pace."
+    "text": "Ok, te las în pace.",
+    "duration_s": 2.59
   },
   "resume": {
     "file": "resume.mp3",
-    "text": "...cum ziceam,"
+    "text": "...cum ziceam,",
+    "duration_s": 1.87
   },
   "message_deferred": {
     "file": "message_deferred.mp3",
-    "text": "Ți-l citesc imediat ce e liniște."
+    "text": "Ți-l citesc imediat ce e liniște.",
+    "duration_s": 2.81
   },
   "confirm_ok": {
     "file": "confirm_ok.mp3",
-    "text": "Ok."
+    "text": "Ok.",
+    "duration_s": 1.87
   },
   "confirm_noted": {
     "file": "confirm_noted.mp3",
-    "text": "Notat."
+    "text": "Notat.",
+    "duration_s": 1.87
   },
   "confirm_sent": {
     "file": "confirm_sent.mp3",
-    "text": "Trimis."
+    "text": "Trimis.",
+    "duration_s": 1.87
   },
   "confirm_done": {
     "file": "confirm_done.mp3",
-    "text": "Gata."
+    "text": "Gata.",
+    "duration_s": 1.87
   },
   "confirm_cancelled": {
     "file": "confirm_cancelled.mp3",
-    "text": "Bine, am anulat."
+    "text": "Bine, am anulat.",
+    "duration_s": 2.47
   }
 }

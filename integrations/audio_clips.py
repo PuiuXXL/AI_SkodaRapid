@@ -3,7 +3,10 @@
 Alarms and safety sentences must play in under 300 ms with no network (plan
 section 5, rule 1), so they are generated once, ahead of time, as mp3 files:
 
-* ``alarm_<name>.mp3``                 - "ANDREI!" for every person (plan C3)
+* ``alarm_<name>.mp3``                 - "ANDREI!" for every person (plan C3), the fallback
+* ``alarm_<alert>_<n>_<name>.mp3``     - "ANDREI! Trezește-te!": per alert, several variants (C3)
+* ``alarm_repeat_<alert>_<name>.mp3``  - "ANDREI! A doua oară! Hai să oprim." (the same alert again soon)
+* ``passenger_wake_<p>_<d>.mp3``       - "Maria, te rog, vorbește puțin cu Andrei..." (after a microsleep)
 * ``are_you_ok.mp3``                   - "Ești bine?" (C4)
 * ``passenger_instructions_<p>_<d>.mp3`` - instructions for passenger <p> when driver <d>
                                          does not answer (C5); never "grab the wheel"
@@ -15,8 +18,9 @@ section 5, rule 1), so they are generated once, ahead of time, as mp3 files:
 * ``confirm_*.mp3``                    - short confirmations ("Notat.", "Trimis."...)
 
 Output: ``dashboard/public/sounds/clips/`` (served by the dashboard at
-``/sounds/clips/<id>.mp3``) plus ``clips.json``, a manifest ``{id: {file, text}}``
-that core and the dashboard can read.
+``/sounds/clips/<id>.mp3``) plus ``clips.json``, a manifest ``{id: {file, text, duration_s}}``
+that core and the dashboard can read. ``duration_s`` lets core time the SOS question after an
+alarm of any length (the fixed ``sos.alarm_clip_s`` is only the fallback).
 
 Texts come from ``assistant/config/texts.<language>.yaml`` (group ``clips``).
 Names come from ``profiles/*/profile.json`` when P4 has created them, otherwise
@@ -77,6 +81,47 @@ def load_names() -> tuple[list[str], list[str]]:
     return unique(names), unique(contacts)
 
 
+#: MPEG audio tables for mp3_duration_s (Layer III): bitrate kbps by index, sample rates by version.
+_BITRATES = {
+    1: [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],  # MPEG-1
+    2: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],      # MPEG-2 / 2.5
+}
+_SAMPLE_RATES = {3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000]}
+
+
+def mp3_duration_s(data: bytes) -> float:
+    """Length of an MP3 (Layer III) in seconds, by walking its frames (edge-tts: MPEG-2, 24 kHz, 48 kbps).
+
+    Returns 0.0 when no frame is found (core then uses its fixed fallback).
+    """
+    pos = 0
+    if data[:3] == b"ID3" and len(data) >= 10:  # skip an ID3v2 tag (its size is "syncsafe": 7 bits per byte)
+        size = data[6:10]
+        pos = 10 + ((size[0] & 0x7F) << 21 | (size[1] & 0x7F) << 14 | (size[2] & 0x7F) << 7 | (size[3] & 0x7F))
+    seconds = 0.0
+    while pos + 4 <= len(data):
+        b1, b2 = data[pos + 1], data[pos + 2]
+        if data[pos] != 0xFF or (b1 & 0xE0) != 0xE0:
+            pos += 1
+            continue
+        version_bits = (b1 >> 3) & 0x03  # 3 = MPEG-1, 2 = MPEG-2, 0 = MPEG-2.5
+        layer_bits = (b1 >> 1) & 0x03  # 1 = Layer III
+        bitrate_index, rate_index, padding = (b2 >> 4) & 0x0F, (b2 >> 2) & 0x03, (b2 >> 1) & 0x01
+        if version_bits == 1 or layer_bits != 1 or bitrate_index in (0, 15) or rate_index == 3:
+            pos += 1
+            continue
+        mpeg1 = version_bits == 3
+        bitrate = _BITRATES[1 if mpeg1 else 2][bitrate_index] * 1000
+        sample_rate = _SAMPLE_RATES[version_bits][rate_index]
+        samples = 1152 if mpeg1 else 576
+        length = (144 if mpeg1 else 72) * bitrate // sample_rate + padding
+        if length <= 0:
+            break
+        seconds += samples / sample_rate
+        pos += length
+    return round(seconds, 2)
+
+
 def build_clip_list() -> dict[str, tuple[str, bool]]:
     """All clips to generate.
 
@@ -88,9 +133,17 @@ def build_clip_list() -> dict[str, tuple[str, bool]]:
     clips: dict[str, tuple[str, bool]] = {}
     for name in names:
         clips[f"alarm_{slug(name)}"] = (fill(texts["alarm_name"], NAME=name.upper()), True)
+        for alert, variants in (texts.get("alarm_alert") or {}).items():
+            for number, variant in enumerate(variants, start=1):
+                clips[f"alarm_{alert}_{number}_{slug(name)}"] = (fill(variant, NAME=name.upper()), True)
+        for alert, text in (texts.get("alarm_repeat") or {}).items():
+            clips[f"alarm_repeat_{alert}_{slug(name)}"] = (fill(text, NAME=name.upper()), True)
     for passenger, driver in permutations(names, 2):
         clips[f"passenger_instructions_{slug(passenger)}_{slug(driver)}"] = (
             fill(texts["passenger_instructions"], passenger=passenger, driver=driver), True)
+        if texts.get("passenger_wake"):
+            clips[f"passenger_wake_{slug(passenger)}_{slug(driver)}"] = (
+                fill(texts["passenger_wake"], passenger=passenger, driver=driver), True)
     for contact in contacts:
         clips[f"notify_contact_{slug(contact)}"] = (fill(texts["notify_contact"], contact=contact), False)
     for key in ("are_you_ok", "monitoring_lost", "refusal_ack", "resume", "message_deferred"):
@@ -120,7 +173,7 @@ async def generate(force: bool = False) -> dict[str, dict[str, str]]:
         if force or not path.exists():
             path.write_bytes(await synthesize(text, voice, rate))
             print(f"  generated {path.name:45s} {text}")
-        manifest[clip_id] = {"file": path.name, "text": text}
+        manifest[clip_id] = {"file": path.name, "text": text, "duration_s": mp3_duration_s(path.read_bytes())}
     (out_dir / "clips.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"{len(manifest)} clips in {out_dir} (voice {voice})")
     return manifest

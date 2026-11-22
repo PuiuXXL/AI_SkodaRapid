@@ -53,6 +53,15 @@ safety:
     # (docs/eval/alerts-conversation-baseline-2026-11-22.md, 100 km/h): one 1.8 s glance cut the answer mid-sentence
     # and dropped the assistant's question; four of them left 1 of 3 answers heard. The LLM veto is the same either way.
     cue_pauses_voice: true
+    # The same spoken warning again within this many minutes: the firmer text (templates escalation_repeat).
+    repeat_window_min: 10
+
+  alarms:                       # C3: the alarm clip (core/safety/alarm.py, core/clips.py)
+    # The same alert's alarm again within this many minutes: the firmer clip (alarm_repeat_<alert>_<driver>).
+    repeat_window_min: 10
+    # The browser plays a short beep before the alarm clip (dashboard/src/voice/player.js); counted in the clip's
+    # length so "Ești bine?" never starts over it.
+    beep_s: 0.2
 
   monitoring:                   # C7: "Nu te mai văd, monitorizarea e întreruptă"
     lost_after_ms: 500          # driver.monitoring_ok=false this long -> announce (P1 already waits face_lost_s=2 s)
@@ -72,6 +81,8 @@ sos:                            # P0 (C4, C5): alarm -> "Ești bine?" -> countdo
   instructions_clip_s: 8        # length of the passenger instructions (fallback for their speak_done; no alarm over it)
   instructions_pause_s: 0.5     # pause after the instructions before the first re-alarm
   realarm_s: 3                  # during the countdown, after the instructions, the alarm is replayed this often
+  # After a microsleep / a falling head answered with "da": ask the awake front passenger to talk with the driver.
+  passenger_wake: true
 
 dialog:
   window_s: 6                   # E1: dialog window opened at speak_done of a question (interaction.dialog_window_open)
@@ -97,6 +108,10 @@ assistant:                      # C: core <-> P3's assistant (core/assistant_lin
   # No initiative (cause_detected, fatigue_high, disengagement_high) during a P0-P2 alert and this long after it: P2's
   # own questions ("Facem o pauză?") come first. The initiative is sent when the quiet is over, if still true.
   quiet_after_alert_s: 20
+  # D5: after a distraction that came to the alarm, the assistant says what happened (alert_explain, LLM): this long
+  # after the episode ended (the alarm clip is over), at most once per alert_explain_cooldown_s.
+  alert_explain_after_s: 2.5
+  alert_explain_cooldown_s: 300
 
 # C8: thumbs down adjusts only P3-P4 thresholds, inside fixed limits. Microsleep, distraction, SOS: never.
 tuning:

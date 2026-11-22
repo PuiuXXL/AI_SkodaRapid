@@ -51,6 +51,7 @@ class Episode:
     alert: str
     started: float
     stage: int = 1  # 1 visual cue, 2 voice, 3 alarm
+    explanation: str = ""  # the latest one ("Telefon în mână 4,2 s la 100 km/h."), for alert_explain
 
 
 class DistractionRule:
@@ -62,6 +63,7 @@ class DistractionRule:
         self.episode: Episode | None = None
         self.phone_since: float | None = None
         self.last_voice: dict[str, float] = {}
+        self.voices: dict[str, int] = {}  # warnings said per key (the variants are used in turn)
         self.episodes = 0
 
     def condition(self, state: State, now: float) -> tuple[str, str] | None:
@@ -104,6 +106,7 @@ class DistractionRule:
             if episode is not None:
                 self._end(episode, now)
             episode = self._start(alert, explanation, now)
+        episode.explanation = explanation
         elapsed_ms = (now - episode.started) * 1000.0
         if episode.stage == 1 and elapsed_ms >= float(th("safety", "escalation", "voice_after_ms")):
             episode.stage = 2
@@ -136,13 +139,26 @@ class DistractionRule:
             return
         waiting = any(m.state in ("pending", "deferred") for m in state.messages)
         key = "phone_message" if alert == "phone" and waiting else alert
-        if now - self.last_voice.get(key, float("-inf")) < float(th("safety", "escalation", "cooldown_s")):
+        last = self.last_voice.get(key, float("-inf"))
+        if now - last < float(th("safety", "escalation", "cooldown_s")):
             return
         self.last_voice[key] = now
         text_key, clip_key = VOICE[key]
         driver, _ = clips.person_names(state)
-        text = render("escalation", text_key, driver_name=clips.display(driver))
-        self.engine.say(str(template("clips", clip_key)), text, prefix="dis")
+        name = clips.display(driver)
+        repeat = now - last <= float(th("safety", "escalation", "repeat_window_min")) * 60.0
+        if repeat:
+            # the same warning again soon: firmer, with the next step (no pre-generated clip: TTS)
+            text, clip_id = render("escalation_repeat", text_key, driver_name=name), None
+        else:
+            # the first one as before (it has a clip), then the other ways of saying it, in turn
+            count = self.voices.get(key, 0)
+            options = [str(template("escalation", text_key))] + list(template("escalation_variants", text_key) or [])
+            chosen = options[count % len(options)]
+            text = chosen.format(driver_name=name)
+            clip_id = str(template("clips", clip_key)) if count % len(options) == 0 else None
+        self.voices[key] = self.voices.get(key, 0) + 1
+        self.engine.say(clip_id, text, prefix="dis")
         self.engine.log_event("alert", now, text=text, explanation=explanation, alert=alert, level="P2")
 
     def _end(self, episode: Episode, now: float) -> None:
@@ -151,6 +167,8 @@ class DistractionRule:
         assistant = self.engine.assistant
         if assistant is not None:
             assistant.release_voice(now)  # back on the road before the spoken stage: "...cum ziceam"
+            if episode.stage >= 3:  # it came to the alarm: the assistant says what happened, calmly (D5)
+                assistant.explain_alert(now, alert=episode.alert, explanation=episode.explanation)
         text = "Privirea a revenit pe drum." if episode.alert == "off_road" else "Telefonul a fost lăsat."
         self.engine.log_event("distraction_end", now, alert=episode.alert, stage=episode.stage,
                               latency_ms=round((now - episode.started) * 1000.0, 1), text=text)

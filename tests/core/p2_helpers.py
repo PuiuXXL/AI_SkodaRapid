@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from assistant.client import AnswerInfo
+from core import clips
 from core.assistant_link import AssistantLink
 from core.engine import Engine
 from core.hub import Hub
@@ -25,7 +26,14 @@ TICK_HZ = 10.0
 
 # The SOS timeline without browser feedback (no alarm_played / speak_done: the fallbacks apply).
 ALARM_S = th("safety", "drowsiness", "alarm_ms") / 1000.0  # eyes shut this long -> alarm
-ASK_AFTER = th("sos", "alarm_clip_s") + th("sos", "ask_after_alarm_s")  # alarm -> "Ești bine?"
+def alarm_clip_s(alert: str = "microsleep", driver: str = "andrei") -> float:
+    """Length of the first alarm for ``alert`` as core counts it: the real clip (P3's clips.json) + the browser's
+    beep, never under ``sos.alarm_clip_s`` (core/safety/alarm.py)."""
+    clip = clips.alarm_clip(driver, alert)
+    return max(th("sos", "alarm_clip_s"), (clips.duration_s(clip) or 0.0) + th("safety", "alarms", "beep_s"))
+
+
+ASK_AFTER = alarm_clip_s() + th("sos", "ask_after_alarm_s")  # alarm -> "Ești bine?"
 ASK_WINDOW = th("sos", "ask_clip_s") + th("sos", "answer_window_s")  # "Ești bine?" -> countdown (no answer)
 COUNTDOWN = th("sos", "countdown_s")
 

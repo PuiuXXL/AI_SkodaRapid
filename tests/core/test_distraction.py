@@ -148,7 +148,9 @@ def test_same_warning_is_not_repeated_within_the_cooldown() -> None:
     rig.run(th("safety", "escalation", "cooldown_s"))
     rig.press("3")
     rig.run(PHONE_MIN + VOICE_AFTER + 0.3)
-    assert warnings(rig) == ["Andrei, lasă telefonul, te rog.", "Andrei, lasă telefonul, te rog."]
+    # again within safety.escalation.repeat_window_min: the firmer text (templates escalation_repeat)
+    assert warnings(rig) == ["Andrei, lasă telefonul, te rog.",
+                             "Andrei, iar telefonul. Lasă-l jos; ce e urgent îți citesc eu."]
 
 
 def test_quiet_during_the_sos() -> None:

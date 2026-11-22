@@ -89,13 +89,13 @@ class SosMachine:
         self.alarm_id = self.alarms.send(now, alert, "P1", capture_ts=capture_ts or None, explanation=explanation)
         if self.ab is not None:
             self.ab.our_alert(now, alert)
-        self.ask_at = now + _s("alarm_clip_s") + _s("ask_after_alarm_s")  # moved later by alarm_played
+        self.ask_at = now + self.alarms.last_clip_s + _s("ask_after_alarm_s")  # moved later by alarm_played
         self.dialog.open(now, self._window_s(), "driver", reason="sos")  # one window for the whole SOS
         return True
 
     def _window_s(self) -> float:
         """The dialog window covers every step (P1 restarts its nod counting when a window is opened again)."""
-        return (_s("alarm_clip_s") + _s("ask_after_alarm_s") + _s("ask_clip_s") + _s("answer_window_s")
+        return (self.alarms.last_clip_s + _s("ask_after_alarm_s") + _s("ask_clip_s") + _s("answer_window_s")
                 + _s("reask_clip_s") + _s("answer_window_s") + _s("countdown_s") + 2.0)
 
     def _cover(self, until: float, now: float) -> None:
@@ -129,10 +129,11 @@ class SosMachine:
             return
         self.consumed_at = now
         if value == "yes":
-            stage = self.state
+            stage, trigger = self.state, self.trigger
             self._normal(now)
             clip_id = str(template("clips", "confirm_ok"))
             self.engine.say(clip_id, clips.clip_text(clip_id, "Ok."), prefix="sos")
+            self._passenger_wake(trigger, now)
             text = "Șoferul a răspuns după SOS." if stage == "sos_sent" else "Șoferul a răspuns."
             self.engine.log_event("sos_cancelled", now, channel=channel, text=text, stage=stage,
                                   latency_ms=round((now - (self.alarm_started or now)) * 1000.0, 1))
@@ -144,12 +145,29 @@ class SosMachine:
         elif self.state in ("alarm", "asking") and not self.reasked:  # unclear: ask once more
             self._reask(now, why=f"unclear:{channel}")
 
+    def _passenger_wake(self, trigger: str | None, now: float) -> None:
+        """After a microsleep / a falling head: the awake front passenger is asked to talk with the driver."""
+        state = self.engine.state
+        if trigger not in ("microsleep", "nodding") or not bool(th("sos", "passenger_wake")):
+            return
+        if not (state.passenger.present and state.passenger.awake):
+            return
+        driver, passenger = clips.person_names(state)
+        if not passenger:
+            return
+        text = render("sos", "passenger_wake", passenger_name=clips.display(passenger),
+                      driver_name=clips.display(driver))
+        # important, not critical: it waits for "Ok." and goes before the break question (same priority, in order)
+        self.engine.say(clips.passenger_wake_clip(passenger, driver), text, to="passenger", prefix="sos",
+                        priority="important")
+        self.engine.log_event("passenger_wake", now, text=text, passenger=passenger)
+
     # --- browser feedback ----------------------------------------------------------------------------------------
 
     def on_alarm_played(self, alarm_id: str, now: float) -> None:
         """The alarm clip started now: "Ești bine?" comes after it, not over it."""
         if self.state == "alarm" and alarm_id == self.alarm_id:
-            self.ask_at = max(self.ask_at, now + _s("alarm_clip_s") + _s("ask_after_alarm_s"))
+            self.ask_at = max(self.ask_at, now + self.alarms.last_clip_s + _s("ask_after_alarm_s"))
             self._cover(self.ask_at + _s("ask_clip_s") + _s("answer_window_s"), now)
 
     def on_speak_done(self, utterance_id: str, now: float) -> None:

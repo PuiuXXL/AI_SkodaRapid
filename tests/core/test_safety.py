@@ -10,6 +10,7 @@ import pytest
 from p2_helpers import ALARM_S, ASK_AFTER, ASK_WINDOW, COUNTDOWN, Rig
 
 from core.safety.answers import parse_gesture, parse_sos_voice, parse_voice
+from core import clips
 from core.settings import th
 from shared import contracts as c
 
@@ -228,8 +229,9 @@ def test_eyes_closed_alarm_fires_on_the_frame() -> None:
     alarm_at = rig.hub.events("alarm")[0]["ts"]
     assert ALARM_S <= alarm_at - pressed <= ALARM_S + 1.0 / 15 + 1e-6  # the first frame over the threshold
     alarm = rig.hub.of_type("alarm")[0]
-    assert alarm["clip_url"] == "/sounds/clips/alarm_andrei.mp3" and (alarm["level"], alarm["alert"]) == ("P1",
-                                                                                                         "microsleep")
+    # the clip says what to do ("ANDREI! Trezește-te!") when P3 generated it, else "ANDREI!"
+    expected = clips.clip_url(clips.alarm_clip("andrei", "microsleep"))
+    assert alarm["clip_url"] == expected and (alarm["level"], alarm["alert"]) == ("P1", "microsleep")
     sent = [m["type"] for m in rig.hub.ui_sent]
     assert sent.index("speak_control") < sent.index("media") < sent.index("alarm")  # sounds stop first
     assert rig.state.safety.level == "P1" and rig.state.safety.llm_allowed is False
@@ -343,7 +345,10 @@ def test_spoken_yes_cancels_and_brings_the_llm_back() -> None:
     assert rig.state.safety.sos.state == "normal" and rig.state.safety.level is None
     assert rig.state.safety.llm_allowed is True and rig.state.interaction.dialog_window_open is False
     assert rig.hub.events("sos_cancelled")[0]["channel"] == "voice"
-    assert rig.speaks()[-1]["clip_url"] == "/sounds/clips/confirm_ok.mp3"
+    ok, wake = rig.speaks()[-2:]  # "Ok.", then the awake passenger is asked to keep the driver talking
+    assert ok["clip_url"] == "/sounds/clips/confirm_ok.mp3"
+    assert wake["to"] == "passenger" and wake["priority"] == "important"
+    assert wake["text"] == "Maria, te rog, vorbește puțin cu Andrei, să rămână treaz."
     assert rig.hub.perception_sent[-1] == {**rig.hub.perception_sent[-1], "cmd": "dialog_window", "open": False}
 
 
@@ -423,7 +428,10 @@ def test_after_the_sos_is_cancelled_a_break_is_proposed() -> None:
     rig.say("da")
     rig.run(th("safety", "checkin", "after_sos_s") + 0.3)
     question = checkins(rig)
-    assert len(question) == 1 and question[0]["text"] == "Andrei, facem o pauză?"
+    # personal: what happened and the stop ahead (templates drowsiness.checkin_after_sos_stop)
+    assert len(question) == 1
+    assert question[0]["text"].startswith("Andrei, ai închis ochii ") and " secunde la 118 km/h." in question[0]["text"]
+    assert question[0]["text"].endswith("OMV e la 12 km. Oprim acolo?")
     assert rig.hub.events("drowsy_check")[0]["data"]["reason"] == "after_sos"
 
 

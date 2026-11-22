@@ -43,6 +43,8 @@ export class VoicePlayer {
    *        Utterance finished (or was stopped).
    * @param {(alarm: object, ts: number) => void} [options.onAlarmPlayed] Alarm audio actually started.
    * @param {number} [options.staleNormalMs=8000] The assistant's speech that waited longer than this is dropped.
+   * @param {number} [options.alarmBeepMs=200] A short beep before every alarm clip (0 = none): a tone gets
+   *        attention faster than a voice. Core counts it in the alarm's length (safety.alarms.beep_s).
    */
   constructor({
     lang = "ro-RO",
@@ -53,6 +55,7 @@ export class VoicePlayer {
     onSpeakDone = () => {},
     onAlarmPlayed = () => {},
     staleNormalMs = 8000,
+    alarmBeepMs = 200,
   } = {}) {
     this.lang = lang;
     this.fallbackVoiceNames = fallbackVoiceNames.map((name) => name.toLowerCase());
@@ -69,6 +72,8 @@ export class VoicePlayer {
     this.audio = null;      // HTMLAudioElement of the current sentence
     this.paused = false;
     this.clipCache = new Map(); // url -> preloaded HTMLAudioElement (alarms, clips)
+    this.alarmBeepMs = alarmBeepMs;
+    this.audioContext = null;   // WebAudio, created in unlock() (needs a user gesture) for the alarm beep
 
     this.music = new Audio();
     this.music.loop = true;
@@ -84,6 +89,13 @@ export class VoicePlayer {
   unlock() {
     const silent = new Audio("data:audio/mp3;base64,//uQx");
     silent.play().catch(() => {});
+    try {
+      const Context = window.AudioContext || window.webkitAudioContext;
+      if (Context && !this.audioContext) this.audioContext = new Context();
+      this.audioContext?.resume?.();
+    } catch {
+      this.audioContext = null; // no WebAudio: alarms play without the beep
+    }
     if (window.speechSynthesis) window.speechSynthesis.getVoices();
   }
 
@@ -154,8 +166,41 @@ export class VoicePlayer {
       this.clipCache.set(alarm.clip_url, element);
     }
     element.currentTime = 0;
-    element.onplaying = () => this.onAlarmPlayed(alarm, nowSeconds());
-    element.play().catch((err) => console.error("alarm clip failed", err));
+    const beepMs = this._beep();
+    if (beepMs > 0) {
+      // the beep is the start of the alarm: its latency (alarm_played) is measured from it
+      this.onAlarmPlayed(alarm, nowSeconds());
+      setTimeout(() => element.play().catch((err) => console.error("alarm clip failed", err)), beepMs);
+    } else {
+      element.onplaying = () => this.onAlarmPlayed(alarm, nowSeconds());
+      element.play().catch((err) => console.error("alarm clip failed", err));
+    }
+  }
+
+  /** A short two-tone beep (WebAudio, no file to load). Returns its length in ms, 0 when it cannot play. */
+  _beep() {
+    const context = this.audioContext;
+    if (!context || this.alarmBeepMs <= 0) return 0;
+    try {
+      const start = context.currentTime;
+      const half = this.alarmBeepMs / 2000;
+      [880, 1175].forEach((frequency, index) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = frequency;
+        const from = start + index * half;
+        gain.gain.setValueAtTime(0.0001, from);
+        gain.gain.exponentialRampToValueAtTime(0.35, from + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, from + half);
+        oscillator.connect(gain).connect(context.destination);
+        oscillator.start(from);
+        oscillator.stop(from + half);
+      });
+      return this.alarmBeepMs;
+    } catch {
+      return 0;
+    }
   }
 
   /**

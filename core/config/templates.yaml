@@ -20,6 +20,9 @@ sos:                            # C5, F6: driver not responding
     Ocupanți: {occupants_n}; pasagerul din dreapta e {passenger_state_text}.
     Locație: {maps_url}. Ora: {time_hhmm}.
   # passenger_state_text, from SosReport.passenger_state
+  # After a microsleep the driver answered "da": the awake front passenger helps (clip passenger_wake_<p>_<d>).
+  # Fields: passenger_name, driver_name
+  passenger_wake: "{passenger_name}, te rog, vorbește puțin cu {driver_name}, să rămână treaz."
   passenger_state:
     awake: treaz
     asleep: adormit
@@ -35,6 +38,12 @@ drowsiness:                     # C3, C4: a closure that ended before the alarm 
   checkin: "{driver_name}, ai închis ochii câteva clipe. Facem o pauză?"
   # After "Ești bine?" was answered (the SOS was cancelled). Fields: driver_name
   checkin_after_sos: "{driver_name}, facem o pauză?"
+  # The same with what happened (2026-11-22: personal, not canned), when the car is moving. Fields: driver_name, s
+  # (seconds with a comma), speed_kmh; with a stop ahead also poi_name, dist_km. *_nodding: the head fell.
+  checkin_after_sos_context: "{driver_name}, ai închis ochii {s} secunde la {speed_kmh} km/h. Facem o pauză?"
+  checkin_after_sos_stop: "{driver_name}, ai închis ochii {s} secunde la {speed_kmh} km/h. {poi_name} e la {dist_km} km. Oprim acolo?"
+  checkin_after_sos_nodding: "{driver_name}, ți-a căzut capul la {speed_kmh} km/h. Facem o pauză?"
+  checkin_after_sos_nodding_stop: "{driver_name}, ți-a căzut capul la {speed_kmh} km/h. {poi_name} e la {dist_km} km. Oprim acolo?"
   # Yes, with the nearest stop ahead (core.reminders.pick_stop). Fields: poi_name, dist_km
   break_stop: "Bine. Cea mai apropiată oprire e {poi_name}, la {dist_km} km."
   break_no_stop: "Bine. Oprește când poți, în siguranță."
@@ -77,7 +86,12 @@ explanations:                   # principle 4, D5: one sentence per alert, in th
 # Names are profile names (occupants[].profile), lower case.
 clips:
   url: "/sounds/clips/{clip_id}.mp3"
-  alarm: "alarm_{driver}"                                   # "ANDREI!"
+  alarm: "alarm_{driver}"                                   # "ANDREI!" (fallback of the two below)
+  alarm_alert: "alarm_{alert}_{n}_{driver}"                 # "ANDREI! Trezește-te!" (variants n = 1, 2, ...)
+  alarm_repeat: "alarm_repeat_{alert}_{driver}"             # "ANDREI! A doua oară! Hai să oprim."
+  # Alerts that use another alert's clips (the head falling is a microsleep for the driver).
+  alarm_aliases: {nodding: microsleep, eyes_closing: microsleep}
+  passenger_wake: "passenger_wake_{passenger}_{driver}"     # "Maria, te rog, vorbește puțin cu Andrei..."
   are_you_ok: "are_you_ok"                                  # "Ești bine?"
   passenger_instructions: "passenger_instructions_{passenger}_{driver}"   # "Maria, Andrei nu răspunde. ..."
   monitoring_lost: "monitoring_lost"                        # "Nu te mai văd. Monitorizarea e întreruptă."
@@ -100,6 +114,16 @@ escalation:
   phone_message: "{driver_name}, lasă telefonul, ți-l citesc eu."   # a message is waiting (scene 3)
   # Before the assistant's sentence stopped by the warning, said again once the driver looks back (assistant.resume_*)
   resume_prefix: "Cum ziceam,"
+# More ways to say the same warning, used in turn after the first one (so it does not sound canned). Fields: driver_name
+escalation_variants:
+  off_road: ["{driver_name}, privirea pe drum, te rog.", "{driver_name}, revino cu ochii pe drum."]
+  phone: ["{driver_name}, telefonul jos, te rog.", "{driver_name}, pune telefonul deoparte."]
+  phone_message: ["{driver_name}, nu-l citi tu, ți-l citesc eu."]
+# The same warning again within safety.escalation.repeat_window_min: firmer, with the next step. Fields: driver_name
+escalation_repeat:
+  off_road: "{driver_name}, din nou te-ai uitat în altă parte. Privirea pe drum, te rog."
+  phone: "{driver_name}, iar telefonul. Lasă-l jos; ce e urgent îți citesc eu."
+  phone_message: "{driver_name}, lasă telefonul, ți-l citesc eu."
 
 # B4: the cause of the distraction, for the event log. Fields: glances (in cause.window_s)
 causes:

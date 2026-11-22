@@ -131,6 +131,7 @@ class AssistantLink:
         self.serious_interrupts = 0  # alerts that ended the conversation (SOS, microsleep, camera lost, ...)
         self.submitted_epoch: dict[int, int] = {}  # id(event) -> serious_interrupts when it was queued
         self.last_alert_at: float | None = None  # last tick with a P0-P2 alert (quiet_after_alert_s)
+        self.last_explain: float | None = None  # when alert_explain was last scheduled
         self.greeted = False
         self.driver_seen_since: float | None = None
         self.offered: set[str] = set()  # messages handed to the assistant
@@ -162,6 +163,21 @@ class AssistantLink:
                 self.dialog.reset()
         self.utterances.clear()  # the browser drops its queue; only the current sentence reports speak_done
         self.speaking, self.paused = None, False
+
+    def explain_alert(self, now: float, *, alert: str, explanation: str) -> None:
+        """D5: after an alert that came to the alarm, the assistant says what happened (``alert_explain``).
+
+        A little later (``assistant.alert_explain_after_s``: after the alarm clip), at most once per
+        ``alert_explain_cooldown_s``, and not when a stopped conversation is about to resume (it would talk over it).
+        """
+        if not self.available or self.interrupted:
+            return
+        cooldown = float(th("assistant", "alert_explain_cooldown_s"))
+        if self.last_explain is not None and now - self.last_explain < cooldown:
+            return
+        self.last_explain = now
+        due = now + float(th("assistant", "alert_explain_after_s"))
+        self.retries["alert_explain"] = (due, 0, {"alert": alert, "explanation": explanation})
 
     def busy_with_driver(self, now: float) -> bool:
         """A conversation with the driver is going on: the assistant speaks, an answer is on the way, a question
@@ -325,6 +341,8 @@ class AssistantLink:
             return state.assessment.fatigue >= float(th("fatigue", "low"))
         if event_type == "disengagement_high":
             return state.assessment.disengagement >= float(th("disengagement", "low"))
+        if event_type == "alert_explain":  # only while nothing more serious is going on
+            return (state.safety.level or "P4") not in ("P0", "P1", "P2")
         return state.cause.label == data.get("label")
 
     def _retry(self, state: State, now: float) -> None:
@@ -333,8 +351,8 @@ class AssistantLink:
             if now < due:
                 continue
             del self.retries[event_type]
-            if muted or not self._still_true(event_type, data, state):
-                continue
+            if (muted and event_type != "alert_explain") or not self._still_true(event_type, data, state):
+                continue  # (alert_explain is said even after a refusal: P3's policies allow it while muted)
             if event_type == "cause_detected" and self.busy_with_driver(now):
                 # Not into the middle of a conversation: try again later, same attempt (the cause may also expire).
                 self.retries[event_type] = (now + float(th("assistant", "retry_s")), attempt, data)
