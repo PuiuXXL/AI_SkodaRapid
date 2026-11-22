@@ -11,25 +11,28 @@
   - pause / "...cum ziceam" resume, alarms interrupting everything, music ducking;
   - speech_onset timestamps (verbal reaction channel).
 -->
-<html lang="ro">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Test voce · DriveMate</title>
+  <title>Voice test · DriveMate</title>
   <link rel="icon" href="/voice/favicon.ico">
   <link rel="stylesheet" href="/voice/obsidian-tokens.css">
   <style>
     :root { --bg: var(--ui-bg); --fg: var(--ui-text); --card: var(--ui-surface-1); --ok: var(--ui-success); --warn: var(--ui-warning); }
     * { box-sizing: border-box; }
     body { margin: 0 auto; max-width: 1600px; padding: 24px; font: 16px/1.5 "Segoe UI Variable", "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); }
-    h1 { font-size: 20px; margin: 0 0 12px; }
+    h1 { display:flex; flex-wrap:wrap; align-items:center; gap:18px; font-size:clamp(22px,3vw,36px); letter-spacing:-.04em; margin:0 0 18px; }
     .grid { display: grid; gap: 16px; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(min(100%,300px), 1fr)); }
     .card { min-width: 0; background: var(--card); border: 1px solid var(--ui-stroke); border-radius: var(--ui-radius); padding: 20px; }
-    .card h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .card h2 { display:flex; align-items:center; gap:12px; font-size:18px; line-height:1.25; margin:0 0 16px; color:var(--fg); }
+    .card .card-art { --art-size:52px; }
+    body > p { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+    .card input { min-height:44px; font:inherit; }
     button { min-height: 44px; font: inherit; margin: 4px 4px 4px 0; padding: 8px 12px; border: 1px solid var(--ui-stroke-strong); border-radius: 10px; background: var(--ui-surface-2); color: var(--fg); cursor: pointer; transition: background-color var(--ui-fast); }
     button:hover:not(:disabled) { border-color: var(--ui-accent-stroke); background: var(--ui-inset); }
-    button.primary { background: var(--accent); border-color: var(--accent); color: var(--ui-on-accent); }
-    button.primary:hover:not(:disabled) { background: var(--ui-accent-hover); }
+    button.primary { background:var(--ui-cta); border-color:var(--ui-cta); color:var(--ui-on-cta); }
+    button.primary:hover:not(:disabled) { background:var(--ui-cta-hover); }
     button:disabled { opacity: .5; cursor: default; }
     :where(button,input):focus-visible { outline: 2px solid var(--ui-accent-hover); outline-offset: 3px; }
     input { width: 100%; padding: 7px; border-radius: 7px; border: 1px solid var(--muted); background: transparent; color: var(--fg); }
@@ -38,55 +41,60 @@
     .pill.on { border-color: var(--ok); color: var(--ok); }
     .interim { color: var(--muted); }
     .addressed { color: var(--ok); }
+    @media (min-width:1080px) {
+      .grid { grid-template-columns:repeat(6,minmax(0,1fr)); }
+      .card { grid-column:span 2; }
+      .card:has(#transcript), .card:has(#log) { grid-column:span 3; }
+    }
     @media (max-width:400px) { body { padding: 16px; } .card { padding: 16px; } }
     @media (prefers-reduced-motion:reduce) { * { transition: none !important; } }
   </style>
 </head>
 <body>
-  <h1><img src="/voice/drivemate_full_dark.svg" alt="DriveMate" width="156" height="42" style="vertical-align:middle"> Test voce (P3)</h1>
+  <h1><img src="/voice/drivemate_full_dark.svg" alt="DriveMate" width="156" height="42" style="vertical-align:middle"> Voice test (P3)</h1>
   <p>
-    <button id="start" class="primary">Start (microfon + audio)</button>
-    <span id="conn" class="pill">deconectat</span>
-    <span id="dialog" class="pill">fereastră dialog</span>
-    <span id="speaking" class="pill">asistentul vorbește</span>
+    <button id="start" class="primary">Start (microphone + audio)</button>
+    <span id="conn" class="pill">disconnected</span>
+    <span id="dialog" class="pill">dialogue window</span>
+    <span id="speaking" class="pill">assistant speaking</span>
   </p>
   <div class="grid">
     <section class="card">
-      <h2>Evenimente (ca de la core)</h2>
+      <h2><img alt="" aria-hidden="true" class="card-art" src="/voice/illustrations/journal.png">Events (core simulation)</h2>
       <button data-event="trip_start">trip_start</button>
       <button data-event="cause_detected">cause_detected</button>
       <button data-event="fatigue_high">fatigue_high</button>
       <button data-event="disengagement_high">disengagement_high</button>
       <button data-event="message_received" data-data='{"msg_id":"m17","delivery":"ask"}'>message_received</button>
-      <button data-event="stop_suggested" data-data='{"poi_id":"omv_km42","poi_name":"OMV","dist_km":12,"task":"lichidul de parbriz"}'>stop_suggested</button>
-      <p style="color:var(--muted);font-size:13px">Vorbește cu „copilot …” sau „DriveMate …”. După o întrebare sau după „copilot” poți vorbi fără nume cât timp vorbești și încă 15 s după ultimul cuvânt.</p>
+      <button data-event="stop_suggested" data-data='{"poi_id":"omv_km42","poi_name":"OMV","dist_km":12,"task":"windscreen washer fluid"}'>stop_suggested</button>
+      <p style="color:var(--muted);font-size:13px">Say “copilot” or “DriveMate” to start. After a question, keep talking for up to 15 seconds without repeating the wake word.</p>
     </section>
     <section class="card">
-      <h2>Voce și audio</h2>
-      <input id="sayText" aria-label="Text de redat vocal" value="Salut Andrei. Asta e vocea asistentului, propoziție cu propoziție. Merge bine?">
-      <button id="say">Spune textul (TTS)</button>
-      <button data-control="pause">Pauză</button>
-      <button data-control="resume">Reia („…cum ziceam”)</button>
+      <h2><img alt="" aria-hidden="true" class="card-art" src="/voice/illustrations/microphone.png">Voice & audio</h2>
+      <input id="sayText" aria-label="Text to speak" value="Hello Andrei. This is your copilot speaking, one sentence at a time. Can you hear me?">
+      <button id="say">Speak text (TTS)</button>
+      <button data-control="pause">Pause</button>
+      <button data-control="resume">Resume</button>
       <button data-control="stop">Stop</button><br>
-      <button id="alarm">Alarmă „ANDREI!”</button>
-      <button id="music">Muzică</button>
-      <button id="stopMusic">Oprește muzica</button>
+      <button id="alarm">Alarm „ANDREI!”</button>
+      <button id="music">Music</button>
+      <button id="stopMusic">Stop music</button>
     </section>
     <section class="card">
-      <h2>Răspuns fără voce (simulează camera lui P1)</h2>
-      <button data-input="gesture:Thumb_Up">👍 deget sus</button>
-      <button data-input="gesture:Thumb_Down">👎 deget jos</button>
-      <button data-input="gesture:Open_Palm">✋ palmă</button><br>
-      <button data-input="nod:yes">dă din cap (da)</button>
-      <button data-input="nod:no">clatină din cap (nu)</button>
-      <p style="color:var(--muted);font-size:13px">Merg doar când asistentul așteaptă un răspuns („Bine?”, „Trimit?”, „Pun ceva?”, KSS, quiz).</p>
+      <h2><img alt="" aria-hidden="true" class="card-art" src="/voice/illustrations/camera.png">Non-verbal response (camera simulation)</h2>
+      <button data-input="gesture:Thumb_Up">👍 thumbs up</button>
+      <button data-input="gesture:Thumb_Down">👎 thumbs down</button>
+      <button data-input="gesture:Open_Palm">✋ open palm</button><br>
+      <button data-input="nod:yes">nod yes</button>
+      <button data-input="nod:no">shake head no</button>
+      <p style="color:var(--muted);font-size:13px">Available while the assistant is waiting for an answer.</p>
     </section>
     <section class="card">
-      <h2>Ce aude (transcriere)</h2>
+      <h2><img alt="" aria-hidden="true" class="card-art" src="/voice/illustrations/ribbons.png">Live transcription</h2>
       <div id="transcript"></div>
     </section>
     <section class="card">
-      <h2>Jurnal</h2>
+      <h2><img alt="" aria-hidden="true" class="card-art" src="/voice/illustrations/journal.png">Journal</h2>
       <div id="log"></div>
     </section>
   </div>
@@ -109,13 +117,13 @@
 
     function connect() {
       ws = new WebSocket(`ws://${location.host}/ws/ui`);
-      ws.addEventListener("open", () => { $("conn").textContent = "conectat"; $("conn").classList.add("on"); });
-      ws.addEventListener("close", () => { $("conn").textContent = "deconectat"; $("conn").classList.remove("on"); });
+      ws.addEventListener("open", () => { $("conn").textContent = "connected"; $("conn").classList.add("on"); });
+      ws.addEventListener("close", () => { $("conn").textContent = "disconnected"; $("conn").classList.remove("on"); });
       ws.addEventListener("message", (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "dev_log") log(message.text);
         else if (message.type === "state") serverDialog = Boolean(message.state?.interaction?.dialog_window_open);
-        else if (message.type === "speak") log(`▶ speak ${message.is_question ? "(întrebare) " : ""}${message.text}`);
+        else if (message.type === "speak") log(`▶ speak ${message.is_question ? "(question) " : ""}${message.text}`);
       });
       return new Promise((resolve) => ws.addEventListener("open", resolve, { once: true }));
     }
@@ -125,15 +133,15 @@
     $("start").addEventListener("click", async () => {
       await connect();
       if (!window.webkitSpeechRecognition && !window.SpeechRecognition) {
-        log("[voce] EROARE: browserul nu are Web Speech API. Folosește Google Chrome.");
+        log("[voice] ERROR: Web Speech API unavailable. Use Google Chrome.");
       }
       try {
         await initVoice(ws, {
           preloadClips: ["/sounds/clips/alarm_andrei.mp3"],
-          onStatus: (text) => log(`[voce] ${text}`),
+          onStatus: (text) => log(`[voice] ${text}`),
         });
       } catch (err) {
-        log(`[voce] EROARE la pornire: ${err}`);
+        log(`[voice] Start error: ${err}`);
         return;
       }
       onTranscript((r) => appendFollowing($("transcript"), () => {
@@ -152,10 +160,10 @@
         // window (speech.dialog_window_s) also keeps it open while it lasts.
         const left = Math.ceil(dialogRemainingMs() / 1000);
         $("dialog").classList.toggle("on", left > 0 || serverDialog);
-        $("dialog").textContent = left > 0 ? `fereastră dialog · ${left} s` : (serverDialog ? "fereastră dialog" : "fereastră închisă · spune „copilot”");
+        $("dialog").textContent = left > 0 ? `dialogue window · ${left} s` : (serverDialog ? "dialogue window" : "dialogue closed · say “copilot”");
       }, 150);
       $("start").disabled = true;
-      log("voce pornită");
+      log("voice enabled");
     });
 
     document.querySelectorAll("[data-event]").forEach((button) => button.addEventListener("click", () =>

@@ -33,11 +33,11 @@ export function NavigationShell({mobile,navigationKey,children,dark}: {dark:bool
   },[mobile,open]);
   const content=<header className={"app-header"+(mobile?"":" desktop-sidebar")} onClick={event=>{
     if(mobile&&(event.target as Element).closest(".page-link,.section-nav button,.brand"))setOpen(false);
-  }}>{children}{mobile&&<button className="mobile-close" aria-label="Închide meniul" onClick={()=>setOpen(false)}>Închide meniul</button>}</header>;
+  }}>{children}{mobile&&<button className="mobile-close" aria-label="Close menu" onClick={()=>setOpen(false)}>Close menu</button>}</header>;
   if(!mobile)return content;
   return <>
-    <div className="mobile-toolbar"><BrandLogo dark={dark}/><button ref={trigger} className="mobile-menu-button" aria-haspopup="dialog" aria-controls="mobile-navigation" aria-expanded={open} onClick={()=>setOpen(true)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Meniu</button></div>
-    <dialog ref={dialog} id="mobile-navigation" className="mobile-drawer" aria-label="Navigare DriveMate" onCancel={()=>setOpen(false)} onClose={()=>setOpen(false)} onClick={event=>{
+    <div className="mobile-toolbar"><BrandLogo dark={dark}/><button ref={trigger} className="mobile-menu-button" aria-haspopup="dialog" aria-controls="mobile-navigation" aria-expanded={open} onClick={()=>setOpen(true)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Menu</button></div>
+    <dialog ref={dialog} id="mobile-navigation" className="mobile-drawer" aria-label="DriveMate navigation" onCancel={()=>setOpen(false)} onClose={()=>setOpen(false)} onClick={event=>{
       if(event.target===event.currentTarget){
         const bounds=event.currentTarget.getBoundingClientRect();
         if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)setOpen(false);

@@ -5,23 +5,22 @@ import "leaflet/dist/leaflet.css";
 
 const mapViews = [
   {id:"soft",label:"Soft"},
-  {id:"streets",label:"Rutier"},
-  {id:"satellite",label:"Satelit"},
-  {id:"terrain",label:"Relief"}
+  {id:"streets",label:"Streets"},
+  {id:"satellite",label:"Satellite"},
+  {id:"terrain",label:"Terrain"}
 ] as const;
 type MapView = typeof mapViews[number]["id"];
 
 /** The road route and its points (editable), and the car where core says it is (planner.position). */
-export function RouteMap({planner:simulation,disabled,pointsOpen,onOpenLayers}: {planner:RoutePlanner;disabled:boolean;pointsOpen:boolean;onOpenLayers:()=>void}) {
+export function RouteMap({planner:simulation,disabled}: {planner:RoutePlanner;disabled:boolean}) {
   const host=useRef<HTMLDivElement>(null),map=useRef<Leaflet.Map|null>(null);
   const library=useRef<typeof Leaflet|null>(null),layers=useRef<Leaflet.LayerGroup|null>(null);
   const car=useRef<Leaflet.Marker|null>(null),latest=useRef({simulation,disabled});
   const [ready,setReady]=useState(false),[mapError,setMapError]=useState("");
   const [mapView,setMapView]=useState<MapView>("soft");
   const [showRoute,setShowRoute]=useState(true),[showPoints,setShowPoints]=useState(true),[showCar,setShowCar]=useState(true),[showSights,setShowSights]=useState(true);
-  const layerPanel=useRef<HTMLDetailsElement>(null);
   const tileKind=mapView==="soft"?"streets":mapView;
-  useEffect(()=>{if(pointsOpen&&(host.current?.clientWidth??0)<620&&layerPanel.current)layerPanel.current.open=false},[pointsOpen]);
+
   useEffect(()=>{latest.current={simulation,disabled}},[simulation,disabled]);
   useEffect(()=>{
     let cancelled=false;
@@ -41,13 +40,13 @@ export function RouteMap({planner:simulation,disabled,pointsOpen,onOpenLayers}: 
         view.on("click",(event:Leaflet.LeafletMouseEvent)=>{
           const point=event.latlng.wrap();
           const planner=latest.current.simulation;
-          if(planner.placing)planner.placeAttraction({lat:point.lat,lon:point.lng});  // "Adaugă obiectiv pe hartă"
+          if(planner.placing)planner.placeAttraction({lat:point.lat,lon:point.lng});  // "Add a place on the map"
           else if(!latest.current.disabled)void planner.add({lat:point.lat,lon:point.lng});
         });
         observer=new ResizeObserver(()=>view.invalidateSize({pan:false}));
         observer.observe(host.current);
         setReady(true);
-      }catch{if(!cancelled)setMapError("Harta nu a putut fi încărcată. Reîncarcă pagina.")}
+      }catch{if(!cancelled)setMapError("Unable to load the map. Reload the page.")}
     }
     void init();
     return ()=>{cancelled=true;observer?.disconnect();map.current?.remove();map.current=null;car.current=null;layers.current=null};
@@ -58,14 +57,14 @@ export function RouteMap({planner:simulation,disabled,pointsOpen,onOpenLayers}: 
     setMapError("");
     const sources={
       streets:{url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'},
-      satellite:{url:"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",attribution:'Tiles &copy; Esri, Vantor, Earthstar Geographics, GIS User Community · <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer">Surse</a>'},
-      terrain:{url:"https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",attribution:'Tiles &copy; Esri · <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer">Surse și atribuiri</a>'}
+      satellite:{url:"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",attribution:'Tiles &copy; Esri, Vantor, Earthstar Geographics, GIS User Community · <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer">Sources</a>'},
+      terrain:{url:"https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",attribution:'Tiles &copy; Esri · <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer">Sources & attribution</a>'}
     };
     const source=sources[tileKind];
     // OSM requires Referer; override the page's no-referrer policy only for its tiles.
     const tiles=L.tileLayer(source.url,{attribution:source.attribution,maxZoom:19,
       referrerPolicy:tileKind==="streets"?"strict-origin-when-cross-origin":false});
-    tiles.on("tileerror",()=>setMapError("Unele imagini ale hărții nu s-au încărcat. Verifică conexiunea sau alege alt strat."));
+    tiles.on("tileerror",()=>setMapError("Some map tiles could not load. Check your connection or choose another layer."));
     tiles.addTo(view);
     return ()=>{tiles.off();tiles.remove()};
   },[ready,tileKind]);
@@ -122,17 +121,17 @@ export function RouteMap({planner:simulation,disabled,pointsOpen,onOpenLayers}: 
     });
   }
   return <div className="route-map-shell">
-    <div className="route-map-toolbar"><span>Hartă rutieră · navigare liberă</span><div><button onClick={()=>fit(false)} disabled={!ready}>Cluj–A3</button><button onClick={()=>fit(true)} disabled={!ready||!simulation.points.length}>Vezi traseul</button></div></div>
+    <div className="route-map-toolbar"><span>Road map · explore freely</span><div><button onClick={()=>fit(false)} disabled={!ready}>Cluj–A3</button><button onClick={()=>fit(true)} disabled={!ready||!simulation.points.length}>Fit route</button></div></div>
     <div className="route-map-canvas" data-placing={simulation.placing||undefined}>
-      <div ref={host} className="route-map" data-view={mapView} role="region" aria-label="Hartă rutieră interactivă. Apasă pentru a adăuga un punct."/>
-      <details ref={layerPanel} className="map-layers" onToggle={event=>{if(event.currentTarget.open&&(host.current?.clientWidth??0)<620)onOpenLayers()}} onKeyDown={event=>{if(event.key==="Escape"){event.currentTarget.open=false;event.currentTarget.querySelector("summary")?.focus()}}}>
-        <summary><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m3 7 9-5 9 5-9 5-9-5Zm0 5 9 5 9-5M3 17l9 5 9-5"/></svg><span>Straturi</span><small>{mapViews.find(item=>item.id===mapView)?.label}</small></summary>
+      <div ref={host} className="route-map" data-view={mapView} role="region" aria-label="Interactive road map. Click to add a point."/>
+      <details className="map-layers" onKeyDown={event=>{if(event.key==="Escape"){event.currentTarget.open=false;event.currentTarget.querySelector("summary")?.focus()}}}>
+        <summary><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m3 7 9-5 9 5-9 5-9-5Zm0 5 9 5 9-5M3 17l9 5 9-5"/></svg><span>Layers</span><small>{mapViews.find(item=>item.id===mapView)?.label}</small></summary>
         <div className="map-layer-content">
-          <fieldset><legend>Vizualizare hartă</legend><div className="map-view-options">{mapViews.map(item=><button key={item.id} aria-pressed={mapView===item.id} onClick={()=>setMapView(item.id)} disabled={!ready}><span className="map-view-swatch" data-view={item.id} aria-hidden="true"/>{item.label}</button>)}</div></fieldset>
-          <fieldset className="map-overlay-options"><legend>Elemente vizibile</legend><label><input type="checkbox" checked={showRoute} onChange={event=>setShowRoute(event.target.checked)}/>Traseu</label><label><input type="checkbox" checked={showPoints} onChange={event=>setShowPoints(event.target.checked)}/>Puncte de oprire</label><label><input type="checkbox" checked={showCar} onChange={event=>setShowCar(event.target.checked)}/>Mașină</label><label><input type="checkbox" checked={showSights} onChange={event=>setShowSights(event.target.checked)}/>Obiective turistice</label></fieldset>
+          <fieldset><legend>Map style</legend><div className="map-view-options">{mapViews.map(item=><button key={item.id} aria-pressed={mapView===item.id} onClick={()=>setMapView(item.id)} disabled={!ready}><span className="map-view-swatch" data-view={item.id} aria-hidden="true"/>{item.label}</button>)}</div></fieldset>
+          <fieldset className="map-overlay-options"><legend>Visible elements</legend><label><input type="checkbox" checked={showRoute} onChange={event=>setShowRoute(event.target.checked)}/>Route</label><label><input type="checkbox" checked={showPoints} onChange={event=>setShowPoints(event.target.checked)}/>Stops</label><label><input type="checkbox" checked={showCar} onChange={event=>setShowCar(event.target.checked)}/>Vehicle</label><label><input type="checkbox" checked={showSights} onChange={event=>setShowSights(event.target.checked)}/>Places of interest</label></fieldset>
         </div>
       </details>
-      <div className="map-route-legend" aria-hidden="true"><i/>{simulation.placing?"Apasă pe hartă unde e obiectivul":simulation.synced?"Traseu urmat de core":simulation.route?"Traseu auto · netrimis":"Planificare traseu"}</div>
+      <div className="map-route-legend" aria-hidden="true"><i/>{simulation.placing?"Click the map to place a point of interest":simulation.synced?"Route followed by core":simulation.route?"Driving route · draft":"Route planning"}</div>
     </div>
     {mapError&&<p className="map-notice" role="status">{mapError}</p>}
   </div>;

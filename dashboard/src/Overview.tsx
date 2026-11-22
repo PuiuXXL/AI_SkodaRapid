@@ -1,6 +1,6 @@
 import type { Reading, Trip } from "./types";
 import React from "react";
-import {MeasureIcon} from "./MeasureIcon";
+import {CardArt} from "./CardArt";
 import {fmt} from "./Panels";
 
 export function AttentionGauge({value}: {value: Reading | undefined}){
@@ -10,7 +10,7 @@ export function AttentionGauge({value}: {value: Reading | undefined}){
     {Array.from({length:20},(_,i)=><line key={i} x1="60" x2="60" y1="2" y2={i%5===0?"7":"5"} transform={`rotate(${i*18} 60 60)`} stroke="var(--ui-stroke-strong)" strokeWidth={i%5===0?1.5:1}/>)}
     <circle cx="60" cy="60" r="49" fill="none" stroke="var(--line)" strokeWidth="9"/>
     {progress!==null&&progress>0&&<circle cx="60" cy="60" r="49" pathLength="100" strokeDasharray={progress+" 100"} transform="rotate(-90 60 60)" fill="none" stroke="var(--accent)" strokeWidth="9" strokeLinecap="round"/>}
-    </svg><div><strong>{fmt(value,"",100,0)}</strong><small>Atenție / 100</small></div></div>;
+    </svg><div><strong>{fmt(value,"",100,0)}</strong><small>Attention / 100</small></div></div>;
 }
 
 export function ScoreReading({label, icon, value}: {
@@ -20,7 +20,7 @@ export function ScoreReading({label, icon, value}: {
 }) {
   const measured = typeof value === "number" && Number.isFinite(value);
   return <div>
-    <span><MeasureIcon name={icon}/>{label}</span>
+    <span><CardArt subject={icon==="fatigue"?"eye":"camera"}/>{label}</span>
     <b>{fmt(value, "", 100, 0)}{measured && <em>/100</em>}</b>
     <div className="score-reading-track" aria-hidden="true">{measured&&<i style={{width:Math.max(0,Math.min(100,value!*100))+"%"}}/>}</div>
   </div>;
@@ -28,11 +28,11 @@ export function ScoreReading({label, icon, value}: {
 
 export function TripStrip({trip}: {trip: Trip | undefined}){
   const readings = [
-    ["Viteză", "speed", fmt(trip?.speed_kmh, " km/h")],
-    ["Durată", "clock", fmt(trip?.elapsed_min, " min")],
-    ["Până la destinație", "arrival", fmt(trip?.eta_min, " min")]
+    ["Speed", "chart", fmt(trip?.speed_kmh, " km/h")],
+    ["Duration", "pulse", fmt(trip?.elapsed_min, " min")],
+    ["Arrival in", "route", fmt(trip?.eta_min, " min")]
   ] as const;
   return <dl className="trip-strip">{readings.map(([label,icon,value]) =>
-    <div key={label}><dt><MeasureIcon name={icon}/>{label}</dt><dd>{value}</dd></div>
+    <div key={label}><dt><CardArt subject={icon}/>{label}</dt><dd>{value}</dd></div>
   )}</dl>;
 }

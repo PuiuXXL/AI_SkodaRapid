@@ -15,9 +15,9 @@ export interface Attraction extends Coordinate {
   id: string; name: string; kind: string; description?: string; wikipedia?: string; source: "wikipedia" | "manual";
   selected: boolean; score?: number;
 }
-export const attractionKinds: Record<string,string>={attraction:"Atracție",viewpoint:"Belvedere",museum:"Muzeu",castle:"Castel",
-  fort:"Cetate",monument:"Monument",ruins:"Ruine",archaeological_site:"Sit arheologic",monastery:"Mănăstire",nature:"Natură",church:"Lăcaș de cult",
-  palace:"Palat",manor:"Conac"};
+export const attractionKinds: Record<string,string>={attraction:"Attraction",viewpoint:"Viewpoint",museum:"Museum",castle:"Castle",
+  fort:"Fort",monument:"Monument",ruins:"Ruins",archaeological_site:"Archaeological site",monastery:"Monastery",nature:"Nature",church:"Place of worship",
+  palace:"Palace",manor:"Manor"};
 
 export function validCoordinate(point: Coordinate) {
   return Number.isFinite(point.lat) && Number.isFinite(point.lon) &&
@@ -71,12 +71,12 @@ export function roadRoute(geometry: Coordinate[]): RoadRoute | null {
 
 /** Stop categories: the reminders' POI categories (assistant.yaml) plus a waypoint that only shapes the road. */
 export const stopCategories=[
-  {id:"fuel",label:"Benzinărie"},{id:"cafe",label:"Cafenea"},{id:"pharmacy",label:"Farmacie"},
-  {id:"supermarket",label:"Supermarket"},{id:"auto_parts",label:"Piese auto"},{id:"waypoint",label:"Punct de trecere"},
+  {id:"fuel",label:"Fuel station"},{id:"cafe",label:"Café"},{id:"pharmacy",label:"Pharmacy"},
+  {id:"supermarket",label:"Supermarket"},{id:"auto_parts",label:"Auto parts"},{id:"waypoint",label:"Waypoint"},
 ] as const;
 export const EXAMPLE_POINTS: RoutePoint[] = [
   {id:"cluj",name:"Cluj-Napoca",category:"origin",lat:46.769,lon:23.589},
-  {id:"gilau",name:"Benzinărie · Gilău",category:"fuel",lat:46.7507,lon:23.3907},
+  {id:"gilau",name:"Fuel station · Gilău",category:"fuel",lat:46.7507,lon:23.3907},
   {id:"turda",name:"Turda",category:"destination",lat:46.5667,lon:23.7833}
 ];
 
@@ -196,7 +196,7 @@ export async function simulatorApi<T>(path:string,method="GET",body?:unknown):Pr
   const response=await fetch("/simulator"+path,{method,cache:"no-store",signal:AbortSignal.timeout(10000),
     headers:body===undefined?{}:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
   const data=await response.json().catch(()=>null);
-  if(!response.ok)throw new Error(typeof data?.detail==="string"?data.detail:response.status===404?"Core rulează fără simulatorul de traseu (simulator/).":"Core nu a acceptat cererea.");
+  if(!response.ok)throw new Error(typeof data?.detail==="string"?data.detail:response.status===404?"Core is running without the route simulator.":"Core did not accept the request.");
   return data as T;
 }
 
@@ -228,20 +228,20 @@ export function useRoutePlanner(trip: Trip | undefined) {
   }
   async function add(point: Coordinate, replaceId?: string) {
     if(adding || addRequest.current)return;
-    if(!validCoordinate(point)){setError("Introdu coordonate valide: latitudine între −90 și 90, longitudine între −180 și 180.");return;}
+    if(!validCoordinate(point)){setError("Enter a latitude between −90 and 90 and a longitude between −180 and 180.");return;}
     const controller=new AbortController();
     addRequest.current=controller;
     const version=editVersion.current;
     setAdding(true);setError("");
     try{
       const response=await fetch(`https://router.project-osrm.org/nearest/v1/driving/${point.lon},${point.lat}?number=1`,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(15000)])});
-      if(!response.ok)throw new Error("Validarea punctului nu este disponibilă. Reîncearcă.");
+      if(!response.ok)throw new Error("Point validation unavailable. Try again.");
       const result=await response.json() as {code:string;waypoints?:{location:number[];distance:number}[]};
       const road=result.waypoints?.[0];
-      if(result.code!=="Ok"||!road||road.distance>500)throw new Error("Punctul este la peste 500 m de un drum accesibil. Alege un punct mai aproape de drum.");
+      if(result.code!=="Ok"||!road||road.distance>500)throw new Error("This point is more than 500 m from an accessible road. Choose a point closer to the road.");
       const snapped={lat:road.location[1],lon:road.location[0]};
-      if(!validCoordinate(snapped))throw new Error("Serviciul de rutare a returnat coordonate invalide.");
-      if(points.some(p=>p.id!==replaceId&&distanceKm(p,snapped)<.01))throw new Error("Există deja un punct la această poziție.");
+      if(!validCoordinate(snapped))throw new Error("The routing service returned invalid coordinates.");
+      if(points.some(p=>p.id!==replaceId&&distanceKm(p,snapped)<.01))throw new Error("A point already exists at this location.");
       if(version!==editVersion.current)return;
       edit(replaceId?points.map(p=>p.id===replaceId?{...p,...snapped}:p):[...points,{...snapped,id:crypto.randomUUID(),name:`Punct ${points.length+1}`,category:"waypoint"}]);
     }catch(cause){
@@ -261,17 +261,17 @@ export function useRoutePlanner(trip: Trip | undefined) {
         const coordinates=points.map(p=>`${p.lon},${p.lat}`).join(";");
         const radiuses=points.map(()=>"500").join(";");
         const response=await fetch(`https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson&radiuses=${radiuses}`,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(20000)])});
-        if(!response.ok)throw new Error("Serviciul de rutare nu răspunde. Reîncearcă.");
+        if(!response.ok)throw new Error("The routing service is not responding. Try again.");
         const result=await response.json() as {code:string;routes?:{geometry:{coordinates:number[][]}}[]};
         const geometry=result.routes?.[0]?.geometry.coordinates.map(([lon,lat])=>({lat,lon}));
-        if(result.code!=="Ok"||!geometry||geometry.length<2)throw new Error("Nu există un traseu auto între punctele alese.");
+        if(result.code!=="Ok"||!geometry||geometry.length<2)throw new Error("No driving route exists between the selected points.");
         const road=roadRoute(geometry);
-        if(!road)throw new Error("Serviciul de rutare a returnat un traseu invalid.");
+        if(!road)throw new Error("The routing service returned an invalid route.");
         if(controller.signal.aborted)return;
         setRoute(road);setStatus("ready");setError("");
         void findAttractions(road);
       }catch(cause){
-        if(!controller.signal.aborted){setStatus("error");setError(cause instanceof Error?cause.message:"Traseu indisponibil.");}
+        if(!controller.signal.aborted){setStatus("error");setError(cause instanceof Error?cause.message:"Route unavailable.");}
       }
     },350);
     return ()=>{controller.abort();clearTimeout(timer)};
@@ -287,7 +287,7 @@ export function useRoutePlanner(trip: Trip | undefined) {
       const pages:WikiPage[]=[];
       for(const circle of searchCircles(road)){  // one request at a time, as Wikipedia asks of API clients
         const response=await fetch(geosearchUrl(circle),{signal});
-        if(!response.ok)throw new Error(response.status===429?"Wikipedia a limitat căutările. Reîncearcă peste un minut.":"Wikipedia nu răspunde. Reîncearcă.");
+        if(!response.ok)throw new Error(response.status===429?"Wikipedia has rate-limited searches. Try again in a minute.":"Wikipedia is not responding. Try again.");
         pages.push(...Object.values(((await response.json()) as {query?:{pages?:Record<string,WikiPage>}}).query?.pages??{}));
       }
       const found=attractionsFromWiki(pages,point=>nearestOnRoute(road.geometry,road.cumulative,point));
@@ -296,7 +296,7 @@ export function useRoutePlanner(trip: Trip | undefined) {
       setSearch({status:"ready",error:""});
       for(const sight of found.filter(a=>a.selected&&a.wikipedia))await describe(sight.id,sight.wikipedia!,controller.signal);
     }catch(cause){
-      if(!controller.signal.aborted)setSearch({status:"error",error:cause instanceof Error&&cause.name!=="TimeoutError"&&cause.name!=="TypeError"?cause.message:"Căutarea obiectivelor nu răspunde. Reîncearcă."});
+      if(!controller.signal.aborted)setSearch({status:"error",error:cause instanceof Error&&cause.name!=="TimeoutError"&&cause.name!=="TypeError"?cause.message:"Place search is not responding. Try again."});
     }
   }
   async function describe(id:string,tag:string,signal:AbortSignal){
@@ -337,7 +337,7 @@ export function useRoutePlanner(trip: Trip | undefined) {
   },[]);
   const refresh=useCallback(async(load=false)=>{
     try{adopt(await simulatorApi<CoreRoute>("/route"),load);}
-    catch(cause){setCoreError(cause instanceof Error&&cause.name!=="TimeoutError"?cause.message:"Core nu răspunde. Pornește core pentru a trimite traseul.");}
+    catch(cause){setCoreError(cause instanceof Error&&cause.name!=="TimeoutError"?cause.message:"Core is not responding. Start core to send the route.");}
   },[adopt]);
   useEffect(()=>{void refresh(true);},[refresh]);  // a reload shows the route core is following
   const draft=useMemo(()=>routeFile(points,route,{id:crypto.randomUUID(),ts:Date.now()/1000,attractions}),[points,route,attractions]);
@@ -349,10 +349,10 @@ export function useRoutePlanner(trip: Trip | undefined) {
     finally{setSending(false);}
   }
   async function clear(){
-    try{adopt(await simulatorApi<CoreRoute>("/route","DELETE"),false);}catch(cause){setCoreError(cause instanceof Error?cause.message:"Cererea a eșuat.");}
+    try{adopt(await simulatorApi<CoreRoute>("/route","DELETE"),false);}catch(cause){setCoreError(cause instanceof Error?cause.message:"The request failed.");}
   }
   async function seek(fraction:number){
-    try{setCore(await simulatorApi<CoreRoute>("/seek","POST",{fraction}));setCoreError("");}catch(cause){setCoreError(cause instanceof Error?cause.message:"Cererea a eșuat.");}
+    try{setCore(await simulatorApi<CoreRoute>("/seek","POST",{fraction}));setCoreError("");}catch(cause){setCoreError(cause instanceof Error?cause.message:"The request failed.");}
   }
   // In step with core when core follows exactly this file (compared as the file normalises the points).
   const synced=Boolean(core?.active&&draft&&sentKey===fileKey(draft));

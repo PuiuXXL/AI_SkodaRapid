@@ -1,24 +1,24 @@
 // Romanian labels for the contract's vocabularies (shared/contracts.py). An unknown code is shown as received
 // (underscores as spaces), never hidden: a new backend value stays visible on the dashboard.
-export const zones: Record<string,string>={road:"Drum",passenger:"Pasager",lap:"Poală",mirror_left:"Oglinda stângă",mirror_right:"Oglinda dreaptă",mirror_rear:"Oglinda centrală",cluster:"Bord",infotainment:"Ecran",away:"În altă direcție",rear_seat:"Bancheta din spate"};
+export const zones: Record<string,string>={road:"Road",passenger:"Passenger",lap:"Lap",mirror_left:"Left mirror",mirror_right:"Right mirror",mirror_rear:"Rear-view mirror",cluster:"Instruments",infotainment:"Screen",away:"Looking away",rear_seat:"Rear seat"};
 /** Zones that count as looking at the road scene (road and mirrors); the rest is off-road. */
 export const drivingZones=new Set(["road","mirror_left","mirror_right","mirror_rear"]);
 export const monitoringReasons: Record<string,string>={
-  camera_unavailable:"Cameră indisponibilă",camera_frozen:"Imagine înghețată",camera_covered:"Obiectiv acoperit",face_lost:"Fața nu se vede",
-  no_frames:"Fără cadre",frozen:"Imagine înghețată",mode_switch:"Comutare zi / noapte",occluded:"Obiectiv acoperit",too_dark:"Prea întuneric",
-  blurred:"Imagine neclară",camera_fallback:"Cameră de rezervă",face_too_small:"Față prea mică",
+  camera_unavailable:"Camera unavailable",camera_frozen:"Frozen image",camera_covered:"Lens covered",face_lost:"Face not visible",
+  no_frames:"No frames",frozen:"Frozen image",mode_switch:"Day / night switch",occluded:"Lens covered",too_dark:"Too dark",
+  blurred:"Blurred image",camera_fallback:"Backup camera",face_too_small:"Face too small",
 };
-export const safetyLevels: Record<string,string>={P0:"Urgență",P1:"Alarmă",P2:"Avertizare",P3:"Sugestie",P4:"Normal"};
+export const safetyLevels: Record<string,string>={P0:"Emergency",P1:"Alarm",P2:"Warning",P3:"Suggestion",P4:"Normal"};
 /** ``safety.alert`` codes of core's safety rules (core/safety). */
-export const alerts: Record<string,string>={microsleep:"Microsomn",phone:"Telefon în mână",off_road:"Privire în afara drumului",distraction:"Distragere",
-  fatigue:"Oboseală",fatigue_high:"Oboseală ridicată",nodding:"Cădere de cap",monitoring_lost:"Nu te mai văd",are_you_ok:"Ești bine?",
-  unresponsive:"Șoferul nu răspunde",sos_countdown:"Numărătoare SOS",sos_sent:"SOS trimis"};
-export const sosStates: Record<string,string>={normal:"Normal",alarm:"Alarmă activă",asking:"Întreabă șoferul",countdown:"Numărătoare SOS",sos_sent:"SOS trimis"};
-export const causes: Record<string,string>={passenger_showing_phone:"Pasagerul arată telefonul",passenger_talk:"Conversație cu pasagerul",incoming_message:"Mesaj primit",phone:"Telefon",child_activity:"Copil în spate"};
-export const phoneUsage: Record<string,string>={call:"La ureche",hand:"În mână",visible:"Vizibil",lap:"În poală"};
-export const postures: Record<string,string>={leaning_forward:"Aplecat în față",leaning_side:"Aplecat lateral",slumped:"Lăsat pe scaun",out_of_position:"În afara poziției"};
-export const integrationNames: Record<string,string>={phone_bridge:"Punte telefon",twilio:"Apel SOS",contact_app:"Aplicație contact",llm:"LLM"};
-export const integrationStates: Record<string,string>={ok:"activ",down:"căzut",off:"oprit",unknown:"necunoscut"};
-export const seats: Record<string,string>={driver:"Șofer",front_right:"Pasager față",rear:"Spate"};
-export const roads: Record<string,string>={city:"Oraș",highway:"Autostradă",rural:"Drum național",national:"Drum național"};
+export const alerts: Record<string,string>={microsleep:"Microsleep",phone:"Phone in hand",off_road:"Eyes off the road",distraction:"Distraction",
+  fatigue:"Fatigue",fatigue_high:"High fatigue",nodding:"Head nodding",monitoring_lost:"Monitoring lost",are_you_ok:"Are you OK?",
+  unresponsive:"Driver unresponsive",sos_countdown:"SOS countdown",sos_sent:"SOS sent"};
+export const sosStates: Record<string,string>={normal:"Normal",alarm:"Active alarm",asking:"Asking driver",countdown:"SOS countdown",sos_sent:"SOS sent"};
+export const causes: Record<string,string>={passenger_showing_phone:"Passenger showing phone",passenger_talk:"Passenger conversation",incoming_message:"Incoming message",phone:"Phone",child_activity:"Child in rear seat"};
+export const phoneUsage: Record<string,string>={call:"At ear",hand:"In hand",visible:"Visible",lap:"In lap"};
+export const postures: Record<string,string>={leaning_forward:"Leaning forward",leaning_side:"Leaning sideways",slumped:"Slumped",out_of_position:"Out of position"};
+export const integrationNames: Record<string,string>={phone_bridge:"Phone bridge",twilio:"SOS call",contact_app:"Contact app",llm:"LLM"};
+export const integrationStates: Record<string,string>={ok:"active",down:"down",off:"off",unknown:"unknown"};
+export const seats: Record<string,string>={driver:"Driver",front_right:"Front passenger",rear:"Rear"};
+export const roads: Record<string,string>={city:"City",highway:"Highway",rural:"National road",national:"National road"};
 export const label=(table: Record<string,string>,code: unknown)=>typeof code==="string"&&code?table[code]??code.replaceAll("_"," "):"—";

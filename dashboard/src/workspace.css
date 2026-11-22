@@ -1,0 +1,310 @@
+@font-face {
+  font-family:"Instrument Sans"; src:url("/fonts/instrument-sans.ttf") format("truetype");
+  font-weight:400 700; font-style:normal; font-display:swap;
+}
+/* Layout and typography shared across the driver workspace. */
+[data-workspace-theme] {
+  --fx-focus:var(--ui-focus);
+  --series-attention:var(--ui-graph);
+  --series-fatigue:var(--ui-graph-secondary);
+  --series-disengagement:var(--ui-graph-tertiary);
+  --fx-shadow:0 1px 2px var(--fx-track), 0 7px 22px color-mix(in srgb,var(--ui-photo-ink) 5%,transparent);
+  --fx-card:var(--ui-surface-1);
+  --fx-card-solid:var(--ui-surface-1);
+}
+.driver-main header { height:auto; max-width:none; border:0; }
+.driver-main :is(h1,h2,h3,p,dt,dd,small,button) { overflow-wrap:break-word; }
+.driver-main :is(h1,h2,h3) { text-wrap:balance; }
+.driver-main :is(.primary-action,.fx-primary), .driver-app .fx-control button.fx-primary,
+.drive-welcome a { background:var(--ui-cta); color:var(--ui-on-cta); font-weight:600; }
+.driver-main :is(.primary-action,.fx-primary):hover:not(:disabled), .drive-welcome a:hover {
+  background:var(--ui-cta-hover); color:var(--ui-on-cta); filter:none;
+}
+.drive-welcome a { margin-top:16px; padding:12px 22px; border-radius:999px; text-decoration:none; }
+.driver-app .primary-action:disabled,.driver-app .fx-primary:disabled { background:var(--fx-inset); color:var(--ui-muted); }
+.driver-main :is(input[type=range],input[type=checkbox]) { accent-color:var(--ui-graph); }
+.driver-heading { padding:clamp(20px,3vw,44px) 0 24px; }
+.driver-heading h1,.cockpit-title h1 { font:520 clamp(36px,4.2vw,64px)/1.06 "Helvetica Neue","Segoe UI",sans-serif; letter-spacing:-.058em; margin:8px 0; }
+.driver-heading p,.cockpit-title p { max-width:60ch; font-size:clamp(15px,1.2vw,18px); margin:0; line-height:1.5; }
+.workspace-topline { min-height:36px; padding-bottom:12px; border-bottom:1px solid var(--ui-rule); }
+.connection-warning { padding:10px 14px; font-size:13px; border-inline-start:3px solid var(--ui-warning); border-radius:4px 10px 10px 4px; }
+.driver-footer { border-top:1px solid var(--ui-rule); margin-top:28px; padding-top:16px; }
+.driver-app .app-header { --fx-focus:var(--ui-photo-text); --ui-text:var(--ui-photo-text); --ui-muted:var(--ui-photo-muted); --text:var(--ui-text); --muted:var(--ui-muted); --accent:var(--ui-text); --ui-accent-hover:var(--ui-photo-text); --fx-inset:rgb(240 243 250 / 8%); --fx-inset-strong:rgb(240 243 250 / 15%); color:var(--ui-text); }
+.driver-app .app-header.desktop-sidebar,.driver-app .mobile-drawer .app-header {
+  background:color-mix(in srgb,var(--ui-photo-ink) 95%,transparent); box-shadow:0 8px 24px var(--ui-shadow-color);
+}
+.driver-app .app-header .page-link { color:var(--ui-muted); }
+.driver-app .app-header .page-link[aria-current=page] { color:var(--ui-cta); background:var(--fx-inset-strong); box-shadow:inset 3px 0 var(--ui-cta); }
+.driver-app .app-header .account-avatar { background:var(--fx-inset-strong); color:var(--ui-photo-text); }
+.driver-app .app-header .account-caption small { color:var(--ui-muted); }
+
+/* The film occupies its own full-width panel. The four supporting cards share a reading edge. */
+.cockpit { max-width:none; margin:clamp(20px,3vw,44px) 0 0; }
+.cockpit-title { margin-bottom:24px; }
+.cockpit-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr)); gap:16px; }
+.driver-main .cockpit-grid > .cockpit-card:nth-of-type(n) { grid-column:auto; grid-row:auto; padding:var(--ui-panel-space); align-content:start; gap:16px; }
+.driver-main .cockpit-grid > .cockpit-voice {
+  grid-column:1/-1; grid-row:auto; min-height:250px; padding:clamp(24px,3.2vw,48px);
+  background:linear-gradient(90deg,var(--ui-photo-ink),color-mix(in srgb,var(--ui-photo-ink) 83%,transparent) 38%,transparent 95%),url('/film/drivemate-grey.jpg') center 60% / cover;
+  --fx-on-hero:var(--ui-photo-text); --fx-on-hero-muted:var(--ui-photo-muted);
+}
+.cockpit-voice .cockpit-mic { width:fit-content; max-width:100%; min-width:min(200px,100%); }
+.cockpit-mic strong { line-height:1.12; }
+.mic-action { display:inline-flex; align-items:center; min-height:44px; margin-block:6px; padding:8px 18px; border-radius:999px; background:var(--ui-cta); color:var(--ui-on-cta); font-size:14px; font-weight:600; }
+.cockpit-mic:hover .mic-action { background:var(--ui-cta-hover); }
+.cockpit-mic:focus-visible { outline-color:var(--ui-photo-text); }
+.cockpit-voice .voice-wave { height:36px; width:min(200px,100%); color:var(--ui-photo-muted); }
+.driver-main .cockpit-speech { max-width:38ch; }
+.cockpit-card > header { display:grid; grid-template-columns:auto minmax(0,1fr); justify-content:start; gap:2px 14px; align-items:end; }
+.cockpit-card > header .card-art { grid-row:span 2; --art-size:72px; }
+.cockpit-card > header span:not(.card-art) { color:var(--ui-text); font-size:16px; font-weight:600; line-height:1.25; }
+.cockpit-card > header b { align-self:start; justify-self:start; margin:0; padding:1px 0; background:none; }
+.cockpit-card > small { letter-spacing:0; font:inherit; font-size:13px; }
+.cockpit-card > strong { font-size:clamp(20px,1.55vw,26px); }
+.cockpit-card dl { grid-template-columns:repeat(auto-fit,minmax(min(100%,100px),1fr)); }
+.cockpit-card dl > div { display:grid; align-content:start; gap:4px; }
+.cockpit-card dd { text-align:start; }
+.cockpit-meter > i { height:6px; }
+.cockpit-meter:not(.is-warn) em { background:var(--ui-graph); }
+@container workspace (min-width:680px) {
+  .cockpit-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+/* Settings and route sections use the same art direction and gutters. */
+.settings-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,255px),1fr)); gap:16px; }
+.driver-main .settings-card { margin:0; padding:var(--ui-panel-space); display:flex; flex-direction:column; gap:14px; }
+.driver-main .settings-card > header { display:grid; justify-content:stretch; gap:16px; }
+.settings-card .card-art { --art-size:clamp(80px,8vw,116px); }
+.driver-main .settings-card h3 { font-size:21px; line-height:1.2; letter-spacing:-.03em; }
+.driver-main .settings-card p { font-size:14px; line-height:1.55; color:var(--ui-muted); }
+.settings-card blockquote { margin:0 0 6px; padding-inline-start:12px; border-inline-start:2px solid var(--ui-rule); color:var(--ui-muted); font-size:13px; }
+.settings-card blockquote small { display:block; font-family:inherit; font-size:11px; line-height:1.6; font-weight:600; letter-spacing:.04em; }
+.settings-options { display:grid; margin-top:0; gap:6px; align-content:start; }
+.driver-app .settings-options button { background:var(--fx-inset); align-content:center; }
+.driver-app .settings-options button[aria-pressed=true] { background:var(--ui-cta); color:var(--ui-on-cta); }
+.settings-options small { font-family:inherit; letter-spacing:0; }
+.route-simulator.content { gap:18px; }
+.driver-main .route-simulator > section { padding:var(--ui-panel-space); margin:0; }
+.route-heading { justify-content:flex-start; }
+.route-heading > div { flex:1 1 150px; }
+.driver-main .route-heading h2 { margin:4px 0 0; }
+.route-heading .card-art { --art-size:64px; }
+.route-simulator section > p { max-width:78ch; }
+.route-workspace { display:grid; gap:16px; grid-template-columns:minmax(0,1fr); }
+.route-workspace .route-points { position:static; width:auto; max-height:none; min-width:0; padding:16px; background:var(--fx-inset); box-shadow:none; }
+.route-workspace .route-map { height:clamp(320px,52svh,590px); min-height:300px; }
+.route-list-heading h3 { margin:0; }
+.route-points .route-point-list li { display:grid; grid-template-columns:auto auto minmax(0,1fr); }
+.route-points .point-actions { grid-column:3; justify-self:end; }
+.route-points .point-description input,.route-points .point-description > span { font-size:13px; }
+.driver-main .route-playback .scores { grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr)); }
+.route-playback .scores > span { flex-wrap:wrap; }
+@container workspace (min-width:860px) {
+  .route-workspace { grid-template-columns:minmax(0,1fr) minmax(260px,32%); }
+  .route-workspace .route-points { max-height:65svh; overflow:auto; }
+}
+
+/* Telemetry labels, plot and notes each own a row, even with the sidebar expanded. */
+.fx-kpis { grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr)); gap:12px; }
+.fx-kpi { padding:16px; gap:12px; align-content:start; }
+.fx-kpi:first-child { grid-column:auto; }
+.fx-kpi > header { display:grid; grid-template-columns:auto minmax(0,1fr); justify-content:start; align-items:center; gap:4px 10px; }
+.fx-kpi .card-art { --art-size:44px; --art-radius:10px; grid-row:span 2; }
+.fx-kpi > header span:not(.card-art) { color:var(--ui-text); font-size:14px; font-weight:600; white-space:normal; }
+.fx-kpi > header small { grid-column:2; padding:0; background:none; white-space:normal; line-height:1.35; font-family:inherit; letter-spacing:0; }
+.fx-kpi-body { grid-template-columns:minmax(0,1fr); gap:12px; }
+.fx-kpi-chart { width:100%; height:58px; justify-items:stretch; align-items:center; }
+.fx-kpi-chart .fx-gauge { width:96px; }
+.fx-kpi-pair { justify-content:flex-start; gap:8px; }
+.risk-history { flex:1; min-width:0; }
+.risk-history .fx-heat { height:14px; gap:1px; }
+.risk-history small { font:inherit; font-size:10px; letter-spacing:0; color:var(--ui-muted); }
+.fx-kpi-chart .fx-minibars.tone-soft { color:var(--ui-graph-tertiary); }
+.fx-minibars i,.fx-heat i { min-width:0; }
+.fx-heat { min-width:0; }
+.fx-kpi-chart .tone-ink,.fx-spark.tone-ink,.fx-rank-row.tone-ink { color:var(--ui-graph); }
+.fx-kpi-chart .tone-soft { color:var(--ui-graph-secondary); }
+.trip-strip { grid-template-columns:repeat(auto-fit,minmax(min(100%,165px),1fr)); }
+.trip-strip dt { flex-direction:row; align-items:center; }
+.trip-strip dt .card-art { --art-size:48px; --art-radius:10px; }
+.trip-strip dd { margin:0; color:var(--ui-text); }
+.driver-main .instrument-label { width:auto; margin:0; display:flex; flex:none; align-items:center; justify-content:flex-start; gap:16px; padding:18px var(--ui-panel-space); border-bottom:1px solid var(--ui-rule); }
+.instrument-label .card-art { --art-size:64px; }
+.instrument-label > div { min-width:0; }
+.driver-main .instrument-label p { max-width:68ch; font-size:13px; }
+.instrument-body { padding:18px var(--ui-panel-space); }
+.instrument-body :is(.inline-detail,.response,.score-context) { min-width:0; }
+.fx-overview-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,245px),1fr)); }
+.fx-block h3,.fx-control-group header,.fx-trends figcaption,.fx-resources figcaption { flex-wrap:wrap; }
+.fx-pose-row { flex-wrap:wrap; }
+.fx-pose-row .fx-readings { flex:1 1 140px; }
+.fx-readings dd { min-width:0; overflow-wrap:anywhere; }
+.fx-overview-main header { display:block; }
+.driver-main .art-heading,.fx-overview-main > header.art-heading {
+  display:flex; justify-content:flex-start; align-items:center; gap:16px;
+  width:auto; margin:0; padding:0; --art-size:64px;
+}
+.driver-main .art-heading h2 { margin:4px 0; }
+.fx-context .card-art,.fx-control-group:not(.settings-card) .card-art { --art-size:42px; --art-radius:9px; }
+.fx-context h3 small { margin-left:auto; }
+.driver-main .fx-control-group > header { align-items:center; }
+.seat-feed:has(.feed-error) .feed-live { display:none; }
+.seat-feed .feed-error { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px 12px; padding:12px; font-size:13px; }
+.feed-error button { margin:0; }
+.camera-pair.is-docked .feed-error { padding:3px; gap:3px; font-size:10px; }
+.camera-pair.is-docked .feed-error button { min-height:26px; padding:2px 6px; }
+.fx-status { flex-wrap:wrap; margin-inline:0; padding-inline:0; overflow:visible; }
+.fx-chip { flex:0 1 auto; max-width:100%; flex-wrap:wrap; box-shadow:none; background:var(--fx-inset); }
+.instrument-body .vision-timelines figure { grid-template-columns:minmax(0,1fr); gap:4px; margin:10px 0; }
+.vision-timelines figcaption { font-weight:600; }
+.timeline-plot { display:grid; position:relative; grid-template-columns:3ch minmax(0,1fr); align-items:stretch; gap:8px; }
+.timeline-scale { display:flex; flex-direction:column; justify-content:space-between; padding-block:3px; font-size:10px; color:var(--ui-muted); text-align:end; font-variant-numeric:tabular-nums; }
+.instrument-body .timeline-plot svg { display:block; height:74px; }
+.timeline-note { position:absolute; inset:50% auto auto 50%; transform:translate(-50%,-50%); padding:3px 8px; background:var(--ui-surface-1); border-radius:4px; color:var(--ui-muted); font-size:12px; white-space:nowrap; }
+.vision-timelines svg line:not([stroke-dasharray="4 5"]) { stroke:var(--ui-graph); }
+.comparison-track,.fx-rank-track,.fx-range-track { background:repeating-linear-gradient(90deg,var(--ui-rule) 0 1px,transparent 1px 25%),var(--fx-inset); }
+.comparison-track i,.comparison-row:nth-child(even) .comparison-track i,.fx-range-lo,.response-comparison b { background:var(--ui-graph); min-width:0; }
+.fx-range-hi { background:color-mix(in srgb,var(--ui-graph) 35%,transparent); }
+.response-comparison > span:last-child b { background:var(--ui-graph-secondary); }
+.fx-pose-dot { fill:var(--ui-graph); }
+.fx-pose-inner,.fx-pose-field { stroke:var(--ui-rule); stroke-width:.6px; }
+.fx-rank-row > span,.fx-range-row > span { white-space:normal; }
+.fx-stack-bar i { min-width:0; }
+.driver-main .fx-control-group header { justify-content:flex-start; }
+.driver-main .fx-control-group header small { font-family:inherit; letter-spacing:0; }
+@media (min-width:768px) {
+  .driver-app:has(.instrument-scene.is-flow):has(.camera-pair[data-dock=float]) {
+    min-height:0; height:calc(100dvh - 112px);
+  }
+  .driver-main .camera-pair.is-docked[data-dock=float] { bottom:4px; }
+}
+@media (max-width:767px) {
+  .driver-main .cockpit-grid > .cockpit-voice { min-height:210px; }
+  .driver-main .instrument-label { gap:12px; }
+  .instrument-label .card-art { --art-size:48px; }
+  .fx-kpis { grid-template-columns:repeat(auto-fit,minmax(min(100%,146px),1fr)); }
+  .driver-main .fx-kpi { padding:12px; }
+  .fx-status { gap:5px; }
+  .fx-chip { padding:4px 10px; }
+  .driver-app:has(.camera-pair[data-dock=float]) { min-height:0; height:calc(100dvh - 110px); }
+  .driver-main .camera-pair.is-docked[data-dock=float] { bottom:5px; left:8px; right:8px; width:auto; height:100px; }
+  .seat-feed .feed-error { flex-direction:column; gap:4px; padding:4px; }
+  .seat-feed .feed-error button { min-height:32px; }
+  .driver-main .instrument-body { padding-inline:14px; }
+  .fx-resources { grid-template-columns:repeat(auto-fit,minmax(min(100%,95px),1fr)); }
+}
+
+/* Card anatomy: artwork belongs to the title, readings and controls have their own rhythm. */
+:root { font-family:"Instrument Sans","Segoe UI",sans-serif; }
+.driver-app,.dm-premiere,.drive-welcome { font-family:"Instrument Sans","Segoe UI",sans-serif; }
+.driver-main :is(h1,h2,h3),.cockpit-title h1,.dm-premiere h1 {
+  font-family:"Instrument Sans","Segoe UI",sans-serif;
+}
+.driver-heading h1,.cockpit-title h1 { font-weight:550; letter-spacing:-.055em; }
+.driver-main small { font-family:inherit; }
+.card-art { background:none; border-radius:0; object-fit:contain; object-position:center; }
+.driver-main img.card-art { flex:none; padding:0; margin:0; max-width:100%; }
+.driver-main :is(.route-heading,.instrument-label,.art-heading,.settings-card > header) {
+  display:flex; align-items:center; justify-content:flex-start; gap:16px;
+}
+.driver-main :is(.route-heading,.instrument-label,.art-heading) > div { min-width:0; }
+.driver-main .route-heading { flex-wrap:wrap; padding-bottom:20px; margin-bottom:0; border-bottom:1px solid var(--ui-rule); }
+.route-heading .card-art { --art-size:88px; }
+.driver-main .route-heading h2 { font-size:clamp(22px,2vw,30px); line-height:1.15; margin:5px 0 0; letter-spacing:-.04em; }
+.route-heading small,.instrument-label small,.driver-heading > small { font-size:10px; line-height:1.5; letter-spacing:.13em; }
+.driver-main .instrument-label { padding-block:18px; }
+.instrument-label .card-art { --art-size:72px; }
+.driver-main .instrument-label h2 { font-size:26px; line-height:1.15; }
+.driver-main .instrument-label p { margin-top:5px; line-height:1.5; max-width:62ch; }
+.driver-main .cockpit-card { gap:20px; }
+.cockpit-card > header { grid-template-columns:72px minmax(0,1fr); align-items:center; gap:2px 14px; }
+.cockpit-card > header img.card-art { align-self:center; }
+.cockpit-card > header span:not(.card-art) { align-self:end; font-size:18px; }
+.cockpit-card > header b { align-self:start; line-height:1.45; font-weight:400; }
+.cockpit-card > strong { padding-top:4px; font-size:24px; line-height:1.25; }
+.cockpit-card dl > div,.cockpit-counts > div { padding:14px; border-radius:12px; }
+.cockpit-card dl dd { margin-top:6px; font-size:20px; line-height:1.2; font-weight:550; }
+.cockpit-counts span { margin-top:4px; font-size:13px; }
+.cockpit-card > button,.cockpit-row { margin-top:auto; }
+.driver-main .settings-card {
+  display:grid; grid-row:span 4; grid-template-rows:subgrid;
+  gap:14px; padding:18px; align-content:start;
+}
+.driver-main .settings-card > header { min-height:56px; gap:12px; }
+.settings-card .card-art { --art-size:52px; }
+.driver-main .settings-card h3 { font-size:17px; line-height:1.25; }
+.driver-main .settings-card p { font-size:13px; line-height:1.5; }
+.settings-card blockquote { font-size:12px; line-height:1.45; margin:0; padding-inline-start:10px; }
+.settings-card blockquote small { font-size:10px; }
+.settings-options { padding-top:0; }
+.driver-app .settings-options button { min-height:50px; padding:9px 12px; gap:2px; }
+.settings-options b { font-size:13px; font-weight:600; }
+.settings-options small { font-size:11px; line-height:1.35; }
+.fx-kpi { gap:18px; }
+.fx-kpi > header { grid-template-columns:52px minmax(0,1fr); gap:3px 10px; }
+.fx-kpi .card-art { --art-size:52px; }
+.fx-kpi strong { font-weight:550; }
+.fx-kpi-chart { margin-top:3px; }
+.driver-main .fx-control-group > header { gap:12px; flex-wrap:nowrap; align-items:center; padding-bottom:12px; border-bottom:1px solid var(--ui-rule); }
+.fx-control-group:not(.settings-card) .card-art { --art-size:56px; }
+.driver-main .fx-control-group header h3 { font-size:17px; line-height:1.3; }
+.fx-control-group header small { display:block; margin-top:4px; line-height:1.5; }
+.fx-control-group { gap:18px; padding:20px; }
+
+/* Route cards share a consistent content width and dedicated control groups. */
+.driver-main .route-simulator { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
+.driver-main .route-simulator > section { padding:clamp(20px,2.5vw,32px); border-radius:22px; }
+.route-editor,.route-playback { grid-column:1/-1; }
+.driver-main .route-simulator section > p { margin:18px 0; font-size:14px; line-height:1.65; }
+.route-sights,.location-preview { height:100%; }
+.driver-main .simulator-actions { display:flex; flex-wrap:wrap; gap:10px; margin-block:18px; align-items:center; }
+.driver-main .simulator-actions button { min-height:44px; padding:10px 16px; font-size:13px; line-height:1.4; }
+.driver-main .simulator-actions > span { flex-basis:100%; font-size:12px; margin-top:4px; }
+.driver-main .route-file { padding:14px 16px; background:var(--fx-inset); border-radius:12px; margin-top:20px; }
+.route-file summary { font-size:12px; overflow-wrap:anywhere; }
+.route-sync { padding-top:14px; border-top:1px solid var(--ui-rule); }
+.playback-layout { display:grid; grid-template-columns:minmax(240px,.8fr) minmax(0,1.5fr); gap:32px; margin-top:26px; }
+.playback-layout > div { min-width:0; }
+.driver-main .playback-layout h3 { font-size:16px; margin:0 0 16px; }
+.playback-console { padding-right:26px; border-right:1px solid var(--ui-rule); }
+.driver-main .route-playback .simulator-controls { display:flex; flex-direction:column; gap:20px; margin:0; }
+.route-playback .simulator-controls .simulator-actions { margin:0 0 4px; }
+.driver-main .route-playback .simulator-controls label { display:grid; grid-template-columns:1fr auto; gap:10px; margin:0; font-size:13px; }
+.route-playback .simulator-controls label input { grid-column:1/-1; }
+.route-playback .simulator-controls output { color:var(--ui-text); font-weight:600; font-variant-numeric:tabular-nums; }
+.driver-main .route-playback .scores { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:0 0 28px; }
+.driver-main .route-playback .scores > span { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:8px; padding:18px; font-size:12px; line-height:1.4; border-radius:12px; }
+.driver-main .route-playback .scores b { font-family:inherit; font-size:28px; line-height:1.15; margin:0; font-weight:550; }
+.route-playback .route-trip { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 24px; margin:0; }
+.route-playback .route-trip > div { background:none; border-radius:0; padding:14px 0; border-bottom:1px solid var(--ui-rule); gap:6px; }
+.route-playback .route-trip dt { font-size:12px; line-height:1.5; }
+.route-playback .route-trip dd { font-size:14px; line-height:1.6; font-weight:500; margin:0; }
+.route-playback .route-trip-wide { grid-column:1/-1; }
+.driver-main .route-points { padding:20px; border-radius:16px; }
+.route-points .route-list-heading { padding-bottom:12px; border-bottom:1px solid var(--ui-rule); }
+.driver-main .route-points .route-point-list li { padding:12px 0; gap:10px; border-bottom:1px solid var(--ui-rule); }
+.sight-list li { padding:16px; gap:14px; }
+.sight-body { gap:8px; }
+.sight-body strong { font-size:15px; line-height:1.4; }
+.sight-body > span { line-height:1.5; }
+.driver-main .sight-body textarea { min-height:76px; font-size:13px; }
+@media (prefers-reduced-motion:no-preference) {
+  .driver-app button,.dm-connect { transition:background-color 220ms var(--ui-ease),color 220ms var(--ui-ease),transform 220ms var(--ui-ease); }
+  .driver-main .card-art { transition:transform 260ms var(--ui-ease); }
+  .driver-main :is(.cockpit-card,.settings-card,.route-simulator > section):focus-within .card-art { transform:translateY(-2px); }
+  .driver-app .point-actions button:active { transform:translateY(1px); }
+}
+@container workspace (max-width:850px) {
+  .driver-main .route-simulator { grid-template-columns:minmax(0,1fr); }
+  .route-editor,.route-playback { grid-column:auto; }
+  .playback-layout { grid-template-columns:minmax(0,1fr); gap:24px; }
+  .playback-console { padding:0 0 24px; border-right:0; border-bottom:1px solid var(--ui-rule); }
+}
+@media(max-width:767px) {
+  .route-heading .card-art { --art-size:64px; }
+  .driver-main .route-heading { gap:12px; }
+  .driver-main .route-heading .status-pill { margin-left:76px; }
+  .driver-main .instrument-label .card-art { --art-size:56px; }
+  .driver-main .settings-card { padding:16px; }
+  .route-playback .route-trip { gap:0 16px; }
+}

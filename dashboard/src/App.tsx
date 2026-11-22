@@ -16,7 +16,7 @@ import type {Sample} from "./telemetry";
 function Feed({src,label}: {src: string; label: string}){
  const [attempt,retry]=useState(0),[error,setError]=useState(false);
  useEffect(()=>setError(false),[src]);
- return error?<div className="feed-error">{label} · indisponibil <button onClick={()=>{retry(attempt+1);setError(false)}}>Reîncearcă</button></div>:
+ return error?<div className="feed-error"><span>{label} · unavailable</span> <button onClick={()=>{retry(attempt+1);setError(false)}}>Retry</button></div>:
  <img key={attempt} src={src} alt={label} onError={()=>setError(true)}/>;
 }
 /** P1's two MJPEG streams (perception/stream.py). A stream that cannot be loaded says so and offers a retry. */
@@ -89,71 +89,71 @@ export function Cameras({socket,cue,trip,onDock}: {socket: SessionData["socket"]
  window.addEventListener("keydown",key);return ()=>window.removeEventListener("keydown",key)},[socket,requested]);
  return <div className="monitor-cameras">
    <div className="camera-anchor" ref={boundary}>
-     <section ref={camera} tabIndex={-1} aria-label="Camere habitaclu" className={"camera-pair"+(compact?" is-docked":"")}>
+     <section ref={camera} tabIndex={-1} aria-label="Cabin cameras" className={"camera-pair"+(compact?" is-docked":"")}>
        {(["driver","passenger"] as const).map(seat=>{
-         const label=seat==="driver"?"Șofer":"Pasager";
+         const label=seat==="driver"?"Driver":"Passenger";
          return <figure key={seat} className="seat-feed">
-           <figcaption><span>{label}</span><small>LIVE</small></figcaption>
+           <figcaption><span>{label}</span><small className="feed-live">LIVE</small></figcaption>
            <div className="camera-stage"><Feed src={videoOrigin+"/video/"+seat} label={"Camera · "+label}/></div>
          </figure>;
        })}
-       {compact&&<button className="camera-return" onClick={returnToCamera} aria-label="Revino la camere">↗</button>}
+       {compact&&<button className="camera-return" onClick={returnToCamera} aria-label="Back to cameras">↗</button>}
      </section>
    </div>
-   {<div className="camera-controls"><button disabled={!socket} onClick={debug}>Debug · D</button>{requested!==null&&socket&&<span>{requested?"Activare cerută":"Dezactivare cerută"}</span>}</div>}
+   {<div className="camera-controls"><button disabled={!socket} onClick={debug}>Debug · D</button>{requested!==null&&socket&&<span>{requested?"Enable requested":"Disable requested"}</span>}</div>}
    <TripStrip trip={trip}/>
  </div>;
 }
 export function General({s}: StateProps & {points: SessionData["history"]}){
  const a=s.assessment??{},safe=s.safety??{},g=s.driver?.gaze??{},h=s.driver?.head??{},c=s.cause??{};
- return <section id="general"><small>STARE GENERALĂ</small><h2>{safe.monitoring_ok===false?"Monitorizare întreruptă":safe.alert?"Alertă activă":g.zone==="road"?"Privirea pe drum":zones[g.zone??""]??"Direcție nedeterminată"}</h2>
- {safe.alert&&<p role="alert">{words(typeof safe.alert === "object" ? safe.alert.text : safe.alert)}</p>}<p>{safe.level??"—"} · Risc {fmt(a.risk)}/3 · {fmt(s.trip?.speed_kmh," km/h")}</p>
+ return <section id="general"><small>DRIVER OVERVIEW</small><h2>{safe.monitoring_ok===false?"Monitoring interrupted":safe.alert?"Active alert":g.zone==="road"?"Eyes on the road":zones[g.zone??""]??"Gaze direction unknown"}</h2>
+ {safe.alert&&<p role="alert">{words(typeof safe.alert === "object" ? safe.alert.text : safe.alert)}</p>}<p>{safe.level??"—"} · Risk {fmt(a.risk)}/3 · {fmt(s.trip?.speed_kmh," km/h")}</p>
  <div className="overview">
   <AttentionGauge value={a.attention}/>
   <div className="trends">
-    <div className="mini-scores"><ScoreReading label="Oboseală" icon="fatigue" value={a.fatigue}/><ScoreReading label="Dezinteres" icon="focus" value={a.disengagement}/></div>
+    <div className="mini-scores"><ScoreReading label="Fatigue" icon="fatigue" value={a.fatigue}/><ScoreReading label="Disengagement" icon="focus" value={a.disengagement}/></div>
 
   </div>
 </div>
- <Detail title="Șofer și context"><Rows items={[["Timp pe traseu",fmt(s.trip?.elapsed_min," min")],["Până la destinație",fmt(s.trip?.eta_min," min")],["Tip drum",words(s.trip?.road)],["Următoarea oprire",s.trip?.next_poi?.name],["Distanță până la oprire",fmt(s.trip?.next_poi?.dist_km," km")],["Ultima stare",time(s.ts)],["Cauză",words(c.label)],["Țintă / priviri în 30 s",words(c.target)+" / "+fmt(c.glances_30s)],["Surse",c.sources?.join?.(", ")||"—"],["Încredere cauză",fmt(c.conf,"%",100)],["Poziție cap · yaw / pitch / roll",[h.yaw,h.pitch,h.roll].map(v=>fmt(v,"°")).join(" / ")],["Cădere de cap",yes(h.nodding)],["Căscat",yes(s.driver?.yawn)],["Vorbește",yes(s.driver?.speaking)],["Telefon folosit",yes(s.driver?.phone?.in_use)],["Sursă telefon",words(s.driver?.phone?.source)],["Încredere telefon",fmt(s.driver?.phone?.conf,"%",100)]]}/></Detail></section>;
+ <Detail title="Driver & context"><Rows items={[["Time on route",fmt(s.trip?.elapsed_min," min")],["Arrival in",fmt(s.trip?.eta_min," min")],["Road type",words(s.trip?.road)],["Next stop",s.trip?.next_poi?.name],["Distance to stop",fmt(s.trip?.next_poi?.dist_km," km")],["Last update",time(s.ts)],["Cause",words(c.label)],["Target / glances in 30 s",words(c.target)+" / "+fmt(c.glances_30s)],["Sources",c.sources?.join?.(", ")||"—"],["Cause confidence",fmt(c.conf,"%",100)],["Head pose · yaw / pitch / roll",[h.yaw,h.pitch,h.roll].map(v=>fmt(v,"°")).join(" / ")],["Head nodding",yes(h.nodding)],["Yawning",yes(s.driver?.yawn)],["Speaking",yes(s.driver?.speaking)],["Phone in use",yes(s.driver?.phone?.in_use)],["Phone source",words(s.driver?.phone?.source)],["Phone confidence",fmt(s.driver?.phone?.conf,"%",100)]]}/></Detail></section>;
 }
 export function Eyes({s,samples=[]}: StateProps & {samples?: Sample[]}){
  const rawEyes=s.driver?.eyes??{},g=s.driver?.gaze??{},crop=import.meta.env.VITE_EYE_STREAM_URL;
  const monitored=s.driver?.monitoring_ok!==false && s.perf?.cameras?.driver?.available!==false;
  const known=monitored && g.calibrated!==false && Boolean(zones[g.zone??""]);
  const e=monitored && rawEyes.reliable===true?rawEyes:{reliable:rawEyes.reliable,state:"UNKNOWN"};
- return <section id="eyes" className="optical"><small>ANALIZĂ OCULARĂ</small><h2>Privire</h2>
+ return <section id="eyes" className="optical"><small>EYE TRACKING</small><h2>Gaze</h2>
  <div className="ocular">{crop&&monitored&&e.reliable===true&&<Feed src={crop} label="Decupaj ocular"/>}
- <div><strong>{known?zones[g.zone!]:"Direcție nedeterminată"}</strong><p>{e.reliable===false?"Semnal ocular nesigur":crop&&monitored&&e.reliable?"Decupaj ocular live":"Decupaj ocular indisponibil"}</p></div></div>
- <Metrics items={[["PERCLOS · 60 s",fmt(e.perclos_60s,"%",100)],["Ultima clipire",fmt(e.blink_ms," ms")],["În afara drumului",known?fmt(g.off_road_ms," s",.001,2):"—"]]}/>
+ <div><strong>{known?zones[g.zone!]:"Gaze direction unknown"}</strong><p>{e.reliable===false?"Unreliable eye signal":crop&&monitored&&e.reliable?"Live eye crop":"Eye crop unavailable"}</p></div></div>
+ <Metrics items={[["PERCLOS · 60 s",fmt(e.perclos_60s,"%",100)],["Last blink",fmt(e.blink_ms," ms")],["Off road",known?fmt(g.off_road_ms," s",.001,2):"—"]]}/>
  <div className="fx-trends">
-   <figure><figcaption>Deschidere oculară (EAR)<b>{fmt(e.ear,"",1,2)}</b></figcaption><Spark values={samples.map(sample=>sample.ear)} label="Deschiderea oculară în ultimul minut"/></figure>
-   <figure><figcaption>În afara drumului<b>{known?fmt(g.off_road_ms," s",.001,1):"—"}</b></figcaption><Spark values={samples.map(sample=>sample.offRoad)} tone="warn" label="Timpul cu privirea în afara drumului, ultimul minut"/></figure>
+   <figure><figcaption>Eye opening (EAR)<b>{fmt(e.ear,"",1,2)}</b></figcaption><Spark values={samples.map(sample=>sample.ear)} label="Eye opening over the last minute"/></figure>
+   <figure><figcaption>Off road<b>{known?fmt(g.off_road_ms," s",.001,1):"—"}</b></figcaption><Spark values={samples.map(sample=>sample.offRoad)} tone="warn" label="Off-road gaze time over the last minute"/></figure>
  </div>
- <Detail title="Calitatea semnalului ocular"><Rows items={[["Deschidere relativă (EAR)",fmt(e.ear,"",1,2)],["Ochi folosit",({left:"Stâng",right:"Drept"} as Record<string,string>)[e.eye_used??""]],["Semnal fiabil",yes(e.reliable)],["Sursa privirii",words(g.source)],["Încredere zonă",known?fmt(g.conf,"%",100):"—"],["Priviri scurte · 60 s",known?fmt(g.vats_60s):"—"],["Entropie · 60 s",known?fmt(g.entropy_60s," bit"):"—"],["Microsomn",yes(e.microsleep)],["Tipar poală (telefon)",known?yes(g.lap_pattern):"—"],["Clipiri numărate",fmt(e.blink_count,"",1,0)],["Închidere curentă",fmt(e.closed_ms," ms")],["Referință ochi deschis",fmt(e.open_baseline,"",1,2)],["Frecvență clipire",fmt(e.blink_rate," /min")],["Ochi mijiți",yes(e.squint)],["Starea pleoapei",words(e.state)],["Închidere prelungită",yes(e.long_closure)]]}/></Detail></section>;
+ <Detail title="Eye signal quality"><Rows items={[["Relative opening (EAR)",fmt(e.ear,"",1,2)],["Tracked eye",({left:"Left",right:"Right"} as Record<string,string>)[e.eye_used??""]],["Reliable signal",yes(e.reliable)],["Gaze source",words(g.source)],["Zone confidence",known?fmt(g.conf,"%",100):"—"],["Short glances · 60 s",known?fmt(g.vats_60s):"—"],["Entropy · 60 s",known?fmt(g.entropy_60s," bit"):"—"],["Microsleep",yes(e.microsleep)],["Lap pattern (phone)",known?yes(g.lap_pattern):"—"],["Blink count",fmt(e.blink_count,"",1,0)],["Current closure",fmt(e.closed_ms," ms")],["Open-eye baseline",fmt(e.open_baseline,"",1,2)],["Blink rate",fmt(e.blink_rate," /min")],["Squinting",yes(e.squint)],["Eyelid state",words(e.state)],["Prolonged closure",yes(e.long_closure)]]}/></Detail></section>;
 }
 export function Reaction({s}: StateProps){
  const r=s.driver?.reaction??{},input=s.interaction?.last_input;
- return <Panel id="reaction" label="INPUT ȘOFER" title="Reacție"><p>Ultima reacție / referința personală</p>{Object.entries({visual:"Vizual",verbal:"Verbal",gesture:"Gest"}).map(([key,label])=>{
+ return <Panel id="reaction" label="DRIVER INPUT" title="Response"><p>Last response / personal baseline</p>{Object.entries({visual:"Visual",verbal:"Verbal",gesture:"Gesture"}).map(([key,label])=>{
  const ms=r[`${key}_ms` as "visual_ms" | "verbal_ms" | "gesture_ms"],base=r.baseline_ms?.[key as "visual" | "verbal" | "gesture"],ratio=Number.isFinite(ms)&&typeof base === "number"&&base>0?ms!/base:null;
  const scale=Math.max(1,typeof ms==="number"&&Number.isFinite(ms)?ms:0,typeof base==="number"&&Number.isFinite(base)?base:0);
  return <div className="response" key={key}><span>{label}</span><strong className="ratio-reading">{ratio===null?"—":fmt(ratio,"×",1,2)}</strong><output>{fmt(ms," ms")} / {fmt(base," ms")}</output>
- <div className="response-comparison" aria-label={label+" · răspuns / referință"}>
-   <span>Răspuns<i>{Number.isFinite(ms)&&<b style={{width:Math.max(0,ms!)/scale*100+"%"}}/>}</i></span>
-   <span>Referință<i>{Number.isFinite(base)&&<b style={{width:Math.max(0,base!)/scale*100+"%"}}/>}</i></span>
+ <div className="response-comparison" aria-label={label+" · response / baseline"}>
+   <span>Response<i>{Number.isFinite(ms)&&<b style={{width:Math.max(0,ms!)/scale*100+"%"}}/>}</i></span>
+   <span>Baseline<i>{Number.isFinite(base)&&<b style={{width:Math.max(0,base!)/scale*100+"%"}}/>}</i></span>
  </div></div>;
- })}<Detail title="Răspunsuri și canale"><Rows items={[["Ultimul canal",words(input?.channel)],["Răspuns",words(input?.value)],["Ora",time(input?.ts)],["Gest",words(s.driver?.gesture)],["Răspuns din cap",words(s.driver?.head?.answer)],["Răspunsuri ratate",fmt(r.missed)],["Rată răspuns · 10 min",fmt(r.response_rate_10min,"%",100)]]}/></Detail></Panel>
+ })}<Detail title="Responses & channels"><Rows items={[["Last channel",words(input?.channel)],["Response",words(input?.value)],["Time",time(input?.ts)],["Gesture",words(s.driver?.gesture)],["Head response",words(s.driver?.head?.answer)],["Missed responses",fmt(r.missed)],["Response rate · 10 min",fmt(r.response_rate_10min,"%",100)]]}/></Detail></Panel>
 }
 type View = "overview" | "history" | "signals" | "reaction" | "cabin" | "report" | "system" | "assistant" | "events";
 const views: {id: View; label: string; icon: string}[] = [
  {id:"overview",label:"General",icon:"grid"},
- {id:"history",label:"Evoluție scoruri",icon:"pulse"},
+ {id:"history",label:"Score history",icon:"pulse"},
  {id:"signals",label:"Semnale",icon:"eye"},
- {id:"reaction",label:"Reacție",icon:"pulse"},
- {id:"cabin",label:"Cabină",icon:"voice"},
- {id:"report",label:"Călătorie",icon:"route"},
- {id:"system",label:"Sistem",icon:"pulse"},
- {id:"assistant",label:"Asistent",icon:"voice"},
+ {id:"reaction",label:"Response",icon:"pulse"},
+ {id:"cabin",label:"Cabin",icon:"voice"},
+ {id:"report",label:"Trip",icon:"route"},
+ {id:"system",label:"System",icon:"pulse"},
+ {id:"assistant",label:"Assistant",icon:"voice"},
  {id:"events",label:"Evenimente",icon:"route"}
 ];
 export function Icon({name}: {name: string}) {

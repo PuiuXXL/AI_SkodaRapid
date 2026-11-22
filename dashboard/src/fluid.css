@@ -206,12 +206,9 @@
 @media (min-width:1180px) {
   .driver-main section.fx-overview { grid-template-columns:minmax(0,1fr) 300px; }
   .fx-overview-rail .camera-slot { display:block; }
-  /* The docked preview takes the place of the context card (same grid cell), so docking never moves the page. */
-  .fx-rail-sticky { position:sticky; top:16px; display:grid; }
-  .fx-rail-sticky > * { grid-area:1/1; }
-  .fx-overview-rail .camera-slot { background:none; min-height:330px; }
-  .fx-context { min-height:330px; transition:opacity var(--ui-duration) var(--ui-ease),visibility var(--ui-duration); }
-  .has-camera-dock .fx-context { opacity:0; visibility:hidden; }
+  .fx-rail-sticky { position:sticky; top:16px; display:grid; gap:14px; }
+  .fx-overview-rail .camera-slot { display:none; }
+  .has-camera-dock .fx-overview-rail .camera-slot { display:block; height:150px; }
 }
 
 /* --- instrument stack ----------------------------------------------------------------------------------------- */

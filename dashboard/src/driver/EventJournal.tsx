@@ -12,17 +12,17 @@ export function EventJournal({events,id,onSelect,pageSize}: {events:DashboardEve
     event.ts===selection.ts&&event.type===selection.type&&event.text===selection.text&&event.source===selection.source;
   const current=events.find(same)??events[0];
   return <section id={id} className="event-journal">
-    <h2>Jurnalul călătoriei</h2>
+    <h2>Trip journal</h2>
     {current?<><div className="journal-list"><div className="journal-entries" aria-label="Evenimente">{visible.map((event,i)=>
       <button key={event.ts+"-"+i} aria-pressed={event===current} onClick={()=>{setSelection(event);onSelect?.(event.ts);}}>
         <time>{time(event.ts)}</time><span>{words(event.text??event.explanation??event.type)}</span>
       </button>)}</div>
-      {pages>1&&<div className="journal-pagination"><button disabled={currentPage===0} onClick={()=>setPage(currentPage-1)} aria-label="Evenimentele anterioare">←</button><span>{currentPage+1} / {pages}</span><button disabled={currentPage===pages-1} onClick={()=>setPage(currentPage+1)} aria-label="Evenimentele următoare">→</button></div>}</div>
+      {pages>1&&<div className="journal-pagination"><button disabled={currentPage===0} onClick={()=>setPage(currentPage-1)} aria-label="Previous events">←</button><span>{currentPage+1} / {pages}</span><button disabled={currentPage===pages-1} onClick={()=>setPage(currentPage+1)} aria-label="Next events">→</button></div>}</div>
       <div className="journal-detail"><small>{time(current.ts)} · {words(current.type)}</small>
         <h3>{words(current.explanation??current.text??current.type)}</h3>
-        {current.source&&<p>Sursă · {words(current.source)}</p>}
+        {current.source&&<p>Source · {words(current.source)}</p>}
         {current.channel&&<p>Canal · {words(current.channel)}</p>}
-        {typeof current.latency_ms==="number"&&<p>Latență · {fmt(current.latency_ms," ms")}</p>}
-      </div></>:<p>În așteptarea primului eveniment.</p>}
+        {typeof current.latency_ms==="number"&&<p>Latency · {fmt(current.latency_ms," ms")}</p>}
+      </div></>:<p>Waiting for the first event.</p>}
   </section>;
 }
