@@ -9,8 +9,9 @@
 * the browser's ``alarm_played`` gives the alarm latency and starts "Ești bine?" after the clip, ``speak_done`` the
   answer window, ``speech`` the spoken answers.
 
-SOS channels: the DriveMate Contact page when P4's ``integrations.contact_app`` exists; ``call`` (Twilio) and
-``sms`` (the driver's phone, via the bridge) report ``not_connected`` until the phone part is wired.
+SOS channels: the DriveMate Contact page when P4's ``integrations.contact_app`` exists; ``call`` and ``sms``
+through Twilio (``core/safety/channels.py``, ``integrations/twilio_call.py``) when ``.env`` has the keys, in the
+background; ``not_connected`` otherwise (and always under pytest).
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from core.ab_baseline import AbBaseline
 from core.dialog_window import DialogWindow
 from core.safety.alarm import Alarms
+from core.safety import channels
 from core.safety.arbiter import Arbiter
 from core.safety.distraction import DistractionRule
 from core.safety.drowsiness import DrowsinessRule
@@ -52,7 +54,7 @@ def _not_connected(_: SosReport) -> str:
 
 
 def default_sos_channels() -> dict[str, SosChannel]:
-    return {"contact_page": _contact_page, "call": _not_connected, "sms": _not_connected}
+    return {"contact_page": _contact_page, "call": channels.twilio_call_channel, "sms": channels.twilio_sms_channel}
 
 
 class Safety:
@@ -63,8 +65,10 @@ class Safety:
         self.arbiter = Arbiter(engine)
         self.alarms = Alarms(engine)
         self.ab = AbBaseline(engine)
-        channels = default_sos_channels() if sos_channels is None else sos_channels
-        self.sos = SosMachine(engine, self.arbiter, self.alarms, self.dialog, channels)
+        sos_set = default_sos_channels() if sos_channels is None else sos_channels
+        self.sos = SosMachine(engine, self.arbiter, self.alarms, self.dialog, sos_set)
+        if sos_channels is None:
+            self.sos.all_clear = channels.twilio_all_clear  # the driver answered after the SOS: tell the contact
         self.sos.ab = self.ab
         self.drowsiness = DrowsinessRule(engine, self.arbiter, self.sos, self.dialog)
         self.distraction = DistractionRule(engine, self.arbiter, self.alarms, self.ab)

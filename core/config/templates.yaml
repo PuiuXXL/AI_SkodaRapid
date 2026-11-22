@@ -7,24 +7,43 @@ links:
   maps: "https://www.google.com/maps?q={lat:.5f},{lon:.5f}"
 
 sos:                            # C5, F6: driver not responding
-  # Twilio <Say> in ro-RO. A link cannot be read aloud: the location goes by SMS and on DriveMate Contact.
-  # Fields: driver_name, unresponsive_s, occupants_n, passenger_state_text, time_hhmm
+  # Twilio <Say> in ro-RO (integrations/twilio_call.py), read twice. A link cannot be read aloud: the location goes
+  # by SMS and on DriveMate Contact. Fields: driver_name, unresponsive_s, cause, occupants_n, passenger_state_text,
+  # time_hhmm
   call: >-
-    Alertă automată DriveMate. {driver_name} nu răspunde de {unresponsive_s} secunde.
+    Alertă automată DriveMate. {driver_name} nu răspunde de {unresponsive_s} secunde. {cause}
     Ocupanți: {occupants_n}; pasagerul din dreapta e {passenger_state_text}.
     Locația a fost trimisă prin SMS. Ora: {time_hhmm}.
-  # SMS from the driver's phone (send_sms to=emergency) and the red alert on DriveMate Contact.
-  # Fields: driver_name, unresponsive_s, occupants_n, passenger_state_text, maps_url, time_hhmm
+  # SMS to the emergency contact (Twilio) and the red alert on DriveMate Contact.
+  # Fields: driver_name, unresponsive_s, cause, occupants_n, passenger_state_text, maps_url, time_hhmm
   sms: >-
-    Alertă automată DriveMate. {driver_name} nu răspunde de {unresponsive_s} secunde.
+    Alertă automată DriveMate. {driver_name} nu răspunde de {unresponsive_s} secunde. {cause}
     Ocupanți: {occupants_n}; pasagerul din dreapta e {passenger_state_text}.
     Locație: {maps_url}. Ora: {time_hhmm}.
-  # passenger_state_text, from SosReport.passenger_state
+  # What happened, by the alert that started the SOS (spoken by Twilio: "la oră", not "km/h").
+  # Fields: driver_name, speed_kmh
+  cause:
+    microsleep: "{driver_name} a închis ochii la volan, mergând cu {speed_kmh} la oră."
+    nodding: "Lui {driver_name} i-a căzut capul la volan, mergând cu {speed_kmh} la oră."
+    head_down: "Lui {driver_name} i-a căzut capul la volan, mergând cu {speed_kmh} la oră."
+    face_lost: "Camera nu l-a mai văzut pe {driver_name}, mergând cu {speed_kmh} la oră."
+    default: "Alarma de siguranță s-a declanșat, mergând cu {speed_kmh} la oră."
+  # In the car, when the call goes out and when its outcome is known. Fields: driver_name, contact_name
+  announce_call: "{driver_name} nu răspunde. Sun contactul de urgență, {contact_name}."
+  announce_call_unnamed: "{driver_name} nu răspunde. Sun contactul de urgență."
+  call_answered: "{contact_name} a răspuns la apel și știe unde suntem."
+  call_no_answer: "{contact_name} nu a răspuns. I-am trimis locația prin SMS."
+  call_failed: "Nu am putut suna contactul de urgență."
+  # The driver answered after the SOS went out: the emergency contact is told (SMS), and the car hears it.
+  # Fields: driver_name, contact_name, time_hhmm
+  all_clear_sms: "DriveMate: {driver_name} a răspuns după alertă și spune că e bine. Ora: {time_hhmm}."
+  all_clear_said: "Îi spun lui {contact_name} că ești bine."
   # After a microsleep the driver answered "da": the awake front passenger helps (clip passenger_wake_<p>_<d>).
   # Fields: passenger_name, driver_name
   passenger_wake: "{passenger_name}, te rog, vorbește puțin cu {driver_name}, să rămână treaz."
   # SOS sent, no answer yet: how to cancel it (repeated every sos.sent_reask_s). Fields: driver_name
   sent_ask: "{driver_name}, am chemat ajutor. Dacă ești bine, spune «sunt bine» sau arată degetul mare."
+  # passenger_state_text, from SosReport.passenger_state
   passenger_state:
     awake: treaz
     asleep: adormit

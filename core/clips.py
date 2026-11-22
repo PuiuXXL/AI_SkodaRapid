@@ -61,6 +61,30 @@ def person_names(state: State) -> tuple[str, str | None]:
     return (driver or str(template("clips", "default_driver"))).lower(), passenger.lower() if passenger else None
 
 
+def emergency_contact_name(state: State) -> str | None:
+    """Who the SOS calls: ``emergency_contact.name`` in the driver's profile, else ``clips.emergency_contact_name`` in
+    P3's ``assistant/config/assistant.yaml`` (the number itself is only in ``.env``: EMERGENCY_NUMBER)."""
+    from core import profiles  # here: profiles is small, clips is imported early
+
+    driver, _ = person_names(state)
+    profile = profiles.load(driver) or {}
+    contact = profile.get("emergency_contact") or {}
+    name = str(contact.get("name") or "").strip() if isinstance(contact, dict) else ""
+    return name or _assistant_contact_name()
+
+
+@lru_cache(maxsize=1)
+def _assistant_contact_name() -> str | None:
+    try:
+        import yaml
+
+        data = yaml.safe_load((REPO_ROOT / "assistant" / "config" / "assistant.yaml").read_text(encoding="utf-8"))
+    except (OSError, ValueError, ImportError):
+        return None
+    name = str(((data or {}).get("clips") or {}).get("emergency_contact_name") or "").strip()
+    return name or None
+
+
 def display(name: str | None) -> str:
     return (name or "").capitalize()
 

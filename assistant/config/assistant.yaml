@@ -153,7 +153,10 @@ clips:
   # People that get a personal alarm clip ("ANDREI!") and passenger instructions.
   names: [Andrei, Maria, Ioana, Mihai]
   # Trusted / emergency contacts that get "Îi dau de veste lui {contact}."
-  contact_names: [Mihai]
+  contact_names: [Mihai, Cristian]
+  # The emergency contact the SOS calls (core reads it: core/clips.py emergency_contact_name; a profile's
+  # emergency_contact.name wins). The number is only in .env (EMERGENCY_NUMBER).
+  emergency_contact_name: Cristian
 
 # -----------------------------------------------------------------------------
 # Music recommendation (assistant/music.py; plan D8)

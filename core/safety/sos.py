@@ -30,8 +30,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from concurrent.futures import Future
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from core import clips
 from core.ab_baseline import AbBaseline
@@ -65,6 +66,8 @@ class SosMachine:
         self.ab: AbBaseline | None = None  # the A/B counter (B8) counts every alarm as a DriveMate alert
         self.eyes_open_s: Callable[[float], float] = lambda now: 0.0  # set by the drowsiness rule
         self.on_cancelled: list[Callable[[float], None]] = []  # e.g. the drowsiness rule proposes a break
+        self.all_clear: Callable[[str], Any] | None = None  # SMS to the contact when the driver answers after it
+        self.pending: dict[str, Future[str]] = {}  # channels still running in the background (Twilio)
         self.reset(0.0)
 
     def reset(self, now: float) -> None:
@@ -80,6 +83,7 @@ class SosMachine:
         self.instructions_id: str | None = None
         self.next_sent_ask = 0.0  # sos_sent: when the driver is next asked to cancel
         self.last_report: SosReport | None = None
+        self.start_speed_kmh = 0.0  # the speed when the alarm started (for the cause in the call / SMS)
         self.consumed_at: float | None = None  # when an input last answered the SOS (not for the assistant then)
 
     # --- the start (called by the drowsiness rule on the frame that crossed the threshold) -----------------------
@@ -90,6 +94,7 @@ class SosMachine:
             return False
         self.state, self.since, self.alarm_started, self.alert, self.trigger = "alarm", now, now, alert, alert
         self.reasked = False
+        self.start_speed_kmh = self.engine.state.trip.speed_kmh
         self.arbiter.raise_alert(RULE, "P1", alert, now)  # stops speech and music first
         self.alarm_id = self.alarms.send(now, alert, "P1", capture_ts=capture_ts or None, explanation=explanation)
         if self.ab is not None:
@@ -138,6 +143,8 @@ class SosMachine:
             self._normal(now)
             clip_id = str(template("clips", "confirm_ok"))
             self.engine.say(clip_id, clips.clip_text(clip_id, "Ok."), prefix="sos")
+            if stage == "sos_sent":
+                self._all_clear(now)
             self._passenger_wake(trigger, now)
             text = "Șoferul a răspuns după SOS." if stage == "sos_sent" else "Șoferul a răspuns."
             self.engine.log_event("sos_cancelled", now, channel=channel, text=text, stage=stage,
@@ -235,11 +242,17 @@ class SosMachine:
         results: dict[str, str] = {}
         for name, channel in self.channels.items():
             try:
-                results[name] = channel(report)
+                result = channel(report)
             except Exception as exc:  # one broken channel must not stop the others (C9)
                 log.exception("SOS channel %s failed", name)
-                results[name] = f"error: {exc.__class__.__name__}"
+                result = f"error: {exc.__class__.__name__}"
+            if isinstance(result, Future):  # a network channel running in the background (Twilio)
+                self.pending[name] = result
+                result = "started"
+            results[name] = str(result)
         self.engine.log_event("sos_sent", now, text=report.text, report=to_wire(report), channels=results)
+        if results.get("call") == "started":  # tell the car who is being called
+            self.engine.say(None, self._contact_text("announce_call"), prefix="sos")
 
     def _normal(self, now: float) -> None:
         self.state, self.since, self.alert, self.trigger = "normal", None, "", None
@@ -262,7 +275,8 @@ class SosMachine:
             elif now >= self.next_realarm:
                 self.alarms.send(now, "unresponsive", "P0")
                 self.next_realarm = now + _s("realarm_s")
-        elif self.state == "sos_sent":
+        self._channel_results(now)
+        if self.state == "sos_sent":
             if now >= self.next_sent_ask:
                 self._sent_ask(now)
             if not self.dialog.is_open(now) or (self.dialog.until or 0.0) - now < 2.0:
@@ -272,6 +286,44 @@ class SosMachine:
             "state": self.state, "since_ts": self.since, "countdown_s": round(left, 1) if left is not None else None,
             "trigger": self.trigger, "reasked": self.reasked,
         })
+
+    def _contact_text(self, key: str) -> str:
+        """A sentence about the emergency contact, by name when it is known."""
+        driver, _ = clips.person_names(self.engine.state)
+        contact = clips.emergency_contact_name(self.engine.state)
+        if contact is None and key == "announce_call":
+            key = "announce_call_unnamed"
+        return render("sos", key, driver_name=clips.display(driver), contact_name=contact or "contactul de urgență")
+
+    def _channel_results(self, now: float) -> None:
+        """Background channels that finished: the event log, and for the call a sentence in the car."""
+        for name, future in list(self.pending.items()):
+            if not future.done():
+                continue
+            del self.pending[name]
+            status = future.result()
+            self.engine.log_event("sos_channel_result", now, sos_channel=name, status=status,
+                                  text=f"SOS {name}: {status}")
+            if name != "call" or self.state == "normal":
+                continue  # (the driver already answered: no news about the call over the conversation)
+            key = {"answered": "call_answered", "no_answer": "call_no_answer", "busy": "call_no_answer",
+                   "started": None}.get(status, "call_failed")
+            if key is not None:
+                self.engine.say(None, self._contact_text(key), prefix="sos")
+
+    def _all_clear(self, now: float) -> None:
+        """The driver answered after the SOS went out: the emergency contact gets an SMS, the car hears it."""
+        if self.all_clear is None:
+            return
+        driver, _ = clips.person_names(self.engine.state)
+        text = render("sos", "all_clear_sms", driver_name=clips.display(driver),
+                      time_hhmm=datetime.fromtimestamp(now).strftime("%H:%M"))
+        result = self.all_clear(text)
+        if isinstance(result, Future):
+            self.pending["all_clear"] = result
+            self.engine.say(None, self._contact_text("all_clear_said"), prefix="sos", priority="important")
+        self.engine.log_event("sos_all_clear", now, text=text, status="started" if isinstance(result, Future)
+                              else str(result))
 
     def _sent_ask(self, now: float) -> None:
         """SOS sent and no answer yet: tell the driver how to cancel it, by name."""
@@ -291,6 +343,9 @@ class SosMachine:
         passenger_state = "absent" if not passenger.present else "awake" if passenger.awake else "asleep"
         occupants_n = 1 + int(passenger.present) + sum(1 for o in state.occupants if o.seat == "rear")
         pos: Position = state.trip.pos
+        causes = template("sos", "cause")
+        cause_template = causes.get(self.trigger or "", causes["default"])
+        cause = cause_template.format(driver_name=clips.display(driver), speed_kmh=round(self.start_speed_kmh))
         fields = {
             "driver_name": clips.display(driver),
             "unresponsive_s": round(now - (self.alarm_started or now)),
@@ -298,10 +353,11 @@ class SosMachine:
             "passenger_state_text": template("sos", "passenger_state", passenger_state),
             "maps_url": render("links", "maps", lat=pos.lat, lon=pos.lon),
             "time_hhmm": datetime.fromtimestamp(now).strftime("%H:%M"),
+            "cause": cause,
         }
         return SosReport.model_validate({
             "driver_name": fields["driver_name"], "unresponsive_s": fields["unresponsive_s"],
             "occupants_n": occupants_n, "passenger_state": passenger_state, "pos": pos.model_dump(),
             "maps_url": fields["maps_url"], "time_hhmm": fields["time_hhmm"], "ts": now,
-            "text": render("sos", "sms", **fields),
+            "text": render("sos", "sms", **fields), "cause": cause, "call_text": render("sos", "call", **fields),
         })

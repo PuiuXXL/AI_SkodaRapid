@@ -1270,7 +1270,10 @@ class SosReport(ContractModel):
     maps_url: str = ""
     time_hhmm: str = ""
     ts: float = 0.0
-    text: str = ""  # the rendered template, read by Twilio <Say> and sent by SMS
+    text: str = ""  # the rendered SMS template (state + map link), also on DriveMate Contact
+    # P2 additions (2026-11-22): what happened, and the text the Twilio call reads aloud (no link in it)
+    cause: str = ""  # e.g. "Andrei a închis ochii la volan, mergând cu 110 la oră."
+    call_text: str = ""
 
 
 class SafeContactNotice(ContractModel):

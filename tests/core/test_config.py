@@ -122,8 +122,9 @@ def test_unknown_demo_key_is_an_error(tmp_path: Path) -> None:
 
 TEMPLATE_FIELDS = {
     ("links", "maps"): {"lat", "lon"},
-    ("sos", "call"): {"driver_name", "unresponsive_s", "occupants_n", "passenger_state_text", "time_hhmm"},
-    ("sos", "sms"): {"driver_name", "unresponsive_s", "occupants_n", "passenger_state_text", "maps_url", "time_hhmm"},
+    ("sos", "call"): {"driver_name", "unresponsive_s", "cause", "occupants_n", "passenger_state_text", "time_hhmm"},
+    ("sos", "sms"): {"driver_name", "unresponsive_s", "cause", "occupants_n", "passenger_state_text", "maps_url",
+                     "time_hhmm"},
     ("sos", "passenger_instructions"): {"passenger_name", "driver_name"},
     ("sos", "reask"): {"driver_name"},
     ("drowsiness", "checkin"): {"driver_name"},
@@ -158,9 +159,11 @@ def test_sos_sms_renders_like_the_plan() -> None:
     text = settings.render(
         "sos", "sms", driver_name="Andrei", unresponsive_s=15, occupants_n=2,
         passenger_state_text=settings.template("sos", "passenger_state", "awake"), maps_url=maps, time_hhmm="18:20",
+        cause="Andrei a închis ochii la volan, mergând cu 110 la oră.",
     )
     assert text == (
-        "Alertă automată DriveMate. Andrei nu răspunde de 15 secunde. Ocupanți: 2; pasagerul din dreapta e treaz. "
+        "Alertă automată DriveMate. Andrei nu răspunde de 15 secunde. Andrei a închis ochii la volan, mergând cu 110 "
+        "la oră. Ocupanți: 2; pasagerul din dreapta e treaz. "
         "Locație: https://www.google.com/maps?q=45.75000,21.23000. Ora: 18:20."
     )
 
