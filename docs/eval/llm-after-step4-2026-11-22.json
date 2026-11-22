@@ -1,0 +1,3193 @@
+{
+  "meta": {
+    "label": "after-step4",
+    "date": "2026-11-22",
+    "model": "gemini-3.5-flash-lite",
+    "backup_model": "gemini-3.1-flash-lite",
+    "max_output_tokens": 1024,
+    "thinking_level": "minimal",
+    "thinking_budget": null,
+    "timeout_s": 2.5,
+    "temperature": 0.2,
+    "cases": 46,
+    "repeat": 2,
+    "real_search": false,
+    "overrides": []
+  },
+  "summary": {
+    "runs": 92,
+    "outcomes": {
+      "ok": 88,
+      "fallback:silent_on_request": 3,
+      "wrong": 1
+    },
+    "ok_rate": 0.957,
+    "fixed_text_rate": 0.033,
+    "latency_ms": {
+      "answer_p50": 827.0,
+      "answer_p95": 1123.0,
+      "llm_ttft_p50": 813.0,
+      "llm_total_p50": 843.0,
+      "llm_total_p95": 1131.0
+    },
+    "llm_finish_reasons": {
+      "STOP": 84
+    },
+    "thought_tokens_p50": null,
+    "by_group": {
+      "alerts": {
+        "ok": 8
+      },
+      "cause": {
+        "ok": 10
+      },
+      "media": {
+        "ok": 14
+      },
+      "messages": {
+        "ok": 10
+      },
+      "reminders": {
+        "ok": 9,
+        "fallback:silent_on_request": 1
+      },
+      "stops": {
+        "ok": 9,
+        "fallback:silent_on_request": 1
+      },
+      "talk": {
+        "ok": 11,
+        "fallback:silent_on_request": 1
+      },
+      "trip": {
+        "ok": 17,
+        "wrong": 1
+      }
+    }
+  },
+  "runs": [
+    {
+      "case": "eta",
+      "group": "trip",
+      "text": "Cât mai am până la destinație?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1328.8,
+      "llm_ttft_ms": 1297.2,
+      "llm_total_ms": 1298.3,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Mai ai 20 de minute până la destinație."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Mai ai 20 de minute până la destinație.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 53,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "eta",
+      "group": "trip",
+      "text": "Cât mai am până la destinație?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 804.7,
+      "llm_ttft_ms": 801.6,
+      "llm_total_ms": 802.5,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Mai ai 20 de minute până la destinație."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Mai ai 20 de minute până la destinație.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 53,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "where_are_we",
+      "group": "trip",
+      "text": "Unde suntem acum?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 823.9,
+      "llm_ttft_ms": 803.2,
+      "llm_total_ms": 822.2,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Sunteți după Lugoj și mai aveți 35 de kilometri până la Caransebeș."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Sunteți după Lugoj și mai aveți 35 de kilometri până la Caransebeș.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 43,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "where_are_we",
+      "group": "trip",
+      "text": "Unde suntem acum?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 739.0,
+      "llm_ttft_ms": 580.2,
+      "llm_total_ms": 736.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Sunteți la 8 km după Lugoj, iar în 35 km urmează Caransebeș."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Sunteți la 8 km după Lugoj, iar în 35 km urmează Caransebeș.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 64,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "next_town",
+      "group": "trip",
+      "text": "Ce oraș urmează?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1081.4,
+      "llm_ttft_ms": 1078.5,
+      "llm_total_ms": 1079.5,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Urmează Caransebeș, la 35 de kilometri."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Urmează Caransebeș, la 35 de kilometri.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 56,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "next_town",
+      "group": "trip",
+      "text": "Ce oraș urmează?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 911.2,
+      "llm_ttft_ms": 907.8,
+      "llm_total_ms": 908.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Urmează Caransebeș, la 35 de kilometri."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Urmează Caransebeș, la 35 de kilometri.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 56,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "next_town_no_map",
+      "group": "trip",
+      "text": "Ce oraș urmează?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 651.0,
+      "llm_ttft_ms": 588.9,
+      "llm_total_ms": 649.3,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Nu știu orașele de pe traseu. Următoarea oprire e OMV, în 12 km."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Nu știu orașele de pe traseu. Următoarea oprire e OMV, în 12 km.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 68,
+          "thought_tokens": null
+        }
+      ],
+      "review": true,
+      "error": null
+    },
+    {
+      "case": "next_town_no_map",
+      "group": "trip",
+      "text": "Ce oraș urmează?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 836.3,
+      "llm_ttft_ms": 790.9,
+      "llm_total_ms": 834.7,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Nu știu orașele de pe traseu. Următoarea oprire e OMV, în 12 km."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Nu știu orașele de pe traseu. Următoarea oprire e OMV, în 12 km.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 48,
+          "thought_tokens": null
+        }
+      ],
+      "review": true,
+      "error": null
+    },
+    {
+      "case": "dist_fuel",
+      "group": "trip",
+      "text": "Câți kilometri mai sunt până la benzinărie?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 779.4,
+      "llm_ttft_ms": 732.4,
+      "llm_total_ms": 777.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Următoarea benzinărie e OMV, în 12 km."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Următoarea benzinărie e OMV, în 12 km.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 39,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "dist_fuel",
+      "group": "trip",
+      "text": "Câți kilometri mai sunt până la benzinărie?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 944.0,
+      "llm_ttft_ms": 930.1,
+      "llm_total_ms": 941.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Următoarea oprire e OMV, în 12 km."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Următoarea oprire e OMV, în 12 km.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 37,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "next_stop",
+      "group": "trip",
+      "text": "Care e următoarea oprire?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 806.9,
+      "llm_ttft_ms": 803.9,
+      "llm_total_ms": 805.0,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Următoarea oprire este la OMV, în 12 kilometri."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Următoarea oprire este la OMV, în 12 kilometri.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 39,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "next_stop",
+      "group": "trip",
+      "text": "Care e următoarea oprire?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 727.0,
+      "llm_ttft_ms": 639.7,
+      "llm_total_ms": 725.4,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Următoarea oprire e la OMV, în 12 kilometri."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Următoarea oprire e la OMV, în 12 kilometri.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 59,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "sights",
+      "group": "trip",
+      "text": "Ce e de văzut pe drum?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 801.3,
+      "llm_ttft_ms": 743.8,
+      "llm_total_ms": 799.3,
+      "llm_types": [
+        "speak",
+        "suggest_stop"
+      ],
+      "final_types": [
+        "ask",
+        "suggest_stop"
+      ],
+      "said": [
+        "În 90 km ai Cetatea Devei, o cetate medievală pe un deal vulcanic, cu telecabină. Vrei să oprim acolo?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"În 90 km ai Cetatea Devei, o cetate medievală pe un deal vulcanic, cu telecabină. Vrei să oprim acolo?\"\n    },\n    {\n      \"type\": \"suggest_stop\",\n      \"poi_id\": \"cetatea_deva\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 104,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "sights",
+      "group": "trip",
+      "text": "Ce e de văzut pe drum?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 752.8,
+      "llm_ttft_ms": 650.7,
+      "llm_total_ms": 751.0,
+      "llm_types": [
+        "ask",
+        "suggest_stop"
+      ],
+      "final_types": [
+        "ask",
+        "suggest_stop"
+      ],
+      "said": [
+        "Pe drum ai Cetatea Devei, o cetate medievală pe un deal vulcanic, cu telecabină. Facem o pauză acolo?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Pe drum ai Cetatea Devei, o cetate medievală pe un deal vulcanic, cu telecabină. Facem o pauză acolo?\",\n      \"expects\": \"yes_no\"\n    },\n    {\n      \"type\": \"suggest_stop\",\n      \"poi_id\": \"cetatea_deva\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 111,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "time_driving",
+      "group": "trip",
+      "text": "De cât timp conduc?",
+      "attempt": 1,
+      "outcome": "wrong",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1210.5,
+      "llm_ttft_ms": 1207.4,
+      "llm_total_ms": 1208.6,
+      "llm_types": [
+        "ask"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Conduci de 74 de minute, Andrei. Mai ai 20 de minute până la destinație. Te mai ajut cu ceva?"
+      ],
+      "problems": [
+        "none of ['speak'] in ['ask']"
+      ],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"ask\", \"to\": \"driver\", \"question\": \"Conduci de 74 de minute, Andrei. Mai ai 20 de minute până la destinație. Te mai ajut cu ceva?\", \"expects\": \"free\"}]}",
+          "finish": "STOP",
+          "out_tokens": 58,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "time_driving",
+      "group": "trip",
+      "text": "De cât timp conduc?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 616.5,
+      "llm_ttft_ms": 614.0,
+      "llm_total_ms": 614.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Andrei, conduci de 74 de minute."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Andrei, conduci de 74 de minute.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 52,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "speed",
+      "group": "trip",
+      "text": "Cu cât merg acum?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 893.9,
+      "llm_ttft_ms": 784.9,
+      "llm_total_ms": 892.1,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Mergi cu 118 kilometri pe oră."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Mergi cu 118 kilometri pe oră.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 33,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "speed",
+      "group": "trip",
+      "text": "Cu cât merg acum?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 682.8,
+      "llm_ttft_ms": 660.2,
+      "llm_total_ms": 680.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Mergi cu 118 kilometri pe oră."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Mergi cu 118 kilometri pe oră.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 33,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "read_msgs_passenger",
+      "group": "messages",
+      "text": "Citește-mi mesajele.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1072.6,
+      "llm_ttft_ms": 1070.0,
+      "llm_total_ms": 1070.9,
+      "llm_types": [
+        "read_message",
+        "ask"
+      ],
+      "final_types": [
+        "read_message",
+        "ask"
+      ],
+      "said": [
+        "Mesaj de la Mihai. Îl citesc tare?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"read_message\",\n      \"msg_id\": \"m17\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Mesaj de la Mihai. Îl citesc tare?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 91,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "read_msgs_passenger",
+      "group": "messages",
+      "text": "Citește-mi mesajele.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 719.6,
+      "llm_ttft_ms": 714.8,
+      "llm_total_ms": 717.2,
+      "llm_types": [
+        "read_message",
+        "ask"
+      ],
+      "final_types": [
+        "read_message",
+        "ask"
+      ],
+      "said": [
+        "Mesaj de la Mihai. Îl citesc tare?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"read_message\", \"msg_id\": \"m17\"}, {\"type\": \"ask\", \"to\": \"driver\", \"question\": \"Mesaj de la Mihai. Îl citesc tare?\", \"expects\": \"yes_no\"}]}",
+          "finish": "STOP",
+          "out_tokens": 59,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "read_msgs_alone",
+      "group": "messages",
+      "text": "Citește-mi mesajele.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 775.3,
+      "llm_ttft_ms": 746.1,
+      "llm_total_ms": 773.7,
+      "llm_types": [
+        "read_message",
+        "speak"
+      ],
+      "final_types": [
+        "read_message",
+        "speak"
+      ],
+      "said": [
+        "Ai un mesaj de la Mihai."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"read_message\",\n      \"msg_id\": \"m17\"\n    },\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Ai un mesaj de la Mihai.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 76,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "read_msgs_alone",
+      "group": "messages",
+      "text": "Citește-mi mesajele.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 842.6,
+      "llm_ttft_ms": 834.8,
+      "llm_total_ms": 840.3,
+      "llm_types": [
+        "read_message"
+      ],
+      "final_types": [
+        "read_message",
+        "speak"
+      ],
+      "said": [
+        "Ok."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"read_message\", \"msg_id\": \"m17\"}]}",
+          "finish": "STOP",
+          "out_tokens": 22,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "any_msgs",
+      "group": "messages",
+      "text": "Am mesaje noi?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 840.8,
+      "llm_ttft_ms": 837.7,
+      "llm_total_ms": 839.1,
+      "llm_types": [
+        "read_message",
+        "ask"
+      ],
+      "final_types": [
+        "read_message",
+        "ask"
+      ],
+      "said": [
+        "Ai un mesaj de la Mihai. Îl citesc?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"read_message\",\n      \"msg_id\": \"m17\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Ai un mesaj de la Mihai. Îl citesc?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 91,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "any_msgs",
+      "group": "messages",
+      "text": "Am mesaje noi?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 907.5,
+      "llm_ttft_ms": 904.8,
+      "llm_total_ms": 905.7,
+      "llm_types": [
+        "read_message",
+        "ask"
+      ],
+      "final_types": [
+        "read_message",
+        "ask"
+      ],
+      "said": [
+        "Ai un mesaj de la Mihai. Îl citesc?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"read_message\",\n      \"msg_id\": \"m17\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Ai un mesaj de la Mihai. Îl citesc?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 91,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "who_wrote",
+      "group": "messages",
+      "text": "Cine mi-a scris?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 926.8,
+      "llm_ttft_ms": 923.4,
+      "llm_total_ms": 924.8,
+      "llm_types": [
+        "read_message",
+        "ask"
+      ],
+      "final_types": [
+        "read_message",
+        "ask"
+      ],
+      "said": [
+        "Ai un mesaj de la Mihai. Îl citesc?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"read_message\", \"msg_id\": \"m17\"}, {\"type\": \"ask\", \"to\": \"driver\", \"question\": \"Ai un mesaj de la Mihai. Îl citesc?\", \"expects\": \"yes_no\"}]}",
+          "finish": "STOP",
+          "out_tokens": 59,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "who_wrote",
+      "group": "messages",
+      "text": "Cine mi-a scris?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 759.7,
+      "llm_ttft_ms": 718.6,
+      "llm_total_ms": 757.9,
+      "llm_types": [
+        "read_message",
+        "ask"
+      ],
+      "final_types": [
+        "read_message",
+        "ask"
+      ],
+      "said": [
+        "Mesaj de la Mihai. Îl citesc tare?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"read_message\",\n      \"msg_id\": \"m17\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Mesaj de la Mihai. Îl citesc tare?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 91,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reply_mihai",
+      "group": "messages",
+      "text": "Răspunde-i lui Mihai că ajung în 20 de minute.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1151.9,
+      "llm_ttft_ms": 1147.1,
+      "llm_total_ms": 1149.7,
+      "llm_types": [
+        "ask",
+        "reply_message"
+      ],
+      "final_types": [
+        "ask",
+        "reply_message"
+      ],
+      "said": [
+        "Îi scriu: «Ajung pe la 23:20.» Trimit?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Îi scriu: «Ajung pe la 23:20.» Trimit?\",\n      \"expects\": \"yes_no\"\n    },\n    {\n      \"type\": \"reply_message\",\n      \"msg_id\": \"m17\",\n      \"text\": \"Ajung pe la 23:20.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 115,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reply_mihai",
+      "group": "messages",
+      "text": "Răspunde-i lui Mihai că ajung în 20 de minute.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 867.4,
+      "llm_ttft_ms": 864.3,
+      "llm_total_ms": 865.7,
+      "llm_types": [
+        "ask",
+        "reply_message"
+      ],
+      "final_types": [
+        "ask",
+        "reply_message"
+      ],
+      "said": [
+        "Îi scriu: «Ajung pe la 23:20.» Trimit?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"ask\", \"to\": \"driver\", \"question\": \"Îi scriu: «Ajung pe la 23:20.» Trimit?\", \"expects\": \"yes_no\"}, {\"type\": \"reply_message\", \"msg_id\": \"m17\", \"text\": \"Ajung pe la 23:20.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 81,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reminder_cafe",
+      "group": "reminders",
+      "text": "Amintește-mi să iau o cafea la următoarea cafenea.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 907.0,
+      "llm_ttft_ms": 856.3,
+      "llm_total_ms": 904.9,
+      "llm_types": [
+        "create_reminder",
+        "ask"
+      ],
+      "final_types": [
+        "create_reminder",
+        "ask"
+      ],
+      "said": [
+        "Notat: o cafea, la prima cafenea. Bine?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"create_reminder\",\n      \"task\": \"o cafea\",\n      \"trigger\": {\n        \"type\": \"stop_at_category\",\n        \"category\": \"cafe\"\n      }\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Notat: o cafea, la prima cafenea. Bine?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 119,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reminder_cafe",
+      "group": "reminders",
+      "text": "Amintește-mi să iau o cafea la următoarea cafenea.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 851.7,
+      "llm_ttft_ms": 732.0,
+      "llm_total_ms": 849.5,
+      "llm_types": [
+        "create_reminder",
+        "ask"
+      ],
+      "final_types": [
+        "create_reminder",
+        "ask"
+      ],
+      "said": [
+        "Notat: o cafea, la prima cafenea. Bine?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"create_reminder\",\n      \"task\": \"o cafea\",\n      \"trigger\": {\n        \"type\": \"stop_at_category\",\n        \"category\": \"cafe\"\n      }\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Notat: o cafea, la prima cafenea. Bine?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 119,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reminder_time",
+      "group": "reminders",
+      "text": "Amintește-mi peste 30 de minute să o sun pe mama.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 923.5,
+      "llm_ttft_ms": 920.3,
+      "llm_total_ms": 921.7,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Deocamdată îți pot aminti doar la opriri, de exemplu la benzinărie."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Deocamdată îți pot aminti doar la opriri, de exemplu la benzinărie.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 62,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reminder_time",
+      "group": "reminders",
+      "text": "Amintește-mi peste 30 de minute să o sun pe mama.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 750.3,
+      "llm_ttft_ms": 688.7,
+      "llm_total_ms": 748.3,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Deocamdată îți pot aminti doar la opriri, de exemplu la benzinărie."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Deocamdată îți pot aminti doar la opriri, de exemplu la benzinărie.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 62,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reminder_list",
+      "group": "reminders",
+      "text": "Ce mementouri am?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 725.0,
+      "llm_ttft_ms": 721.9,
+      "llm_total_ms": 723.0,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Ai un singur memento: lichid de parbriz, la prima benzinărie."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Ai un singur memento: lichid de parbriz, la prima benzinărie.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 41,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reminder_list",
+      "group": "reminders",
+      "text": "Ce mementouri am?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 791.4,
+      "llm_ttft_ms": 788.5,
+      "llm_total_ms": 789.7,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Ai notat: lichid de parbriz, la prima benzinărie."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Ai notat: lichid de parbriz, la prima benzinărie.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 58,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reminder_exists",
+      "group": "reminders",
+      "text": "Amintește-mi să iau lichid de parbriz la benzinărie.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 926.7,
+      "llm_ttft_ms": 886.0,
+      "llm_total_ms": 924.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Am deja notat: lichid de parbriz, la benzinărie."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Am deja notat: lichid de parbriz, la benzinărie.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 58,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reminder_exists",
+      "group": "reminders",
+      "text": "Amintește-mi să iau lichid de parbriz la benzinărie.",
+      "attempt": 2,
+      "outcome": "fallback:silent_on_request",
+      "source": "RULE",
+      "reason": "silent_on_request",
+      "latency_ms": 855.5,
+      "llm_ttft_ms": 852.0,
+      "llm_total_ms": 853.5,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Scuze, n-am înțeles. Poți repeta?"
+      ],
+      "problems": [
+        "expected the LLM, got a fixed text (silent_on_request)"
+      ],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"stay_silent\", \"reason\": \"already_noted\"}]}",
+          "finish": "STOP",
+          "out_tokens": 21,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reminder_done",
+      "group": "reminders",
+      "text": "Am luat lichidul de parbriz, poți să-l bifezi.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 779.2,
+      "llm_ttft_ms": 633.3,
+      "llm_total_ms": 777.6,
+      "llm_types": [
+        "complete_reminder",
+        "speak"
+      ],
+      "final_types": [
+        "complete_reminder",
+        "speak",
+        "ask"
+      ],
+      "said": [
+        "Gata, am bifat lichidul de parbriz.",
+        "Bifez lichid de parbriz?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"complete_reminder\",\n      \"reminder_id\": \"r1\"\n    },\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Gata, am bifat lichidul de parbriz.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 81,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "reminder_done",
+      "group": "reminders",
+      "text": "Am luat lichidul de parbriz, poți să-l bifezi.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 852.8,
+      "llm_ttft_ms": 849.0,
+      "llm_total_ms": 851.0,
+      "llm_types": [
+        "complete_reminder",
+        "speak"
+      ],
+      "final_types": [
+        "complete_reminder",
+        "speak",
+        "ask"
+      ],
+      "said": [
+        "Gata, am bifat lichidul de parbriz.",
+        "Bifez lichid de parbriz?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"complete_reminder\",\n      \"reminder_id\": \"r1\"\n    },\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Gata, am bifat lichidul de parbriz.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 81,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "rock",
+      "group": "media",
+      "text": "Pune ceva rock.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 943.4,
+      "llm_ttft_ms": 820.4,
+      "llm_total_ms": 941.7,
+      "llm_types": [
+        "ask",
+        "suggest_media"
+      ],
+      "final_types": [
+        "ask",
+        "suggest_media"
+      ],
+      "said": [
+        "Pun «Rock 1»? Îți place?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Pun «Rock 1»? Îți place?\",\n      \"expects\": \"yes_no\"\n    },\n    {\n      \"type\": \"suggest_media\",\n      \"track_id\": \"rock1\",\n      \"reason\": \"driver_request\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 98,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "rock",
+      "group": "media",
+      "text": "Pune ceva rock.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 943.6,
+      "llm_ttft_ms": 824.9,
+      "llm_total_ms": 941.6,
+      "llm_types": [
+        "ask",
+        "suggest_media"
+      ],
+      "final_types": [
+        "ask",
+        "suggest_media"
+      ],
+      "said": [
+        "Să pun «Rock 1»?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Să pun «Rock 1»?\",\n      \"expects\": \"yes_no\"\n    },\n    {\n      \"type\": \"suggest_media\",\n      \"track_id\": \"rock1\",\n      \"reason\": \"driver_request\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 96,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "music_plain",
+      "group": "media",
+      "text": "Pune muzică.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1170.9,
+      "llm_ttft_ms": 1131.0,
+      "llm_total_ms": 1169.2,
+      "llm_types": [
+        "suggest_media",
+        "ask"
+      ],
+      "final_types": [
+        "suggest_media",
+        "ask"
+      ],
+      "said": [
+        "Să pun Rock 1?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"suggest_media\",\n      \"track_id\": \"rock1\",\n      \"reason\": \"music_request\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Să pun Rock 1?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 94,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "music_plain",
+      "group": "media",
+      "text": "Pune muzică.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 934.2,
+      "llm_ttft_ms": 837.4,
+      "llm_total_ms": 932.0,
+      "llm_types": [
+        "suggest_media",
+        "ask"
+      ],
+      "final_types": [
+        "suggest_media",
+        "ask"
+      ],
+      "said": [
+        "Vrei să pun Pop 1? Bine?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"suggest_media\",\n      \"track_id\": \"pop1\",\n      \"reason\": \"music_request\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Vrei să pun Pop 1? Bine?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 97,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "podcast",
+      "group": "media",
+      "text": "Caută un podcast despre istoria României.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 977.2,
+      "llm_ttft_ms": 973.0,
+      "llm_total_ms": 973.8,
+      "llm_types": [
+        "search_media"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Pun podcast istoria României 1?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"search_media\",\n      \"query\": \"podcast istoria României\",\n      \"kind\": \"podcast\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 49,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "podcast",
+      "group": "media",
+      "text": "Caută un podcast despre istoria României.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 914.7,
+      "llm_ttft_ms": 903.0,
+      "llm_total_ms": 912.3,
+      "llm_types": [
+        "search_media"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Pun podcast istoria României 1?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"search_media\",\n      \"query\": \"podcast istoria României\",\n      \"kind\": \"podcast\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 49,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "stop_music",
+      "group": "media",
+      "text": "Oprește muzica.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "RULE",
+      "reason": "deterministic",
+      "latency_ms": 0.5,
+      "llm_ttft_ms": null,
+      "llm_total_ms": null,
+      "llm_types": [],
+      "final_types": [
+        "stop_media",
+        "speak"
+      ],
+      "said": [
+        "Ok."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "stop_music",
+      "group": "media",
+      "text": "Oprește muzica.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "RULE",
+      "reason": "deterministic",
+      "latency_ms": 0.3,
+      "llm_ttft_ms": null,
+      "llm_total_ms": null,
+      "llm_types": [],
+      "final_types": [
+        "stop_media",
+        "speak"
+      ],
+      "said": [
+        "Ok."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "quieter",
+      "group": "media",
+      "text": "Mai încet.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "RULE",
+      "reason": "deterministic",
+      "latency_ms": 0.5,
+      "llm_ttft_ms": null,
+      "llm_total_ms": null,
+      "llm_types": [],
+      "final_types": [
+        "set_preference",
+        "speak"
+      ],
+      "said": [
+        "Ok."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "quieter",
+      "group": "media",
+      "text": "Mai încet.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "RULE",
+      "reason": "deterministic",
+      "latency_ms": 0.5,
+      "llm_ttft_ms": null,
+      "llm_total_ms": null,
+      "llm_types": [],
+      "final_types": [
+        "set_preference",
+        "speak"
+      ],
+      "said": [
+        "Ok."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "volume_30",
+      "group": "media",
+      "text": "Dă volumul la 30 la sută.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "RULE",
+      "reason": "deterministic",
+      "latency_ms": 0.6,
+      "llm_ttft_ms": null,
+      "llm_total_ms": null,
+      "llm_types": [],
+      "final_types": [
+        "set_preference",
+        "speak"
+      ],
+      "said": [
+        "Ok."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "volume_30",
+      "group": "media",
+      "text": "Dă volumul la 30 la sută.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "RULE",
+      "reason": "deterministic",
+      "latency_ms": 0.6,
+      "llm_ttft_ms": null,
+      "llm_total_ms": null,
+      "llm_types": [],
+      "final_types": [
+        "set_preference",
+        "speak"
+      ],
+      "said": [
+        "Ok."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "what_song",
+      "group": "media",
+      "text": "Ce melodie e asta?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1113.3,
+      "llm_ttft_ms": 1110.8,
+      "llm_total_ms": 1111.6,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Asculți Rock 1."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Asculți Rock 1.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 47,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "what_song",
+      "group": "media",
+      "text": "Ce melodie e asta?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 789.9,
+      "llm_ttft_ms": 784.2,
+      "llm_total_ms": 788.3,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Aceasta este piesa «Rock 1»."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Aceasta este piesa «Rock 1».\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 51,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "hungry",
+      "group": "stops",
+      "text": "Mi-e foame, unde pot opri?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 913.7,
+      "llm_ttft_ms": 780.5,
+      "llm_total_ms": 911.5,
+      "llm_types": [
+        "ask",
+        "suggest_stop"
+      ],
+      "final_types": [
+        "ask",
+        "suggest_stop"
+      ],
+      "said": [
+        "Oprim la OMV, în 12 km? Ai și mâncare acolo."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Oprim la OMV, în 12 km? Ai și mâncare acolo.\",\n      \"expects\": \"yes_no\"\n    },\n    {\n      \"type\": \"suggest_stop\",\n      \"poi_id\": \"omv_km42\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 99,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "hungry",
+      "group": "stops",
+      "text": "Mi-e foame, unde pot opri?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 888.0,
+      "llm_ttft_ms": 865.7,
+      "llm_total_ms": 886.3,
+      "llm_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "final_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "said": [
+        "Oprim la OMV, în 12 kilometri? Găsești ceva de mâncare acolo."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"suggest_stop\",\n      \"poi_id\": \"omv_km42\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Oprim la OMV, în 12 kilometri? Găsești ceva de mâncare acolo.\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 104,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "need_fuel",
+      "group": "stops",
+      "text": "Am nevoie de benzină.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 819.0,
+      "llm_ttft_ms": 718.2,
+      "llm_total_ms": 817.3,
+      "llm_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "final_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "said": [
+        "Oprim la OMV, în 12 kilometri?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"suggest_stop\",\n      \"poi_id\": \"omv_km42\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Oprim la OMV, în 12 kilometri?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 94,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "need_fuel",
+      "group": "stops",
+      "text": "Am nevoie de benzină.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 822.1,
+      "llm_ttft_ms": 683.5,
+      "llm_total_ms": 816.0,
+      "llm_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "final_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "said": [
+        "Oprim la OMV în 12 kilometri pentru benzină?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"suggest_stop\",\n      \"poi_id\": \"omv_km42\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Oprim la OMV în 12 kilometri pentru benzină?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 97,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "want_break",
+      "group": "stops",
+      "text": "Vreau să fac o pauză.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 847.0,
+      "llm_ttft_ms": 826.8,
+      "llm_total_ms": 845.4,
+      "llm_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "final_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "said": [
+        "Oprim la OMV, în 12 km, pentru o pauză?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"suggest_stop\",\n      \"poi_id\": \"omv_km42\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Oprim la OMV, în 12 km, pentru o pauză?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 98,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "want_break",
+      "group": "stops",
+      "text": "Vreau să fac o pauză.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 725.8,
+      "llm_ttft_ms": 567.5,
+      "llm_total_ms": 724.0,
+      "llm_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "final_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "said": [
+        "Oprim la OMV, în 12 kilometri?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"suggest_stop\",\n      \"poi_id\": \"omv_km42\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Oprim la OMV, în 12 kilometri?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 94,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "pharmacy",
+      "group": "stops",
+      "text": "Unde e cea mai apropiată farmacie?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1105.0,
+      "llm_ttft_ms": 1101.6,
+      "llm_total_ms": 1103.1,
+      "llm_types": [
+        "speak",
+        "create_reminder"
+      ],
+      "final_types": [
+        "ask",
+        "create_reminder"
+      ],
+      "said": [
+        "Nu văd o farmacie pe traseu. Îți amintesc la prima farmacie?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Nu văd o farmacie pe traseu. Îți amintesc la prima farmacie?\"}, {\"type\": \"create_reminder\", \"task\": \"farmacie\", \"trigger\": {\"type\": \"stop_at_category\", \"category\": \"pharmacy\"}}]\n}",
+          "finish": "STOP",
+          "out_tokens": 78,
+          "thought_tokens": null
+        }
+      ],
+      "review": true,
+      "error": null
+    },
+    {
+      "case": "pharmacy",
+      "group": "stops",
+      "text": "Unde e cea mai apropiată farmacie?",
+      "attempt": 2,
+      "outcome": "fallback:silent_on_request",
+      "source": "RULE",
+      "reason": "silent_on_request",
+      "latency_ms": 705.1,
+      "llm_ttft_ms": 701.3,
+      "llm_total_ms": 702.1,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Scuze, n-am înțeles. Poți repeta?"
+      ],
+      "problems": [
+        "expected the LLM, got a fixed text (silent_on_request)"
+      ],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"stay_silent\", \"reason\": \"nothing_to_add\"}]}",
+          "finish": "STOP",
+          "out_tokens": 22,
+          "thought_tokens": null
+        }
+      ],
+      "review": true,
+      "error": null
+    },
+    {
+      "case": "stop_omv",
+      "group": "stops",
+      "text": "Hai să oprim la OMV.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 931.6,
+      "llm_ttft_ms": 810.3,
+      "llm_total_ms": 929.6,
+      "llm_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "final_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "said": [
+        "Oprim la OMV în 12 kilometri?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"suggest_stop\",\n      \"poi_id\": \"omv_km42\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Oprim la OMV în 12 kilometri?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 93,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "stop_omv",
+      "group": "stops",
+      "text": "Hai să oprim la OMV.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1029.1,
+      "llm_ttft_ms": 1020.8,
+      "llm_total_ms": 1027.2,
+      "llm_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "final_types": [
+        "suggest_stop",
+        "ask"
+      ],
+      "said": [
+        "Oprim la OMV în 12 km?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"suggest_stop\",\n      \"poi_id\": \"omv_km42\"\n    },\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Oprim la OMV în 12 km?\",\n      \"expects\": \"yes_no\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 92,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "why_alert",
+      "group": "alerts",
+      "text": "De ce m-ai alertat adineauri?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1024.0,
+      "llm_ttft_ms": 1020.8,
+      "llm_total_ms": 1022.3,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Nu am înregistrat nicio alertă pe traseul acesta. Alertele vin de la camera de monitorizare a atenției."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Nu am înregistrat nicio alertă pe traseul acesta. Alertele vin de la camera de monitorizare a atenției.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 48,
+          "thought_tokens": null
+        }
+      ],
+      "review": true,
+      "error": null
+    },
+    {
+      "case": "why_alert",
+      "group": "alerts",
+      "text": "De ce m-ai alertat adineauri?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1135.7,
+      "llm_ttft_ms": 1132.2,
+      "llm_total_ms": 1133.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Nu am înregistrat nicio alertă pe traseul acesta. Alertele vin de la camerele care monitorizează atenția."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Nu am înregistrat nicio alertă pe traseul acesta. Alertele vin de la camerele care monitorizează atenția.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 49,
+          "thought_tokens": null
+        }
+      ],
+      "review": true,
+      "error": null
+    },
+    {
+      "case": "tired",
+      "group": "alerts",
+      "text": "Sunt cam obosit.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 802.2,
+      "llm_ttft_ms": 799.5,
+      "llm_total_ms": 800.6,
+      "llm_types": [
+        "ask"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Cât de obosit te simți de la 1 la 9?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Cât de obosit te simți de la 1 la 9?\",\n      \"expects\": \"kss\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 65,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "tired",
+      "group": "alerts",
+      "text": "Sunt cam obosit.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 881.2,
+      "llm_ttft_ms": 877.9,
+      "llm_total_ms": 879.5,
+      "llm_types": [
+        "ask"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Cât de obosit te simți de la 1 la 9?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Cât de obosit te simți de la 1 la 9?\",\n      \"expects\": \"kss\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 65,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "how_am_i",
+      "group": "alerts",
+      "text": "Cum mă descurc la condus?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 930.4,
+      "llm_ttft_ms": 925.8,
+      "llm_total_ms": 928.6,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Te descurci bine, Andrei, ești atent și conduci prudent."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Te descurci bine, Andrei, ești atent și conduci prudent.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 56,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "how_am_i",
+      "group": "alerts",
+      "text": "Cum mă descurc la condus?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 960.8,
+      "llm_ttft_ms": 958.1,
+      "llm_total_ms": 958.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Te descurci bine, Andrei, ești atent."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Te descurci bine, Andrei, ești atent.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 52,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "are_you_there",
+      "group": "alerts",
+      "text": "Ești acolo?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 873.0,
+      "llm_ttft_ms": 865.6,
+      "llm_total_ms": 871.0,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Da, Andrei, sunt aici. Cu ce te pot ajuta?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Da, Andrei, sunt aici. Cu ce te pot ajuta?\"}]}",
+          "finish": "STOP",
+          "out_tokens": 33,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "are_you_there",
+      "group": "alerts",
+      "text": "Ești acolo?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 801.1,
+      "llm_ttft_ms": 797.6,
+      "llm_total_ms": 798.7,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Da, Andrei, te ascult."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Da, Andrei, te ascult.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 48,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "joke",
+      "group": "talk",
+      "text": "Spune-mi o glumă.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 736.1,
+      "llm_ttft_ms": 694.0,
+      "llm_total_ms": 733.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "De ce se tem programatorii de întuneric? Pentru că întuneric înseamnă că nu merge monitorul."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"De ce se tem programatorii de întuneric? Pentru că întuneric înseamnă că nu merge monitorul.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 65,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "joke",
+      "group": "talk",
+      "text": "Spune-mi o glumă.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 774.6,
+      "llm_ttft_ms": 771.6,
+      "llm_total_ms": 772.8,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Șoferul și polițistul..."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Șoferul și polițistul...\"}]}",
+          "finish": "STOP",
+          "out_tokens": 29,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "hello",
+      "group": "talk",
+      "text": "Salut DriveMate!",
+      "attempt": 1,
+      "outcome": "fallback:silent_on_request",
+      "source": "RULE",
+      "reason": "silent_on_request",
+      "latency_ms": 1026.2,
+      "llm_ttft_ms": 1020.2,
+      "llm_total_ms": 1023.1,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Scuze, n-am înțeles. Poți repeta?"
+      ],
+      "problems": [
+        "expected the LLM, got a fixed text (silent_on_request)"
+      ],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"stay_silent\",\n      \"reason\": \"nothing_to_add\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 40,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "hello",
+      "group": "talk",
+      "text": "Salut DriveMate!",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 750.5,
+      "llm_ttft_ms": 715.3,
+      "llm_total_ms": 748.8,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Salut, Andrei! Cu ce te pot ajuta?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Salut, Andrei! Cu ce te pot ajuta?\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 50,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "thanks",
+      "group": "talk",
+      "text": "Mulțumesc mult.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "RULE",
+      "reason": "deterministic",
+      "latency_ms": 0.7,
+      "llm_ttft_ms": null,
+      "llm_total_ms": null,
+      "llm_types": [],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Cu plăcere!"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "thanks",
+      "group": "talk",
+      "text": "Mulțumesc mult.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "RULE",
+      "reason": "deterministic",
+      "latency_ms": 1.1,
+      "llm_ttft_ms": null,
+      "llm_total_ms": null,
+      "llm_types": [],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Cu plăcere!"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "who_are_you",
+      "group": "talk",
+      "text": "Cine ești tu?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 890.3,
+      "llm_ttft_ms": 887.1,
+      "llm_total_ms": 888.3,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Sunt Copilot, asistentul tău vocal pentru drum."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Sunt Copilot, asistentul tău vocal pentru drum.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 54,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "who_are_you",
+      "group": "talk",
+      "text": "Cine ești tu?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 829.8,
+      "llm_ttft_ms": 826.8,
+      "llm_total_ms": 827.6,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Sunt Copilot, asistentul tău vocal pentru drum."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Sunt Copilot, asistentul tău vocal pentru drum.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 54,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "what_time",
+      "group": "talk",
+      "text": "Cât e ceasul?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 893.4,
+      "llm_ttft_ms": 887.4,
+      "llm_total_ms": 891.8,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Este ora 23:00."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Este ora 23:00.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 29,
+          "thought_tokens": null
+        }
+      ],
+      "review": true,
+      "error": null
+    },
+    {
+      "case": "what_time",
+      "group": "talk",
+      "text": "Cât e ceasul?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 807.7,
+      "llm_ttft_ms": 805.2,
+      "llm_total_ms": 806.0,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Este ora 23:00."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Este ora 23:00.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 49,
+          "thought_tokens": null
+        }
+      ],
+      "review": true,
+      "error": null
+    },
+    {
+      "case": "leave_me",
+      "group": "talk",
+      "text": "Lasă-mă în pace.",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1040.9,
+      "llm_ttft_ms": 1037.7,
+      "llm_total_ms": 1038.7,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "stay_silent"
+      ],
+      "said": [],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"stay_silent\",\n      \"reason\": \"driver_refused\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 39,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "leave_me",
+      "group": "talk",
+      "text": "Lasă-mă în pace.",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 624.6,
+      "llm_ttft_ms": 621.5,
+      "llm_total_ms": 623.0,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "stay_silent"
+      ],
+      "said": [],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"stay_silent\", \"reason\": \"driver_refused\"}]}",
+          "finish": "STOP",
+          "out_tokens": 21,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_phone",
+      "group": "cause",
+      "text": "[cause_detected passenger_showing_phone]",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 985.1,
+      "llm_ttft_ms": 917.0,
+      "llm_total_ms": 983.7,
+      "llm_types": [
+        "speak",
+        "delegate"
+      ],
+      "final_types": [
+        "speak",
+        "delegate"
+      ],
+      "said": [
+        "Maria, poți să-i povestești tu?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"passenger\",\n      \"text\": \"Maria, poți să-i povestești tu?\"\n    },\n    {\n      \"type\": \"delegate\",\n      \"to_person\": \"Maria\",\n      \"task\": \"tell_story\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 86,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_phone",
+      "group": "cause",
+      "text": "[cause_detected passenger_showing_phone]",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 822.0,
+      "llm_ttft_ms": 739.8,
+      "llm_total_ms": 815.8,
+      "llm_types": [
+        "speak",
+        "delegate"
+      ],
+      "final_types": [
+        "speak",
+        "delegate"
+      ],
+      "said": [
+        "Maria, poți să-i povestești tu?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"passenger\",\n      \"text\": \"Maria, poți să-i povestești tu?\"\n    },\n    {\n      \"type\": \"delegate\",\n      \"to_person\": \"Maria\",\n      \"task\": \"tell_story\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 86,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_talk",
+      "group": "cause",
+      "text": "[cause_detected passenger_talk]",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 729.0,
+      "llm_ttft_ms": 727.5,
+      "llm_total_ms": 728.1,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "stay_silent"
+      ],
+      "said": [],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"stay_silent\",\n      \"reason\": \"conversation\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 36,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_talk",
+      "group": "cause",
+      "text": "[cause_detected passenger_talk]",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 818.0,
+      "llm_ttft_ms": 816.6,
+      "llm_total_ms": 817.1,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "stay_silent"
+      ],
+      "said": [],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"stay_silent\",\n      \"reason\": \"conversation\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 36,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_incoming_message",
+      "group": "cause",
+      "text": "[cause_detected incoming_message]",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 771.4,
+      "llm_ttft_ms": 619.7,
+      "llm_total_ms": 770.2,
+      "llm_types": [
+        "ask",
+        "read_message"
+      ],
+      "final_types": [
+        "ask",
+        "read_message"
+      ],
+      "said": [
+        "Ai un mesaj de la Mihai. Îl citesc?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"ask\",\n      \"to\": \"driver\",\n      \"question\": \"Ai un mesaj de la Mihai. Îl citesc?\",\n      \"expects\": \"yes_no\"\n    },\n    {\n      \"type\": \"read_message\",\n      \"msg_id\": \"m17\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 91,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_incoming_message",
+      "group": "cause",
+      "text": "[cause_detected incoming_message]",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 734.7,
+      "llm_ttft_ms": 673.5,
+      "llm_total_ms": 733.4,
+      "llm_types": [
+        "ask",
+        "read_message"
+      ],
+      "final_types": [
+        "ask",
+        "read_message"
+      ],
+      "said": [
+        "Ai un mesaj de la Mihai. Îl citesc?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"ask\", \"to\": \"driver\", \"question\": \"Ai un mesaj de la Mihai. Îl citesc?\", \"expects\": \"yes_no\"}, {\"type\": \"read_message\", \"msg_id\": \"m17\"}]}",
+          "finish": "STOP",
+          "out_tokens": 59,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_child",
+      "group": "cause",
+      "text": "[cause_detected child_activity]",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 871.9,
+      "llm_ttft_ms": 869.9,
+      "llm_total_ms": 871.0,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Ioana, vrei să spun o poveste?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"rear\", \"text\": \"Ioana, vrei să spun o poveste?\"}]}",
+          "finish": "STOP",
+          "out_tokens": 31,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_child",
+      "group": "cause",
+      "text": "[cause_detected child_activity]",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 680.8,
+      "llm_ttft_ms": 589.8,
+      "llm_total_ms": 679.6,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Ioana, vrei să spun o poveste?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"rear\", \"text\": \"Ioana, vrei să spun o poveste?\"}]}",
+          "finish": "STOP",
+          "out_tokens": 31,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "talk_with_cause",
+      "group": "cause",
+      "text": "Cât mai am până la destinație?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 762.2,
+      "llm_ttft_ms": 759.6,
+      "llm_total_ms": 760.4,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Andrei, mai ai 20 de minute până la destinație."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Andrei, mai ai 20 de minute până la destinație.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 56,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "talk_with_cause",
+      "group": "cause",
+      "text": "Cât mai am până la destinație?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 787.1,
+      "llm_ttft_ms": 755.5,
+      "llm_total_ms": 784.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Andrei, mai ai 20 de minute până la destinație."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Andrei, mai ai 20 de minute până la destinație.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 56,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    }
+  ]
+}

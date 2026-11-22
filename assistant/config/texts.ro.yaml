@@ -22,16 +22,18 @@ fallback:
   trip_start_driver_only: "Salut {driver}. Drum bun!"
   trip_start_with_passenger: "Salut {driver}. Salut {passenger}."
 
-  # D2: resolving the cause of a distraction (one entry per cause.label).
+  # D2: resolving the cause of a distraction (one entry per cause.label). No road warning here ("ochii pe drum"):
+  # P2's distraction rule already warns with its own voice; repeating it cut the conversation every few seconds
+  # (docs/eval/llm-cause-before-2026-11-22.md, docs/eval/alerts-conversation-baseline-2026-11-22.md).
   cause:
     passenger_showing_phone:
       to_passenger: "{passenger}, poți să-i povestești tu?"
-      to_driver: "{driver}, ochii pe drum."
+      to_driver: "{driver}, îți povestește {passenger}."
     phone: "Lasă telefonul, ți-l citesc eu."
     incoming_message: "Lasă telefonul, ți-l citesc eu."
-    passenger_talk: "{driver}, ochii pe drum, te ascult și așa."
-    child_activity: "{driver}, mă ocup eu de {child}. Ochii pe drum."
-    default: "{driver}, ochii pe drum, te rog."
+    passenger_talk: "{driver}, {passenger} te aude și dacă nu te întorci."
+    child_activity: "{driver}, mă ocup eu de {child}."
+    default: "{driver}, mă ocup eu de asta."
 
   # D3 + D10: fatigue -> keep-awake conversation, starting with the KSS question.
   fatigue_kss: "{driver}, hai să vorbim puțin. Cât de obosit ești, de la 1 la 9?"

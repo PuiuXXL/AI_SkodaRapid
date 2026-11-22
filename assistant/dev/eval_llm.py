@@ -209,13 +209,17 @@ def evaluate(case: dict, info: Any, actions: list, calls: list[RawCall]) -> tupl
     mentions = [normalize(str(m)) for m in expect.get("mentions", [])]
     if mentions and not any(m in said for m in mentions):
         problems.append(f"says none of {expect['mentions']}")
+    forbidden = [m for m in expect.get("none_mentions", []) if normalize(str(m)) in said]
+    if forbidden:
+        problems.append(f"says {forbidden}")
     return ("wrong" if problems else "ok"), problems
 
 
 async def run_case(case: dict, attempt: int, base: dict, presets: dict, provider: RecordingProvider) -> Run:
     state = build_state(base, presets, case.get("overrides"))
     now = time.time()
-    event = Event(type="driver_speech", ts=now, data={"text": case["text"]})
+    spec = case.get("event") or {"type": "driver_speech", "data": {"text": case["text"]}}
+    event = Event(type=spec["type"], ts=now, data=dict(spec.get("data") or {}))
     provider.calls.clear()
     client = AssistantClient(provider=provider)  # fresh memory and policies for every run
     actions = await client.handle_event(event, state, now=now)

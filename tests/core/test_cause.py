@@ -126,7 +126,8 @@ async def test_scene_4_remedy_and_its_effect_with_p3s_client() -> None:
     rig.run(9.0)
     await rig.link.drain()
     said = [s["text"] for s in rig.speaks()]
-    assert "Maria, poți să-i povestești tu?" in said and "Andrei, ochii pe drum." in said
+    assert "Maria, poți să-i povestești tu?" in said and "Andrei, îți povestește Maria." in said
+    assert not any("ochii pe drum" in text for text in said)  # P2 warns; the remedy never repeats it
     rig.run(th("intervention", "after_s") + 0.5)
     effect = rig.hub.events("intervention_effect")[0]
     assert effect["data"]["kind"] == "delegate" and effect["data"]["helped"] is True

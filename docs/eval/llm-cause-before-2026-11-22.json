@@ -1,0 +1,925 @@
+{
+  "meta": {
+    "label": "cause-before",
+    "date": "2026-11-22",
+    "model": "gemini-3.5-flash-lite",
+    "backup_model": "gemini-3.1-flash-lite",
+    "max_output_tokens": 1024,
+    "thinking_level": "minimal",
+    "thinking_budget": null,
+    "timeout_s": 2.5,
+    "temperature": 0.2,
+    "cases": 5,
+    "repeat": 5,
+    "real_search": false,
+    "overrides": []
+  },
+  "summary": {
+    "runs": 25,
+    "outcomes": {
+      "ok": 20,
+      "wrong": 5
+    },
+    "ok_rate": 0.8,
+    "fixed_text_rate": 0.0,
+    "latency_ms": {
+      "answer_p50": 851.0,
+      "answer_p95": 1148.0,
+      "llm_ttft_p50": 825.0,
+      "llm_total_p50": 850.0,
+      "llm_total_p95": 1147.0
+    },
+    "llm_finish_reasons": {
+      "STOP": 25
+    },
+    "thought_tokens_p50": null,
+    "by_group": {
+      "cause": {
+        "wrong": 5,
+        "ok": 20
+      }
+    }
+  },
+  "runs": [
+    {
+      "case": "cause_passenger_phone",
+      "group": "cause",
+      "text": "[cause_detected passenger_showing_phone]",
+      "attempt": 1,
+      "outcome": "wrong",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1510.9,
+      "llm_ttft_ms": 1348.4,
+      "llm_total_ms": 1490.9,
+      "llm_types": [
+        "speak",
+        "delegate",
+        "speak"
+      ],
+      "final_types": [
+        "speak",
+        "delegate",
+        "speak"
+      ],
+      "said": [
+        "Maria, poți să-i povestești tu?",
+        "Andrei, ochii pe drum."
+      ],
+      "problems": [
+        "says ['ochii pe drum']"
+      ],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"passenger\",\n      \"text\": \"Maria, poți să-i povestești tu?\"\n    },\n    {\n      \"type\": \"delegate\",\n      \"to_person\": \"Maria\",\n      \"task\": \"tell_story\"\n    },\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Andrei, ochii pe drum.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 122,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_phone",
+      "group": "cause",
+      "text": "[cause_detected passenger_showing_phone]",
+      "attempt": 2,
+      "outcome": "wrong",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 780.0,
+      "llm_ttft_ms": 693.9,
+      "llm_total_ms": 778.7,
+      "llm_types": [
+        "speak",
+        "delegate",
+        "speak"
+      ],
+      "final_types": [
+        "speak",
+        "delegate",
+        "speak"
+      ],
+      "said": [
+        "Maria, poți să-i povestești tu?",
+        "Andrei, ochii pe drum."
+      ],
+      "problems": [
+        "says ['ochii pe drum']"
+      ],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"passenger\", \"text\": \"Maria, poți să-i povestești tu?\"}, {\"type\": \"delegate\", \"to_person\": \"Maria\", \"task\": \"tell_story\"}, {\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Andrei, ochii pe drum.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 79,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_phone",
+      "group": "cause",
+      "text": "[cause_detected passenger_showing_phone]",
+      "attempt": 3,
+      "outcome": "wrong",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1084.5,
+      "llm_ttft_ms": 1048.6,
+      "llm_total_ms": 1083.1,
+      "llm_types": [
+        "speak",
+        "delegate",
+        "speak"
+      ],
+      "final_types": [
+        "speak",
+        "delegate",
+        "speak"
+      ],
+      "said": [
+        "Maria, poți să-i povestești tu?",
+        "Andrei, ochii pe drum."
+      ],
+      "problems": [
+        "says ['ochii pe drum']"
+      ],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"passenger\", \"text\": \"Maria, poți să-i povestești tu?\"}, {\"type\": \"delegate\", \"to_person\": \"Maria\", \"task\": \"tell_story\"}, {\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Andrei, ochii pe drum.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 79,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_phone",
+      "group": "cause",
+      "text": "[cause_detected passenger_showing_phone]",
+      "attempt": 4,
+      "outcome": "wrong",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1014.8,
+      "llm_ttft_ms": 1011.6,
+      "llm_total_ms": 1013.6,
+      "llm_types": [
+        "speak",
+        "delegate",
+        "speak"
+      ],
+      "final_types": [
+        "speak",
+        "delegate",
+        "speak"
+      ],
+      "said": [
+        "Maria, poți să-i povestești tu?",
+        "Andrei, ochii pe drum."
+      ],
+      "problems": [
+        "says ['ochii pe drum']"
+      ],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"passenger\",\n      \"text\": \"Maria, poți să-i povestești tu?\"\n    },\n    {\n      \"type\": \"delegate\",\n      \"to_person\": \"Maria\",\n      \"task\": \"tell_story\"\n    },\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Andrei, ochii pe drum.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 122,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_phone",
+      "group": "cause",
+      "text": "[cause_detected passenger_showing_phone]",
+      "attempt": 5,
+      "outcome": "wrong",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 888.5,
+      "llm_ttft_ms": 714.5,
+      "llm_total_ms": 887.1,
+      "llm_types": [
+        "speak",
+        "delegate",
+        "speak"
+      ],
+      "final_types": [
+        "speak",
+        "delegate",
+        "speak"
+      ],
+      "said": [
+        "Maria, poți să-i povestești tu?",
+        "Andrei, ochii pe drum."
+      ],
+      "problems": [
+        "says ['ochii pe drum']"
+      ],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"passenger\",\n      \"text\": \"Maria, poți să-i povestești tu?\"\n    },\n    {\n      \"type\": \"delegate\",\n      \"to_person\": \"Maria\",\n      \"task\": \"tell_story\"\n    },\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Andrei, ochii pe drum.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 122,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_talk",
+      "group": "cause",
+      "text": "[cause_detected passenger_talk]",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 798.1,
+      "llm_ttft_ms": 785.2,
+      "llm_total_ms": 797.0,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "stay_silent"
+      ],
+      "said": [],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"stay_silent\", \"reason\": \"conversation\"}]}",
+          "finish": "STOP",
+          "out_tokens": 18,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_talk",
+      "group": "cause",
+      "text": "[cause_detected passenger_talk]",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 745.6,
+      "llm_ttft_ms": 743.6,
+      "llm_total_ms": 744.7,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "stay_silent"
+      ],
+      "said": [],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"stay_silent\", \"reason\": \"nothing_to_add\"}]}",
+          "finish": "STOP",
+          "out_tokens": 22,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_talk",
+      "group": "cause",
+      "text": "[cause_detected passenger_talk]",
+      "attempt": 3,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 851.4,
+      "llm_ttft_ms": 848.6,
+      "llm_total_ms": 850.4,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "stay_silent"
+      ],
+      "said": [],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"stay_silent\", \"reason\": \"nothing_to_add\"}]}",
+          "finish": "STOP",
+          "out_tokens": 22,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_talk",
+      "group": "cause",
+      "text": "[cause_detected passenger_talk]",
+      "attempt": 4,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 899.0,
+      "llm_ttft_ms": 896.7,
+      "llm_total_ms": 897.9,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "stay_silent"
+      ],
+      "said": [],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"stay_silent\", \"reason\": \"nothing_to_add\"}]}",
+          "finish": "STOP",
+          "out_tokens": 22,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_passenger_talk",
+      "group": "cause",
+      "text": "[cause_detected passenger_talk]",
+      "attempt": 5,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 745.1,
+      "llm_ttft_ms": 743.0,
+      "llm_total_ms": 744.2,
+      "llm_types": [
+        "stay_silent"
+      ],
+      "final_types": [
+        "stay_silent"
+      ],
+      "said": [],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"stay_silent\", \"reason\": \"nothing_to_add\"}]}",
+          "finish": "STOP",
+          "out_tokens": 22,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_incoming_message",
+      "group": "cause",
+      "text": "[cause_detected incoming_message]",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 969.3,
+      "llm_ttft_ms": 879.1,
+      "llm_total_ms": 968.3,
+      "llm_types": [
+        "speak",
+        "read_message",
+        "ask"
+      ],
+      "final_types": [
+        "speak",
+        "read_message",
+        "ask"
+      ],
+      "said": [
+        "Lasă telefonul, ți-l citesc eu.",
+        "Ai un mesaj de la Mihai. Îl citesc?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Lasă telefonul, ți-l citesc eu.\"}, {\"type\": \"read_message\", \"msg_id\": \"m17\"}, {\"type\": \"ask\", \"to\": \"driver\", \"question\": \"Ai un mesaj de la Mihai. Îl citesc?\", \"expects\": \"yes_no\"}]}",
+          "finish": "STOP",
+          "out_tokens": 87,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_incoming_message",
+      "group": "cause",
+      "text": "[cause_detected incoming_message]",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 671.2,
+      "llm_ttft_ms": 593.5,
+      "llm_total_ms": 670.0,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Andrei, lasă telefonul, ți-l citesc eu."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Andrei, lasă telefonul, ți-l citesc eu.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 35,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_incoming_message",
+      "group": "cause",
+      "text": "[cause_detected incoming_message]",
+      "attempt": 3,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 995.7,
+      "llm_ttft_ms": 992.8,
+      "llm_total_ms": 993.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Andrei, lasă telefonul, ți-l citesc eu."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Andrei, lasă telefonul, ți-l citesc eu.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 35,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_incoming_message",
+      "group": "cause",
+      "text": "[cause_detected incoming_message]",
+      "attempt": 4,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 814.5,
+      "llm_ttft_ms": 812.3,
+      "llm_total_ms": 813.5,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Andrei, lasă telefonul, ți-l citesc eu."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Andrei, lasă telefonul, ți-l citesc eu.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 35,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_incoming_message",
+      "group": "cause",
+      "text": "[cause_detected incoming_message]",
+      "attempt": 5,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 812.8,
+      "llm_ttft_ms": 810.6,
+      "llm_total_ms": 811.8,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Andrei, lasă telefonul, ți-l citesc eu."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Andrei, lasă telefonul, ți-l citesc eu.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 35,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_child",
+      "group": "cause",
+      "text": "[cause_detected child_activity]",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 843.2,
+      "llm_ttft_ms": 841.0,
+      "llm_total_ms": 842.1,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Ioana, vrei să te ajuți cu un basm sau o poveste?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"all\", \"text\": \"Ioana, vrei să te ajuți cu un basm sau o poveste?\"}]}",
+          "finish": "STOP",
+          "out_tokens": 39,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_child",
+      "group": "cause",
+      "text": "[cause_detected child_activity]",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 1164.1,
+      "llm_ttft_ms": 1107.3,
+      "llm_total_ms": 1163.0,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Ioana, vrei să ne jucăm un joc?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"all\", \"text\": \"Ioana, vrei să ne jucăm un joc?\"}]}",
+          "finish": "STOP",
+          "out_tokens": 32,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_child",
+      "group": "cause",
+      "text": "[cause_detected child_activity]",
+      "attempt": 3,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 899.5,
+      "llm_ttft_ms": 752.2,
+      "llm_total_ms": 895.8,
+      "llm_types": [
+        "ask"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Ioana vrea să ne jucăm ceva? Vreți să pun un joc de ghicitori?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"ask\", \"to\": \"driver\", \"question\": \"Ioana vrea să ne jucăm ceva? Vreți să pun un joc de ghicitori?\", \"expects\": \"yes_no\"}]}",
+          "finish": "STOP",
+          "out_tokens": 50,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_child",
+      "group": "cause",
+      "text": "[cause_detected child_activity]",
+      "attempt": 4,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 867.6,
+      "llm_ttft_ms": 865.2,
+      "llm_total_ms": 866.4,
+      "llm_types": [
+        "ask"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Ioana vrea o poveste? O spun eu. Bine?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"ask\", \"to\": \"driver\", \"question\": \"Ioana vrea o poveste? O spun eu. Bine?\", \"expects\": \"yes_no\"}]}",
+          "finish": "STOP",
+          "out_tokens": 42,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "cause_child",
+      "group": "cause",
+      "text": "[cause_detected child_activity]",
+      "attempt": 5,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 827.6,
+      "llm_ttft_ms": 825.3,
+      "llm_total_ms": 826.5,
+      "llm_types": [
+        "ask"
+      ],
+      "final_types": [
+        "ask"
+      ],
+      "said": [
+        "Ioana vrea să ne jucăm ceva? Vreți să pun un joc?"
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"ask\", \"to\": \"driver\", \"question\": \"Ioana vrea să ne jucăm ceva? Vreți să pun un joc?\", \"expects\": \"yes_no\"}]}",
+          "finish": "STOP",
+          "out_tokens": 46,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "talk_with_cause",
+      "group": "cause",
+      "text": "Cât mai am până la destinație?",
+      "attempt": 1,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 871.7,
+      "llm_ttft_ms": 839.9,
+      "llm_total_ms": 853.3,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Mai ai aproximativ 20 de minute până la destinație."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Mai ai aproximativ 20 de minute până la destinație.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 54,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "talk_with_cause",
+      "group": "cause",
+      "text": "Cât mai am până la destinație?",
+      "attempt": 2,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 812.2,
+      "llm_ttft_ms": 809.2,
+      "llm_total_ms": 810.6,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Mai ai aproximativ 20 de minute până la destinație."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Mai ai aproximativ 20 de minute până la destinație.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 54,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "talk_with_cause",
+      "group": "cause",
+      "text": "Cât mai am până la destinație?",
+      "attempt": 3,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 861.3,
+      "llm_ttft_ms": 857.0,
+      "llm_total_ms": 859.6,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Mai ai aproximativ 20 de minute până la destinație."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Mai ai aproximativ 20 de minute până la destinație.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 54,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "talk_with_cause",
+      "group": "cause",
+      "text": "Cât mai am până la destinație?",
+      "attempt": 4,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 819.8,
+      "llm_ttft_ms": 817.2,
+      "llm_total_ms": 818.1,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Mai ai aproximativ 20 de minute până la destinație."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\n  \"actions\": [\n    {\n      \"type\": \"speak\",\n      \"to\": \"driver\",\n      \"text\": \"Mai ai aproximativ 20 de minute până la destinație.\"\n    }\n  ]\n}",
+          "finish": "STOP",
+          "out_tokens": 54,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    },
+    {
+      "case": "talk_with_cause",
+      "group": "cause",
+      "text": "Cât mai am până la destinație?",
+      "attempt": 5,
+      "outcome": "ok",
+      "source": "LLM",
+      "reason": "ok",
+      "latency_ms": 834.1,
+      "llm_ttft_ms": 804.7,
+      "llm_total_ms": 831.9,
+      "llm_types": [
+        "speak"
+      ],
+      "final_types": [
+        "speak"
+      ],
+      "said": [
+        "Mai ai aproximativ 20 de minute până la destinație."
+      ],
+      "problems": [],
+      "rejected": [],
+      "raw_calls": [
+        {
+          "model": "gemini-3.5-flash-lite",
+          "text": "{\"actions\": [{\"type\": \"speak\", \"to\": \"driver\", \"text\": \"Mai ai aproximativ 20 de minute până la destinație.\"}]}",
+          "finish": "STOP",
+          "out_tokens": 34,
+          "thought_tokens": null
+        }
+      ],
+      "review": false,
+      "error": null
+    }
+  ]
+}

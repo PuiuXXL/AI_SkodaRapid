@@ -30,6 +30,25 @@ presets:
     passenger: {present: false}
   music_playing:
     media: {playing: true, track_id: rock1, title: "Rock 1", volume: 0.6, reason: driver_request}
+  cause_passenger_phone:   # scene 4: Maria shows her phone, Andrei glanced at her 3 times
+    safety: {level: P3}
+    trip: {speed_kmh: 50, road: city}
+    passenger: {holding_phone: true}
+    cause: {target: passenger, person_id: 2, label: passenger_showing_phone, glances_30s: 3, conf: 0.8,
+            sources: [cam_driver, cam_passenger]}
+  cause_passenger_talk:    # Andrei talks with Maria and keeps turning to her
+    passenger: {speaking: true}
+    cause: {target: passenger, person_id: 2, label: passenger_talk, glances_30s: 4, conf: 0.7,
+            sources: [cam_driver, cam_passenger]}
+  cause_incoming_message:  # a WhatsApp from Mihai just arrived and Andrei took the phone
+    cause: {target: phone, label: incoming_message, glances_30s: 1, conf: 0.8, sources: [cam_driver, phone]}
+  cause_child:             # Ioana (child, rear seat) keeps Andrei turning around
+    occupants:
+      - {id: 1, seat: driver, source: cam_driver, profile: andrei, role: adult}
+      - {id: 2, seat: front_right, source: cam_passenger, profile: maria, role: adult}
+      - {id: 3, seat: rear, source: declared, profile: ioana, role: child}
+    cause: {target: rear, person_id: 3, label: child_activity, glances_30s: 3, conf: 0.6,
+            sources: [cam_driver, declared]}
   map_route:
     trip:
       place: {after: Lugoj, after_km: 8, before: Caransebeș, before_km: 35, destination: Deva, destination_km: 95}
@@ -134,3 +153,25 @@ cases:
      expect: {any_types: [speak], review: true}}
   - {id: leave_me, group: talk, text: "Lasă-mă în pace.",
      expect: {any_types: [stay_silent, speak]}}
+
+  # --- distraction causes (P2's cause_detected) and conversation with a cause active -----------------------
+  # P2 already warns about the road (its own fixed sentence and alarm); the assistant must remove the cause without
+  # repeating the warning (plan "alerts vs. conversation", step 4).
+  - {id: cause_passenger_phone, group: cause, text: "[cause_detected passenger_showing_phone]",
+     event: {type: cause_detected, data: {label: passenger_showing_phone}},
+     overrides: {presets: [cause_passenger_phone]},
+     expect: {any_types: [speak, delegate], none_mentions: [ochii pe drum, atent la drum, uita te la drum]}}
+  - {id: cause_passenger_talk, group: cause, text: "[cause_detected passenger_talk]",
+     event: {type: cause_detected, data: {label: passenger_talk}}, overrides: {presets: [cause_passenger_talk]},
+     expect: {any_types: [speak, ask, stay_silent], none_mentions: [ochii pe drum, atent la drum, uita te la drum]}}
+  - {id: cause_incoming_message, group: cause, text: "[cause_detected incoming_message]",
+     event: {type: cause_detected, data: {label: incoming_message}},
+     overrides: {presets: [cause_incoming_message]},
+     expect: {any_types: [speak, ask, read_message], none_mentions: [ochii pe drum, atent la drum, uita te la drum]}}
+  - {id: cause_child, group: cause, text: "[cause_detected child_activity]",
+     event: {type: cause_detected, data: {label: child_activity}}, overrides: {presets: [cause_child]},
+     expect: {any_types: [speak, ask], none_mentions: [ochii pe drum, atent la drum, uita te la drum]}}
+  - {id: talk_with_cause, group: cause, text: "Cât mai am până la destinație?",
+     overrides: {presets: [cause_passenger_talk]},
+     expect: {any_types: [speak], mentions: ["20"], none_mentions: [ochii pe drum, atent la drum, uita te la drum]}}
+
