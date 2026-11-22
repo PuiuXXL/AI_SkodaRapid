@@ -32,9 +32,12 @@ safety:
                                 # Live test 2026-11-22: head let down with the eyes open -> "Nu te mai văd" instead of
                                 # the alarm. Start values (P1: a drowsy nod falls ~18 deg in 2.5 s, nod.pitch_drop_deg 15):
       min_speed_kmh: 10         # parked: no alarm for bending down
-      window_s: 1.5             # the pitch drop is measured over the last face frames in this window ...
-      drop_deg: 15              # ... and must reach this, OR the last pitch is this far below the upright pitch:
-      down_deg: 25              # (median pitch over baseline_s before the window; a lap glance is ~35 deg down)
+      # The frame's pitch is P1's smoothed one (One Euro 0.05 Hz): a slow nod of 18 deg in 2.5 s reads 10.6 deg over
+      # 1.5 s and 15.4 deg over 3 s (25 deg in 2 s: 21.9), so 1.5 s / 15 / 25 missed it (live: "Nu te mai văd").
+      window_s: 3.0             # the pitch drop is measured over the last face frames in this window ...
+      drop_deg: 12              # ... and must reach this, OR the last pitch is this far below the upright pitch:
+      down_deg: 15              # (median pitch over baseline_s before the window; the face stays seen on a lap glance)
+      nod_recent_s: 1.5         # ... OR P1 reported driver.head.nodding this recently (its own slow-nod detector)
       baseline_s: 30
       min_baseline_frames: 30   # ~2 s of face at 15 Hz before the upright pitch counts
       max_gap_s: 0.5            # the last face frame must be this recent (the loss is the fall itself)

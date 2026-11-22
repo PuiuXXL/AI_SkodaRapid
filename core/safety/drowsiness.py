@@ -15,9 +15,11 @@ or with ``driver.head.nodding``), for up to ``face_lost_hold_ms``: a falling hea
 the head down the shut lids often read SQUINT. Eyes P1 reports ``OPEN`` always end the closure.
 
 **A head that falls with no closed eyes seen** (``safety.drowsiness.head_fall``, 2026-11-22): the face is lost right
-after the head pitch dropped fast (``drop_deg`` within ``window_s``) or while it was far below the driver's own upright
-pitch (``down_deg``): a closure starts at the last face frame and goes on while the face stays lost, so the alarm and
-the SOS come at ``alarm_ms`` as for a microsleep (alert ``head_down``). Live test: the head let down with the eyes open
+after the head pitch dropped (``drop_deg`` within ``window_s``), while it was below the driver's own upright pitch
+(``down_deg``), or within ``nod_recent_s`` of P1's ``driver.head.nodding``: a closure starts at the last face frame (or
+the closure of eyes already closing goes on) while the face stays lost, so the alarm and the SOS come at ``alarm_ms``
+as for a microsleep (alert ``head_down``). The pitch in the frame is P1's smoothed one (One Euro, min_cutoff 0.05 Hz):
+a slow drowsy nod of 18 deg in 2.5 s shows only ~15 deg over 3 s, hence the wide window and the low thresholds. Live test: the head let down with the eyes open
 gave "Nu te mai văd. Monitorizarea e întreruptă." instead, because no closure had started before the face was lost.
 
 The check-in is a rule, not the LLM: fixed texts from ``templates.yaml`` (``drowsiness``), answered by voice, nod or
@@ -107,6 +109,7 @@ class DrowsinessRule:
         self.last_inputs: tuple[Any, Any] = (None, None)
         self.pitches: deque[tuple[float, float]] = deque()  # (t, head pitch) of the frames with a face
         self.fall_checked = False  # the current loss of the face was already checked for a falling head
+        self.last_nod: float | None = None  # last frame with P1's driver.head.nodding (a slow drowsy nod)
 
     # --- the timer (fast path: every frame) ----------------------------------------------------------------------
 
@@ -129,7 +132,9 @@ class DrowsinessRule:
         closed = eyes.reliable and (eyes.closed_ms > 0 or eyes.state == "CLOSED")
         face = head.pitch is not None
         self._track_pitch(head.pitch, now)
-        if not face and self.closure is None and not self.fall_checked:
+        if head.nodding:
+            self.last_nod = now
+        if not face and not self.fall_checked:
             self.fall_checked = True  # once per loss of the face
             self._head_fall(now)
         closure = self.closure
@@ -180,13 +185,19 @@ class DrowsinessRule:
         drop = max(recent) - last_pitch
         upright = statistics.median(older) if len(older) >= int(_fall("min_baseline_frames")) else None
         below = (upright - last_pitch) if upright is not None else 0.0
-        if drop < _fall("drop_deg") and below < _fall("down_deg"):
+        nodded = self.last_nod is not None and now - self.last_nod <= _fall("nod_recent_s")
+        if drop < _fall("drop_deg") and below < _fall("down_deg") and not nodded:
             return
-        self.closure = Closure(since=last_t, last_closed=now, nodding=True, head_fall=True)
+        closure = self.closure
+        if closure is None:
+            self.closure = Closure(since=last_t, last_closed=now, nodding=True, head_fall=True)
+        else:  # the eyes were closing already: the same closure goes on while the face stays lost
+            closure.nodding = closure.head_fall = True
+            closure.last_closed = now
         self.unseen_since = None
         self.engine.log_event("head_fall", now, text="Capul a coborât și fața nu se mai vede.",
                               drop_deg=round(drop, 1), below_upright_deg=round(below, 1),
-                              last_pitch=round(last_pitch, 1))
+                              last_pitch=round(last_pitch, 1), p1_nod=nodded, eyes_closing=closure is not None)
 
     def _holds(self, closure: Closure, frame: PerceptionFrame, now: float) -> bool:
         """The closure goes on although P1 does not see closed eyes on this frame."""
@@ -289,6 +300,8 @@ class DrowsinessRule:
                 stage = "warning"
             elif self.shut_ms(now) >= _cfg("checkin_min_ms"):
                 stage = "closed"
+        # P1 always sends eyes.microsleep=false ("P2 decides"): it is P2's closure past warn_ms (the dashboard's flag)
+        state.driver.eyes.microsleep = stage in ("warning", "alarm")
         state.safety.drowsiness = Drowsiness(
             stage=stage, eyes_shut_ms=round(self.shut_ms(now)), episodes_10min=self._episodes(now),
             last_episode_ms=self.last_episode_ms, last_episode_ts=self.last_episode_ts,
