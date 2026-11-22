@@ -239,6 +239,7 @@ class EyesConfig(_Section):
     perclos_closure: RatioOfRef
     perclos_window_s: PositiveFloat
     min_eye_width_px: Annotated[float, Field(ge=1)]
+    unreliable_when_face_small: bool  # face narrower than face.min_face_width_px -> eyes unreliable (no verdict)
     cnn: EyeCnnConfig
 
     @model_validator(mode="after")
@@ -475,6 +476,7 @@ class DemoConfig(_Section):
 
 class PassengerConfig(_Section):
     open_reset_frames: PositiveInt  # consecutive open frames needed to reset the closed time (noise immunity)
+    closed_ratio: Annotated[float, Field(gt=0, lt=1)]  # eye ratio (EAR / reference) below this = closed (AP2)
     asleep_closed_s: PositiveFloat  # AP2: eyes not seen open for this long (passenger present) -> awake = false
     asleep_closed_head_s: PositiveFloat  # ... or this long with the head dropped (plan AP2: eyes closed + head down)
     head_drop_deg: PositiveFloat  # head pitch this far below the passenger's upright pitch = dropped

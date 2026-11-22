@@ -216,7 +216,11 @@ class PhoneTrackerModule:
 
         cfg = phone_config(ctx.cfg)
         if not ctx.is_driver:
-            cfg = dataclasses.replace(cfg, passenger_side="left" if cfg.passenger_side == "right" else "right")
+            # AP4: a phone the passenger holds up / shows is "holding_phone" even far from their face or hands (the
+            # contact rule is for the DRIVER's phone only: with it the passenger's phone read 0 % live, 2026-11-22)
+            cfg = dataclasses.replace(
+                cfg, passenger_side="left" if cfg.passenger_side == "right" else "right", owned_needs_contact=False
+            )
         self.ctx = ctx
         self.perf = perf
         self.tracker = PhoneTracker(cfg)
@@ -590,7 +594,12 @@ class PassengerStateModule:
             self._last_face = t
             if state.head.raw_pitch is not None:
                 self._last_pitch = (t, state.head.raw_pitch)
-            if state.eyes.reliable and state.eyes.state in ("OPEN", "SQUINT"):
+            eyes = state.eyes
+            ratio = getattr(eyes, "ratio", None)
+            # AP2: closed = CLOSED or the eye ratio deep down. A deliberate / sleepy slow close has no fast fall, so the
+            # blink detector never reports CLOSED (eyes_closed_s max 0.4 s in 16 s live, 2026-11-22)
+            low = ratio is not None and ratio < p.closed_ratio
+            if eyes.reliable and eyes.state in ("OPEN", "SQUINT") and not low:
                 self._open_run += 1
                 if self._open_run >= p.open_reset_frames:  # one noisy "open" frame does not wake a sleeper
                     self._last_open = t

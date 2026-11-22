@@ -124,6 +124,15 @@ def test_big_smile_with_high_eyesquint_is_not_closed() -> None:
     assert [e for e in tracker.events if e.kind == "closure"] == []
 
 
+def test_face_below_the_minimum_width_gives_no_eye_verdict() -> None:
+    """R-FL3 + AS14: a face narrower than face.min_face_width_px -> eyes unreliable, no closure (no false alarm)."""
+    tracker = _tracker()
+    small = {"width_px": 200.0}
+    outs = _run(tracker, [(2.0, {"ear_left": OPEN, **small}), (3.0, {"ear_left": CLOSED, "blink": 0.9, **small})])
+    assert {o.state for o in outs} <= {"UNKNOWN"} and not any(o.reliable for o in outs)
+    assert [e for e in tracker.events if e.kind == "closure"] == []
+
+
 def test_really_closed_eye_with_squint_is_still_closed() -> None:
     tracker = _tracker()
     outs = _run(tracker, [(2.0, {"ear_left": OPEN}), (2.0, {"ear_left": CLOSED, "squint": 0.9, "blink": 0.9})])

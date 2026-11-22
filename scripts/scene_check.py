@@ -49,8 +49,9 @@ Frame = dict[str, Any]
 
 
 class Session:
-    def __init__(self, probe: Probe) -> None:
+    def __init__(self, probe: Probe, profile: str = "andrei") -> None:
         self.probe = probe
+        self.profile = profile  # gaze calibration profile (CAL step)
         self.results: list[tuple[str, str, bool, str]] = []  # scene, criterion, ok, detail
         self.aborted = False
         self.steps: list[dict[str, Any]] = []  # every prompt with its time window (for --dump)
@@ -150,7 +151,9 @@ async def s2(s: Session) -> None:
         fr = s.frames(t0, t1)
         clean += all(f["driver"]["gaze"]["off_road_ms"] == 0 for f in fr)
         seen += any(f["driver"]["gaze"]["zone"] == "mirror_left" for f in fr)
-    s.record("S2", "left mirror without off_road x10", clean == 10, f"{clean}/10 clean, mirror_left seen {seen}/10")
+    # both: the mirror must really be SEEN (with the zone stuck on "unknown", "no off_road" alone passed trivially)
+    s.record("S2", "left mirror seen >= 8/10 and without off_road x10", clean == 10 and seen >= 8,
+             f"{clean}/10 clean, mirror_left seen {seen}/10")  # fmt: skip
     t0, t1, _ = await s.step("SOFER: ACOPERA camera soferului cu palma", 6.0, "S2 camera acoperita")
     await s.step("SOFER: descopera camera", 3.0, "S2 camera acoperita")
     t_cover = s.first(t0, t1, lambda f: not f["driver"].get("face_conf"))
@@ -211,8 +214,8 @@ async def s5(s: Session) -> None:
     ent = [f["driver"]["gaze"].get("entropy_60s") for f in s.frames(t_mid - 1.0, t1)]
     start = next((e for e in ent if e is not None), None)
     end = next((e for e in reversed(ent) if e is not None), None)
-    s.record("S5", "gaze entropy falls (30 s fixed)", start is not None and end is not None and end < start,
-             f"{start} -> {end}")  # fmt: skip
+    detail = f"{start} -> {end}" if start is not None else "no entropy: zones stayed unknown (calibration)"
+    s.record("S5", "gaze entropy falls (30 s fixed)", start is not None and end is not None and end < start, detail)
 
 
 async def s6(s: Session) -> None:
@@ -239,7 +242,10 @@ async def s8(s: Session) -> None:
         await s.step(f"SOFER: ochii deschisi, pregateste-te ({k + 1}/3)", 2.0, "S8 inchideri")
         t0, _, _ = await s.step("SOFER: INCHIDE OCHII ACUM", 2.0, "S8 inchideri")
         _, t1, _ = await s.step("SOFER: DESCHIDE ochii", 2.0, "S8 inchideri")
-        closed = [f for f in s.frames(t0, t1) if f["driver"]["eyes"].get("state") == "CLOSED"]
+        fr = s.frames(t0, t1)
+        start = next((i for i, f in enumerate(fr) if f["driver"]["eyes"].get("state") == "CLOSED"), len(fr))
+        stop = next((i for i in range(start, len(fr)) if fr[i]["driver"]["eyes"].get("state") != "CLOSED"), len(fr))
+        closed = fr[start:stop]  # the first closure only (a blink after reopening is not a "reset")
         ms = [f["driver"]["eyes"]["closed_ms"] for f in closed]
         mono = all(b >= a for a, b in itertools.pairwise(ms))
         span = (closed[-1]["ts"] - closed[0]["ts"]) * 1000.0 + ms[0] if closed else 0.0
@@ -271,6 +277,99 @@ async def s9(s: Session) -> None:
         await s.step("SOFER: ridica capul, ochii deschisi", 3.0, "S9")
         hits += any(f["driver"]["head"]["nodding"] for f in s.frames(t0, t1 + 1.0))
     s.record("S9", "slow head drop with closed eyes >= 4/5", hits >= 4, f"{hits}/5")
+
+
+CAL_HINT = {"owl": "intoarce TOT CAPUL spre", "lizard": "capul spre drum, doar OCHII spre"}
+
+
+async def calibrate(s: Session) -> None:
+    """CAL: the driver's gaze calibration through the runtime (``calibrate`` command), prompts shown here."""
+    await s.wait_space(f"CALIBRARE privire pentru '{s.profile}': SOFER, SPATIU cand esti gata")
+    n_prompts, n_acks = len(s.probe.prompts), len(s.probe.acks)
+    await s.probe.send({"cmd": "calibrate", "profile": s.profile, "quick": False})
+    t0, done = time.time(), None
+    while not s.aborted and time.time() - t0 < 240:
+        acks = [a for a in s.probe.acks[n_acks:]
+                if a.get("cmd") == "calibrate" and a.get("status") in ("done", "error")]  # fmt: skip
+        if acks:
+            done = acks[-1]
+            break
+        p = s.probe.prompts[-1] if len(s.probe.prompts) > n_prompts else None
+        if p is None:
+            s._show(["CALIBRARE: pornesc..."])
+        else:
+            mode = str(p.get("mode") or "")
+            s._show([f"CALIBRARE pas {p.get('step')}/{p.get('steps')}  {mode.upper()}",
+                     f"{CAL_HINT.get(mode, '')} {p.get('zone')}", str(p.get("text") or ""),
+                     f"{float(p.get('remaining_s') or 0):.1f} s"])  # fmt: skip
+        await asyncio.sleep(0.03)
+    detail = (done or {}).get("detail") or {}
+    acc = detail.get("loo_accuracy") or {}
+    warns = [str(w) for w in detail.get("warnings") or []]
+    owl_turn = [w.split(":")[0] for w in warns if "OWL step" in w]
+    ok = (done is not None and done.get("status") == "done" and (acc.get("owl") or 0) >= 0.95
+          and (acc.get("lizard") or 0) >= 0.90 and not owl_turn)  # fmt: skip
+    error = f", error: {detail.get('detail')}" if done is not None and done.get("status") == "error" else ""
+    s.record("CAL", "calibration owl >= 95 %, lizard >= 90 %, head turned in every OWL step", ok,
+             f"{done and done.get('status')}, owl {acc.get('owl')}, lizard {acc.get('lizard')}, "
+             f"no head turn: {owl_turn or 'none'}, warnings {len(warns)}{error}")  # fmt: skip
+
+
+def _min_face_px() -> float:
+    cfg = yaml.safe_load((ROOT / "perception/config/perception.yaml").read_text(encoding="utf-8"))
+    return float(cfg["face"]["min_face_width_px"])
+
+
+def _face_px(f: Frame | None, seat: str, need: float) -> int | None:
+    conf = (f or {}).get(seat, {}).get("face_conf") if f else None
+    return round(conf * need) if conf else None  # face_conf = min(1, face width / min_face_width_px)
+
+
+async def framing(s: Session) -> None:
+    """F: both faces at least face.min_face_width_px wide (R-FL3) before anything else, with a live hint.
+
+    Too small a face ruined the 2026-11-22 run (driver ~212 px for 91 % of it: calibration error, squint / smile and
+    false closures). Waits until both seats hold the size for 3 s (or 60 s), then records the widths."""
+    need = _min_face_px()
+    t_end, ok_since = time.time() + 60.0, None
+    widths: dict[str, int | None] = {"driver": None, "passenger": None}
+    while not s.aborted and time.time() < t_end:
+        f = s.probe.frames[-1] if s.probe.frames else None
+        widths = {seat: _face_px(f, seat, need) for seat in widths}
+        good = all(w is not None and w >= need for w in widths.values())
+        ok_since = (ok_since or time.time()) if good else None
+        if ok_since is not None and time.time() - ok_since >= 3.0:
+            break
+        lines = [f"INCADRARE: fata >= {need:.0f} px pe fiecare camera (3 s la rand)"]
+        for seat, label in (("driver", "SOFER (C615)"), ("passenger", "PASAGER (LifeCam)")):
+            w = widths[seat]
+            hint = "OK" if w is not None and w >= need else "nu te vad" if w is None else "APROPIE-TE de camera"
+            lines.append(f"{label}: {w or '-'} px  {hint}")
+        s._show(lines)
+        await asyncio.sleep(0.05)
+    s.record("F", "both faces >= min_face_width_px (framing)", ok_since is not None,
+             f"driver {widths['driver']} px, passenger {widths['passenger']} px (need {need:.0f})")  # fmt: skip
+
+
+def framing_summary(s: Session, t0: float, t1: float) -> None:
+    """After the run: how much of it each face was big enough (the pixels the user asked to see in the report)."""
+    need = _min_face_px()
+    fr = s.frames(t0, t1)
+    for seat, label in (("driver", "driver"), ("passenger", "passenger")):
+        px = [w for w in (_face_px(f, seat, need) for f in fr) if w is not None]
+        share = sum(w >= need for w in px) / max(1, len(px))
+        med = statistics.median(px) if px else None
+        s.record("F", f"{label} face >= {need:.0f} px during the run (>= 90 % of frames)", share >= 0.9,
+                 f"median {med} px, {share:.0%} of the frames big enough")  # fmt: skip
+
+
+async def gaze_check(s: Session) -> None:
+    """G: after the calibration, looking at the road must read ``road`` (else every gaze criterion is meaningless)."""
+    t0, t1, _ = await s.step("SOFER: priveste DRUMUL, drept inainte", 6.0, "G privire")
+    fr = s.frames(t0 + 1.0, t1)
+    share = sum(f["driver"]["gaze"]["zone"] == "road" for f in fr) / max(1, len(fr))
+    cal = any(f["driver"]["gaze"].get("calibrated") for f in fr)
+    s.record("G", "zone road while looking at the road >= 70 %", cal and share >= 0.7, f"calibrated {cal}, road {share:.0%}")
 
 
 async def s7(s: Session) -> None:
@@ -329,12 +428,12 @@ async def normal(s: Session) -> None:
 
 
 #: plan §9 scenes 1-9 (scene 10, the trip report, has no P1 signal) + A (AS8 10 trials) + AS13 (extra) + N
-SCENES: dict[str, Callable[[Session], Any]] = {"S1": s1, "S2": s2, "S3": s3, "S4": s4, "S5": s5, "S6": s6, "S7": s7,
-                                               "S8": s8, "S9": s9, "A": answers10, "AS13": rear,
-                                               "N": normal}  # fmt: skip
+SCENES: dict[str, Callable[[Session], Any]] = {"F": framing, "CAL": calibrate, "G": gaze_check, "S1": s1, "S2": s2, "S3": s3,
+                                               "S4": s4, "S5": s5, "S6": s6, "S7": s7, "S8": s8, "S9": s9,
+                                               "A": answers10, "AS13": rear, "N": normal}  # fmt: skip
 
 
-async def run(only: list[str], port: int) -> Session:
+async def run(only: list[str], port: int, profile: str = "andrei") -> Session:
     import websockets
 
     probe = Probe()
@@ -342,7 +441,7 @@ async def run(only: list[str], port: int) -> Session:
     cfg["output"]["ws_url"] = f"ws://localhost:{port}/ws/perception"
     tmp = Path(tempfile.mkdtemp(prefix="scene_check_"))
     (tmp / "perception.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
-    session = Session(probe)
+    session = Session(probe, profile)
     async with websockets.serve(probe.handler, "localhost", port):
         proc = subprocess.Popen(
             [sys.executable, "-m", "perception.main", "--no-mjpeg", "--config", str(tmp / "perception.yaml"),
@@ -362,6 +461,7 @@ async def run(only: list[str], port: int) -> Session:
                 if session.aborted:
                     break
                 await SCENES[name](session)
+            framing_summary(session, t_start, time.time())
             fps = [f["perf"]["cameras"]["driver"]["process_fps"] for f in session.frames(t_start, time.time())
                    if f["perf"]["cameras"].get("driver", {}).get("available")]  # fmt: skip
             cap = [f["perf"]["cameras"]["driver"]["capture_fps"] for f in session.frames(t_start, time.time())
@@ -405,10 +505,11 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--only", nargs="*", choices=list(SCENES), default=None)
     p.add_argument("--port", type=int, default=8766)
+    p.add_argument("--profile", default="andrei", help="gaze calibration profile (CAL step)")
     p.add_argument("--dump", type=Path, default=None, help="also write the received frames (JSONL, numbers only)")
     args = p.parse_args(argv)
     only = args.only or list(SCENES)
-    session = asyncio.run(run(only, args.port))
+    session = asyncio.run(run(only, args.port, args.profile))
     if args.dump is not None:  # diagnosis only: PerceptionFrame numbers, no image
         args.dump.write_text("\n".join(json.dumps(f) for f in session.probe.frames), encoding="utf-8")
         steps = "\n".join(json.dumps(s) for s in session.steps)

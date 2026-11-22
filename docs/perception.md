@@ -576,7 +576,7 @@ the CONTRACT texts below; with `false` only the plan §7 fields are sent.
 | AS10 / AP1 identity | `occupants[].profile`, `profile_score` | both | SFace on its own thread (loop never waits), embeddings per camera | pending B (< 3 s) | — |
 | AS11 / AP3 speaking | `driver.speaking`, `passenger.speaking` | both | done (hold 800 ms, B9) | pending B | — |
 | AS12 / AP5 camera covered | `*.monitoring_ok`, `monitoring_reason = occluded` | both | fast path: no face + very dark / uniform / sharpless for 1 s (a hand passing < 1 s: nothing) | pending B (< 2 s) | — |
-| AS13 rear-seat glance (S) | `driver.gaze.zone = rear_seat`, `source = body` | driver | face lost right after a growing right turn -> rear_seat <= 3 s | pending B | `demo.rear_seat` |
+| AS13 rear-seat glance (S) | `driver.gaze.zone = rear_seat`, `source = body` | driver | face lost right after a growing right turn -> rear_seat <= 3 s | **NO-GO** 2026-11-22: 3/3 on turns but 4 false in 60 s of normal driving -> off | `demo.rear_seat` (off) |
 | AS14 unreliable eyes (S) | `driver.eyes.reliable` | driver | done (state UNKNOWN, no PERCLOS / nod) | GO | — |
 | AP2 passenger asleep | `passenger.awake`, `eyes_closed_s` | passenger | reset only after 3 open frames in a row; closed 8 s is enough, head drop shortens to 5 s | pending B (< 10 s) | — |
 | AP4 passenger phone | `passenger.holding_phone` | passenger | done | pending B | — |
