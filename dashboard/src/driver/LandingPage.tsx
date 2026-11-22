@@ -44,7 +44,7 @@ export function LandingPage(){
     </header>
     <div className="dm-premiere-story">
       <small className="dm-film-label">DriveMate / Your driving companion</small>
-      <h1 lang="en">four your <span>safety</span></h1>
+      <h1 lang="en">for your <span>safety</span></h1>
       <div className="dm-intro"><p>Keep your eyes on the road. DriveMate watches your attention and lets you know when it is time for a break.</p>
         <a className="dm-connect" href="#/salut">Connect <span aria-hidden="true">↗</span></a>
       </div>

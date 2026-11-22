@@ -24,7 +24,7 @@ export function DriverApp(){
   const landing=usePage()==="start";
   const [visited,setVisited]=useState(!landing);
   useEffect(()=>{
-    if(landing)document.title="DriveMate · four your safety";
+    if(landing)document.title="DriveMate · for your safety";
     else setVisited(true);
   },[landing]);
   return <>{landing&&<LandingPage/>}{(visited||!landing)&&<div hidden={landing}><DriverWorkspace/></div>}</>;
