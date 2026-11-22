@@ -34,8 +34,9 @@ import time
 import urllib.parse
 import urllib.request
 from collections import OrderedDict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Literal, Optional, Union
+from typing import Any, Literal
 
 from assistant.answers import interpret_voice
 from assistant.contract import State
@@ -56,7 +57,7 @@ _KNOWN_MAX = 200
 _BRACKETS = re.compile(r"[(\[{【「].*?[)\]}】」]")
 _HASHTAG = re.compile(r"#\w+")
 _SEGMENTS = re.compile(r"\s*(?:\||//|•|·|¦)\s*")
-_ARTIST_SEP = re.compile(r"\s+[-–—:]\s+|:\s+")
+_ARTIST_SEP = re.compile(r"\s+[-–—:]\s+|:\s+")  # noqa: RUF001
 _NOT_SPOKEN = re.compile(r"[^\w\s,'&.-]", re.UNICODE)
 #: Words never left at the end of a shortened title ("Rock pentru" -> "Rock").
 _TRAILING_STOP = frozenset({
@@ -83,7 +84,7 @@ _REQUEST_VERBS = frozenset({"pune", "puneti", "pui", "cauta", "cautati", "dami",
 _MUSIC_NOUNS = frozenset({"muzica", "melodie", "melodia", "piesa", "cantec", "ceva"})
 _MEDIA_NOUNS = frozenset({"muzica", "melodie", "melodia", "piesa", "piese", "cantec", "cantece", "podcast",
                           "podcastul", "playlist", "mix", "album", "ceva"})
-_QUERY_DROP = frozenset({"pune", "puneti", "pui", "sa", "cauta", "cautati", "da", "mi", "dami", "vreau", "as", "vrea", "porneste",
+_QUERY_DROP = frozenset({"pune", "puneti", "pui", "sa", "cauta", "cautati", "da", "mi", "dami", "vreau", "as", "vrea", "porneste",  # noqa: E501
                          "play", "asculta", "ascultam", "baga", "te", "rog", "imi", "niste", "ceva", "un", "o", "pe",
                          "youtube", "copilot", "drivemate", "drive", "mate", "si", "mie", "noua"})
 
@@ -107,7 +108,7 @@ class MediaResult:
     video_id: str
     title: str
     channel: str = ""
-    duration_s: Optional[int] = None
+    duration_s: int | None = None
     kid_safe: bool = False
 
     @property
@@ -138,9 +139,9 @@ class StreamInfo:
     expires: float = 0.0
 
 
-_known: "OrderedDict[str, MediaResult]" = OrderedDict()
+_known: OrderedDict[str, MediaResult] = OrderedDict()
 _streams: dict[str, StreamInfo] = {}
-_inflight: dict[str, "asyncio.Future[StreamInfo]"] = {}
+_inflight: dict[str, asyncio.Future[StreamInfo]] = {}
 _tasks: set[asyncio.Task[Any]] = set()
 
 
@@ -154,12 +155,12 @@ def valid_video_id(video_id: str) -> bool:
     return bool(_VIDEO_ID.match(video_id or ""))
 
 
-def is_youtube_track(track_id: Optional[str]) -> bool:
+def is_youtube_track(track_id: str | None) -> bool:
     """True for ``yt:<id>`` track ids."""
     return bool(track_id) and track_id.startswith(TRACK_PREFIX)
 
 
-def video_id_of(track_id: Optional[str]) -> Optional[str]:
+def video_id_of(track_id: str | None) -> str | None:
     """``yt:<id>`` -> ``<id>`` (``None`` for catalog ids or invalid ids)."""
     if not is_youtube_track(track_id):
         return None
@@ -176,7 +177,7 @@ def remember(results: Iterable[MediaResult]) -> None:
         _known.popitem(last=False)
 
 
-def known(track_or_video_id: Optional[str]) -> Optional[MediaResult]:
+def known(track_or_video_id: str | None) -> MediaResult | None:
     """The search result for ``yt:<id>`` or ``<id>``, if this process found it."""
     video_id = video_id_of(track_or_video_id) if is_youtube_track(track_or_video_id) else track_or_video_id
     return _known.get(video_id or "")
@@ -209,7 +210,7 @@ def _texts() -> dict[str, Any]:
     return get_texts().get("fallback", {})
 
 
-def clean_title(title: str, max_words: Optional[int] = None) -> str:
+def clean_title(title: str, max_words: int | None = None) -> str:
     """A YouTube title as a short spoken phrase.
 
     ``"Metallica - Enter Sandman (Official Music Video) [4K]"`` -> ``"Metallica, Enter Sandman"``.
@@ -268,7 +269,7 @@ def build_choice(results: list[MediaResult], size: int) -> tuple[str, list[dict[
     size = max(1, min(size, len(results)))
     options = [r.option(offered=i < size) for i, r in enumerate(results)]
     question, titles = choice_question(options, 0, size)
-    for option, title in zip(options, titles):
+    for option, title in zip(options, titles):  # noqa: B905
         option["title"] = title
     return question, options
 
@@ -278,7 +279,7 @@ def playing_text(option: dict[str, Any]) -> str:
     return fill(_texts().get("youtube_playing", "{title}"), title=option.get("title") or "")
 
 
-def parse_choice(text: str, batch: list[dict[str, Any]]) -> Union[int, Literal["next", "cancel"], None]:
+def parse_choice(text: str, batch: list[dict[str, Any]]) -> int | Literal["next", "cancel"] | None:
     """Read the driver's answer to a choice question.
 
     Args:
@@ -324,7 +325,7 @@ def is_specific_wish(text: str) -> bool:
     return any(len(t) >= 3 and t not in fillers for t in normalize(text).split())
 
 
-def media_request(text: str) -> Optional[tuple[str, Kind]]:
+def media_request(text: str) -> tuple[str, Kind] | None:
     """Deterministic detection of a music / podcast request (used when the LLM is off).
 
     ``"pune-mi ceva muzică metal"`` -> ``("muzica metal", "music")``;
@@ -366,7 +367,7 @@ def _ydl_options(**extra: Any) -> dict[str, Any]:
     return options
 
 
-def _iso_duration(value: str) -> Optional[int]:
+def _iso_duration(value: str) -> int | None:
     """``PT1H2M3S`` -> 3723 (``None`` for live / unknown)."""
     match = re.fullmatch(r"P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", value or "")
     if not match or not any(match.groups()):
@@ -396,7 +397,7 @@ def _search_api(query: str, count: int, kid_safe: bool, timeout: float) -> list[
         return []
     ids = [i["id"]["videoId"] for i in items]
     details = _get_json("videos", {"part": "contentDetails", "id": ",".join(ids), "key": key}, timeout)
-    durations = {d["id"]: _iso_duration(d.get("contentDetails", {}).get("duration", "")) for d in details.get("items", [])}
+    durations = {d["id"]: _iso_duration(d.get("contentDetails", {}).get("duration", "")) for d in details.get("items", [])}  # noqa: E501
     return [
         MediaResult(video_id=i["id"]["videoId"], title=html.unescape(i["snippet"].get("title", "")),
                     channel=html.unescape(i["snippet"].get("channelTitle", "")),
@@ -414,7 +415,7 @@ def _search_ytdlp(query: str, count: int) -> list[MediaResult]:
         info = ydl.extract_info(f"ytsearch{count + 3}:{query}", download=False)  # a few spares for the filters
     results = []
     for entry in (info or {}).get("entries") or []:
-        if not entry or entry.get("live_status") in ("is_live", "is_upcoming") or not valid_video_id(entry.get("id", "")):
+        if not entry or entry.get("live_status") in ("is_live", "is_upcoming") or not valid_video_id(entry.get("id", "")):  # noqa: E501
             continue
         duration = entry.get("duration")
         results.append(MediaResult(video_id=entry["id"], title=entry.get("title") or "",
@@ -463,9 +464,9 @@ async def search(query: str, kind: Kind = "music", kid_safe: bool = False) -> li
             raw = await asyncio.wait_for(asyncio.to_thread(_search_api, query, count, kid_safe, timeout), timeout)
         else:
             raw = await asyncio.wait_for(asyncio.to_thread(_search_ytdlp, query, count), timeout)
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         raise MediaSearchError("timeout") from exc
-    except Exception as exc:  # noqa: BLE001 - network / parsing / yt-dlp errors all mean "search failed"
+    except Exception as exc:
         raise MediaSearchError(f"failed: {type(exc).__name__}") from exc
     results = _filter(raw, kind, count)
     remember(results)
@@ -521,7 +522,7 @@ async def _extract_and_cache(video_id: str) -> StreamInfo:
         stream = await asyncio.to_thread(_extract_stream, video_id)
     except MediaSearchError:
         raise
-    except Exception as exc:  # noqa: BLE001 - yt-dlp raises many error types
+    except Exception as exc:
         raise MediaSearchError(f"extract_failed: {type(exc).__name__}") from exc
     _streams[video_id] = stream
     return stream

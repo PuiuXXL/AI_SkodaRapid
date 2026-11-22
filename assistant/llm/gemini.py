@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 from google import genai
 from google.genai import errors as genai_errors
@@ -100,7 +100,7 @@ RESPONSE_SCHEMA: dict[str, Any] = {
 }
 
 
-def _finish_reason(chunk: Any) -> Optional[str]:
+def _finish_reason(chunk: Any) -> str | None:
     """``"STOP"`` / ``"MAX_TOKENS"`` / ... from a streamed chunk (only the last chunk has one)."""
     candidates = getattr(chunk, "candidates", None) or []
     reason = getattr(candidates[0], "finish_reason", None) if candidates else None
@@ -114,7 +114,7 @@ class GeminiProvider(LLMProvider):
 
     name = "gemini"
 
-    def __init__(self, api_key: str, model: str, backup_model: Optional[str] = None) -> None:
+    def __init__(self, api_key: str, model: str, backup_model: str | None = None) -> None:
         """Create the SDK client.
 
         Args:
@@ -167,7 +167,7 @@ class GeminiProvider(LLMProvider):
         """The model used by :meth:`generate_retry` (for logs)."""
         return self.backup_model or self.model
 
-    async def generate(self, system: str, user: str, on_text: Optional[TextCallback] = None) -> LLMResult:
+    async def generate(self, system: str, user: str, on_text: TextCallback | None = None) -> LLMResult:
         """Stream one answer from the main model.
 
         Args:
@@ -184,19 +184,19 @@ class GeminiProvider(LLMProvider):
         """
         return await self._stream(self.model, self._build_config(system), user, on_text)
 
-    async def generate_retry(self, system: str, user: str, on_text: Optional[TextCallback] = None) -> LLMResult:
+    async def generate_retry(self, system: str, user: str, on_text: TextCallback | None = None) -> LLMResult:
         """Retry after a transient error: the backup model if configured, else the main model."""
         if self.backup_model:
             return await self._stream(self.backup_model, self._build_config(system, backup=True), user, on_text)
         return await self.generate(system, user, on_text)
 
     async def _stream(
-        self, model: str, config: types.GenerateContentConfig, user: str, on_text: Optional[TextCallback]
+        self, model: str, config: types.GenerateContentConfig, user: str, on_text: TextCallback | None
     ) -> LLMResult:
         """Stream one answer from ``model`` (shared by :meth:`generate` and :meth:`generate_retry`)."""
         started = time.perf_counter()
-        ttft_ms: Optional[float] = None
-        finish: Optional[str] = None
+        ttft_ms: float | None = None
+        finish: str | None = None
         parts: list[str] = []
         try:
             stream = await self._client.aio.models.generate_content_stream(
@@ -216,7 +216,7 @@ class GeminiProvider(LLMProvider):
             code = getattr(exc, "code", None)
             raise LLMError(f"Gemini API error {code if code is not None else '?'} ({model}): {exc}",
                            transient=code in TRANSIENT_CODES) from exc
-        except Exception as exc:  # noqa: BLE001 - network/HTTP library errors vary; all mean "fall back"
+        except Exception as exc:
             raise LLMError(f"Gemini call failed: {type(exc).__name__}: {exc}") from exc
         total_ms = (time.perf_counter() - started) * 1000
         if finish == "MAX_TOKENS":

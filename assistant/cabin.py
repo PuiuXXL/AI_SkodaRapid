@@ -8,12 +8,10 @@ could hear a private message, etc.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from assistant.contract import Occupant, State
 
 
-def display_name(profile: Optional[str]) -> Optional[str]:
+def display_name(profile: str | None) -> str | None:
     """Turn a profile id into a spoken name: ``"andrei"`` -> ``"Andrei"``.
 
     Args:
@@ -27,18 +25,18 @@ def display_name(profile: Optional[str]) -> Optional[str]:
     return " ".join(part.capitalize() for part in profile.replace("_", " ").split())
 
 
-def occupant(state: State, seat: str) -> Optional[Occupant]:
+def occupant(state: State, seat: str) -> Occupant | None:
     """Return the first occupant on a seat (``driver``, ``front_right``, ``rear``)."""
     return next((o for o in state.occupants if o.seat == seat), None)
 
 
-def driver_name(state: State) -> Optional[str]:
+def driver_name(state: State) -> str | None:
     """Spoken name of the driver, or None when not recognised."""
     person = occupant(state, "driver")
     return display_name(person.profile) if person else None
 
 
-def passenger_name(state: State) -> Optional[str]:
+def passenger_name(state: State) -> str | None:
     """Spoken name of the front passenger, only if the passenger camera sees them."""
     person = occupant(state, "front_right")
     if person is None or not state.passenger.present:
@@ -46,7 +44,7 @@ def passenger_name(state: State) -> Optional[str]:
     return display_name(person.profile)
 
 
-def child_name(state: State) -> Optional[str]:
+def child_name(state: State) -> str | None:
     """Spoken name of the first declared child, or None."""
     person = next((o for o in state.occupants if o.role == "child"), None)
     return display_name(person.profile) if person else None

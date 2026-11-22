@@ -381,7 +381,7 @@ class AssistantLink:
         """``state.assistant.preferences`` from P3 (profile.json + voice changes of this trip), for the dashboard."""
         try:
             state.assistant.preferences = self._preferences.effective(state)
-        except Exception:  # noqa: BLE001 - a preference bug must never stop the tick
+        except Exception:
             log.exception("assistant preferences not available")
 
     def _read(self, action: Action, state: State, now: float) -> str:

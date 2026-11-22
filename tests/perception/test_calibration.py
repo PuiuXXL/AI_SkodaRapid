@@ -17,7 +17,8 @@ from tests.perception.zone_factory import calibrate_synthetic, zone_frame
 
 @pytest.fixture(scope="module")
 def cfg() -> PerceptionConfig:
-    return load_config()
+    base = load_config()  # the calibration feeds the kNN zones (gaze.mode knn)
+    return base.model_copy(update={"gaze": base.gaze.model_copy(update={"mode": "knn"})})
 
 
 def test_protocol_owl_and_lizard_road_three_times(cfg: PerceptionConfig) -> None:

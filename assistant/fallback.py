@@ -15,7 +15,8 @@ ones the LLM could return), validated by ``assistant/actions.py`` and marked
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from assistant import cabin, media_search, music, preferences
 from assistant.contract import Action, Event, State
@@ -309,7 +310,7 @@ def _speech(event: Event, state: State, reason: str | None = None) -> list[dict]
     if media_search.wants_music(text):  # plain "pune muzică": a track from the catalog, after a "yes"
         track = music.pick_track(state, "request")
         if track is not None:
-            return [_ask(_t("music_offer")), {"type": "suggest_media", "track_id": track.id, "reason": "driver_request"}]
+            return [_ask(_t("music_offer")), {"type": "suggest_media", "track_id": track.id, "reason": "driver_request"}]  # noqa: E501
     if reason in LLM_FAILURES:
         return [_speak(_t("llm_hiccup"))]
     return _not_understood(event, state)

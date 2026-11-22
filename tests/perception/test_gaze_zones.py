@@ -23,7 +23,8 @@ from tests.perception.zone_factory import ZONES, calibrate_synthetic, zone_frame
 
 @pytest.fixture(scope="module")
 def cfg() -> PerceptionConfig:
-    return load_config()
+    base = load_config()  # these tests cover the per-driver kNN zones (gaze.mode knn), not the default boxes
+    return base.model_copy(update={"gaze": base.gaze.model_copy(update={"mode": "knn"})})
 
 
 @pytest.fixture(scope="module")

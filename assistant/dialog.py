@@ -35,8 +35,9 @@ The manager never executes anything itself and never touches safety.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable, Literal, Optional
+from typing import Literal
 
 from assistant import cabin, media_search, music
 from assistant.answers import InputEvent, fuse, is_plain_answer, parse_kss, request_after_answer
@@ -95,7 +96,7 @@ class Pending:
     kind: PendingKind
     actions: list[Action] = field(default_factory=list)
     expires: float = 0.0
-    quiz: Optional[QuizSession] = None
+    quiz: QuizSession | None = None
     options: list[dict] = field(default_factory=list)
     start: int = 0
     size: int = 0
@@ -116,8 +117,8 @@ class DialogResult:
     """
 
     handled: bool = False
-    answer: Optional[str] = None
-    channel: Optional[str] = None
+    answer: str | None = None
+    channel: str | None = None
     execute: list[Action] = field(default_factory=list)
     cancelled: list[Action] = field(default_factory=list)
     speak: list[Action] = field(default_factory=list)
@@ -147,7 +148,7 @@ class DialogManager:
 
     def __init__(self) -> None:
         """Start with nothing pending."""
-        self.pending: Optional[Pending] = None
+        self.pending: Pending | None = None
 
     # ------------------------------------------------------------------ registering
 
@@ -213,7 +214,7 @@ class DialogManager:
         self,
         inputs: Iterable[InputEvent],
         now: float,
-        state: Optional[State] = None,
+        state: State | None = None,
         fatigue_dialog: bool = False,
     ) -> DialogResult:
         """Resolve the pending question with the inputs seen since it was asked.
@@ -272,7 +273,7 @@ class DialogManager:
             result.speak.append(_say(_text("follow_up_yes") or "Spune.", question=True))
         return result
 
-    def _choice(self, inputs: list[InputEvent], now: float, state: Optional[State]) -> DialogResult:
+    def _choice(self, inputs: list[InputEvent], now: float, state: State | None) -> DialogResult:
         """Which YouTube result: "a doua" / "cel cu Metallica" / 👍 (one option) -> play it;
         "altceva" / 👎 -> the next results; ✋ / "lasă" -> cancel. Anything else is a new request."""
         pending = self.pending
@@ -284,7 +285,7 @@ class DialogManager:
                 pick = media_search.parse_choice(item.value, batch)
             elif item.channel == "gesture" and item.value == "Open_Palm":
                 pick, channel = "cancel", "gesture"
-            elif (item.channel == "gesture" and item.value == "Thumb_Down") or (item.channel == "nod" and item.value == "no"):
+            elif (item.channel == "gesture" and item.value == "Thumb_Down") or (item.channel == "nod" and item.value == "no"):  # noqa: E501
                 pick, channel = "next", item.channel
             elif len(batch) == 1 and ((item.channel == "gesture" and item.value == "Thumb_Up")
                                       or (item.channel == "nod" and item.value == "yes")):
@@ -318,7 +319,7 @@ class DialogManager:
         return DialogResult(handled=True, answer="choice", channel=channel, execute=[play],
                             speak=[_say(media_search.playing_text(option))])
 
-    def _confirm(self, inputs: list[InputEvent], state: Optional[State], fatigue_dialog: bool) -> DialogResult:
+    def _confirm(self, inputs: list[InputEvent], state: State | None, fatigue_dialog: bool) -> DialogResult:
         """Yes -> execute the held actions; no / silence / refusal -> cancel them.
 
         A yes with a concrete wish to a music offer ("da, ceva metal energic") is not a plain
@@ -372,7 +373,7 @@ class DialogManager:
         return normalize(text) in FOLLOW_UP_DONE
 
     @staticmethod
-    def _request_after(inputs: list[InputEvent], answer) -> Optional[str]:
+    def _request_after(inputs: list[InputEvent], answer) -> str | None:
         """The new request spoken after a yes / no ("nu, vreau să pui muzică"), if the answer came by voice."""
         if answer.channel != "voice":
             return None
@@ -380,7 +381,7 @@ class DialogManager:
         return request_after_answer(spoken) if spoken else None
 
     @staticmethod
-    def _confirmed(action: Action, state: Optional[State]) -> Action:
+    def _confirmed(action: Action, state: State | None) -> Action:
         """The executable form of a confirmed action (``suggest_media`` -> ``play_media``)."""
         if action.type == "suggest_media":
             volume = music.volume_for(state) if state is not None else None
@@ -407,7 +408,7 @@ class DialogManager:
                                     events=[Event(type="driver_refused", data={})])
         return DialogResult()
 
-    def _quiz_offer(self, inputs: list[InputEvent], now: float, state: Optional[State]) -> DialogResult:
+    def _quiz_offer(self, inputs: list[InputEvent], now: float, state: State | None) -> DialogResult:
         """"quiz" / yes -> first question; "podcast" -> play it; no -> acknowledge."""
         voice = " ".join(normalize(i.value) for i in inputs if i.channel == "voice")
         found = music.podcasts(state) if state is not None else []
@@ -433,7 +434,7 @@ class DialogManager:
             return result
         return DialogResult()
 
-    def _start_quiz(self, now: float, state: Optional[State], channel: str) -> DialogResult:
+    def _start_quiz(self, now: float, state: State | None, channel: str) -> DialogResult:
         """Create a quiz session and ask its first question."""
         quiz = QuizSession(kid_safe_only=cabin.has_child(state) if state is not None else False)
         if quiz.current is None:

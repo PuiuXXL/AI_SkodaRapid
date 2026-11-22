@@ -13,8 +13,8 @@ once, inside the same deadline (Gemini then uses its backup model).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 #: Callback type: receives the full text generated so far (not just the new chunk).
 TextCallback = Callable[[str], None]
@@ -50,9 +50,9 @@ class LLMResult:
     """
 
     text: str
-    ttft_ms: Optional[float] = None
-    total_ms: Optional[float] = None
-    finish_reason: Optional[str] = None
+    ttft_ms: float | None = None
+    total_ms: float | None = None
+    finish_reason: str | None = None
 
 
 class LLMProvider(ABC):
@@ -67,7 +67,7 @@ class LLMProvider(ABC):
         return True
 
     @abstractmethod
-    async def generate(self, system: str, user: str, on_text: Optional[TextCallback] = None) -> LLMResult:
+    async def generate(self, system: str, user: str, on_text: TextCallback | None = None) -> LLMResult:
         """Generate the JSON answer for one event.
 
         Args:
@@ -87,7 +87,7 @@ class LLMProvider(ABC):
         """What :meth:`generate_retry` calls, for logs (e.g. the backup model name)."""
         return self.name
 
-    async def generate_retry(self, system: str, user: str, on_text: Optional[TextCallback] = None) -> LLMResult:
+    async def generate_retry(self, system: str, user: str, on_text: TextCallback | None = None) -> LLMResult:
         """Second attempt after a transient :class:`LLMError` (same arguments as :meth:`generate`).
 
         The default simply calls :meth:`generate` again; providers with a backup

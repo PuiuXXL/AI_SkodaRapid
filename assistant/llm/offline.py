@@ -8,8 +8,6 @@ without a key: the assistant still speaks with the texts from
 
 from __future__ import annotations
 
-from typing import Optional
-
 from assistant.llm.base import LLMError, LLMProvider, LLMResult, TextCallback
 
 
@@ -23,6 +21,6 @@ class OfflineProvider(LLMProvider):
         """Always False: the client goes straight to the fallback texts."""
         return False
 
-    async def generate(self, system: str, user: str, on_text: Optional[TextCallback] = None) -> LLMResult:
+    async def generate(self, system: str, user: str, on_text: TextCallback | None = None) -> LLMResult:
         """Always raise :class:`LLMError` (should not be called; ``available`` is False)."""
         raise LLMError("offline provider: no LLM configured")

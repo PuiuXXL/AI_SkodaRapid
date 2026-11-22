@@ -34,7 +34,7 @@ import time
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 
@@ -58,9 +58,9 @@ OUT_DIR = REPO_ROOT / "docs" / "eval"
 class RawCall:
     model: str = ""
     text: str = ""
-    finish: Optional[str] = None  # None = the stream never ended (cancelled by the deadline)
-    out_tokens: Optional[int] = None
-    thought_tokens: Optional[int] = None
+    finish: str | None = None  # None = the stream never ended (cancelled by the deadline)
+    out_tokens: int | None = None
+    thought_tokens: int | None = None
 
 
 class RecordingProvider(LLMProvider):
@@ -111,14 +111,14 @@ class RecordingProvider(LLMProvider):
 
         models.generate_content_stream = wrapped
 
-    async def generate(self, system: str, user: str, on_text: Optional[TextCallback] = None) -> LLMResult:
+    async def generate(self, system: str, user: str, on_text: TextCallback | None = None) -> LLMResult:
         return await self.inner.generate(system, user, on_text)
 
-    async def generate_retry(self, system: str, user: str, on_text: Optional[TextCallback] = None) -> LLMResult:
+    async def generate_retry(self, system: str, user: str, on_text: TextCallback | None = None) -> LLMResult:
         return await self.inner.generate_retry(system, user, on_text)
 
 
-# --- YouTube stub -------------------------------------------------------------------------------------------------------
+# --- YouTube stub -------------------------------------------------------------------------------------------------------  # noqa: E501
 
 
 async def _fake_search(query: str, kind: str = "music", kid_safe: bool = False) -> list[media_search.MediaResult]:
@@ -157,8 +157,8 @@ class Run:
     source: str
     reason: str
     latency_ms: float
-    llm_ttft_ms: Optional[float]
-    llm_total_ms: Optional[float]
+    llm_ttft_ms: float | None
+    llm_total_ms: float | None
     llm_types: list[str]
     final_types: list[str]
     said: list[str]
@@ -166,7 +166,7 @@ class Run:
     rejected: list[str] = field(default_factory=list)
     raw_calls: list[dict] = field(default_factory=list)
     review: bool = False
-    error: Optional[str] = None
+    error: str | None = None
 
 
 def _llm_types(calls: list[RawCall]) -> list[str]:
@@ -243,7 +243,7 @@ def _pct(n: int, total: int) -> str:
     return f"{100.0 * n / total:.0f}%" if total else "-"
 
 
-def _quantile(values: list[float], q: float) -> Optional[float]:
+def _quantile(values: list[float], q: float) -> float | None:
     if not values:
         return None
     if len(values) == 1:

@@ -43,7 +43,7 @@ def load(scene: str) -> tuple[str, Event, State]:
     """Return ``(description, event, state)`` for a scene fixture."""
     base = json.loads((FIXTURES / "state_example.json").read_text(encoding="utf-8"))
     data = json.loads((FIXTURES / "scenes" / f"{scene}.json").read_text(encoding="utf-8"))
-    return data["description"], Event.model_validate(data["event"]), State.model_validate(_merge(base, data["state_overrides"]))
+    return data["description"], Event.model_validate(data["event"]), State.model_validate(_merge(base, data["state_overrides"]))  # noqa: E501
 
 
 async def run(scenes: list[str], say: str | None) -> None:
@@ -53,7 +53,7 @@ async def run(scenes: list[str], say: str | None) -> None:
     client = AssistantClient()
     if say:
         base = json.loads((FIXTURES / "state_example.json").read_text(encoding="utf-8"))
-        jobs = [("free utterance", Event(type="driver_speech", ts=time.time(), data={"text": say}), State.model_validate(base))]
+        jobs = [("free utterance", Event(type="driver_speech", ts=time.time(), data={"text": say}), State.model_validate(base))]  # noqa: E501
     else:
         jobs = [load(name) for name in scenes]
     for description, event, state in jobs:
@@ -66,7 +66,7 @@ async def run(scenes: list[str], say: str | None) -> None:
         if info.error:
             print(f"LLM error: {info.error}")
         print(f"source={info.source} reason={info.reason} total={info.latency_ms:.0f} ms "
-              f"ttft={info.llm_ttft_ms and round(info.llm_ttft_ms)} ms llm_total={info.llm_total_ms and round(info.llm_total_ms)} ms")
+              f"ttft={info.llm_ttft_ms and round(info.llm_ttft_ms)} ms llm_total={info.llm_total_ms and round(info.llm_total_ms)} ms")  # noqa: E501
         for action in actions:
             print("  ACCEPTED", action.model_dump_json(exclude_none=True, exclude_defaults=True))
         for raw, reason in info.rejected:

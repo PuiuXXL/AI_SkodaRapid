@@ -39,6 +39,6 @@ def make_provider(settings: LLMSettings | None = None) -> LLMProvider:
     if settings.provider not in ("gemini", "offline"):
         log.warning("LLM_PROVIDER=%r is not supported (only 'gemini'); running offline.", settings.provider)
     elif settings.provider == "gemini":
-        missing = [name for name, value in (("LLM_API_KEY", settings.api_key), ("LLM_MODEL", settings.model)) if not value]
+        missing = [name for name, value in (("LLM_API_KEY", settings.api_key), ("LLM_MODEL", settings.model)) if not value]  # noqa: E501
         log.warning("LLM disabled: %s missing in .env; using fixed fallback texts.", " and ".join(missing))
     return OfflineProvider()

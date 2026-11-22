@@ -20,8 +20,9 @@ Rejected actions are returned with the reason so the client can log them (plan:
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Optional
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -113,14 +114,14 @@ def needs_confirmation(action: Action, state: State) -> bool:
     return action.type in CONFIRMATION_REQUIRED
 
 
-def _word_limit(addressee: Optional[str]) -> int:
+def _word_limit(addressee: str | None) -> int:
     """Max words for an utterance to this addressee (driver = strict rule)."""
     if addressee in (None, "driver", "all"):
         return int(cfg("speech", "max_words_to_driver", default=30))
     return int(cfg("speech", "max_words_to_passenger", default=30))
 
 
-def _allowed_poi_ids(state: State, event: Optional[Event]) -> set[str]:
+def _allowed_poi_ids(state: State, event: Event | None) -> set[str]:
     """POIs the LLM may suggest: only those proposed by P2's rule (plan D3, K3).
 
     Sources: ``event.data["poi_id"]`` / ``event.data["poi_options"]`` of a
@@ -140,7 +141,7 @@ def _allowed_poi_ids(state: State, event: Optional[Event]) -> set[str]:
     return ids
 
 
-def check_action(action: Action, state: State, event: Optional[Event] = None) -> Optional[str]:
+def check_action(action: Action, state: State, event: Event | None = None) -> str | None:
     """Check one parsed action against the plan rules.
 
     Args:
@@ -241,7 +242,7 @@ def check_action(action: Action, state: State, event: Optional[Event] = None) ->
                 return "preference_out_of_range"
         elif action.value not in limits:
             return "preference_value_not_allowed"
-    elif t == "stay_silent":
+    elif t == "stay_silent":  # noqa: SIM102
         if not action.reason:
             return "missing_reason"
     return None
@@ -280,7 +281,7 @@ def _is_numeric_range(limits: Any) -> bool:
 def validate_actions(
     raw_actions: Iterable[Any],
     state: State,
-    event: Optional[Event] = None,
+    event: Event | None = None,
     source: str = "LLM",
 ) -> ValidationResult:
     """Parse and validate a list of actions coming from the LLM (or a fallback).
