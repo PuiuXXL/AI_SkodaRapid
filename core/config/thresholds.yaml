@@ -28,6 +28,16 @@ safety:
     face_lost_hold_ms: 2500     # ... keeps counting while the face is lost / the eyes unreliable, up to this long
                                 # (P1 holds a closure over a gap of 200 ms only; a falling head leaves the tracker)
     episodes_window_min: 10     # safety.drowsiness.episodes_10min: closures >= checkin_min_ms in this window
+    head_fall:                  # the face lost right after the head fell, no closed eyes seen (drowsiness.py)
+                                # Live test 2026-11-22: head let down with the eyes open -> "Nu te mai văd" instead of
+                                # the alarm. Start values (P1: a drowsy nod falls ~18 deg in 2.5 s, nod.pitch_drop_deg 15):
+      min_speed_kmh: 10         # parked: no alarm for bending down
+      window_s: 1.5             # the pitch drop is measured over the last face frames in this window ...
+      drop_deg: 15              # ... and must reach this, OR the last pitch is this far below the upright pitch:
+      down_deg: 25              # (median pitch over baseline_s before the window; a lap glance is ~35 deg down)
+      baseline_s: 30
+      min_baseline_frames: 30   # ~2 s of face at 15 Hz before the upright pitch counts
+      max_gap_s: 0.5            # the last face frame must be this recent (the loss is the fall itself)
 
   checkin:                      # the question after a closure that ended before the alarm (deterministic, no LLM)
     after_open_s: 1.0           # asked once the eyes have been open this long
@@ -66,6 +76,11 @@ safety:
   monitoring:                   # C7: "Nu te mai văd, monitorizarea e întreruptă"
     lost_after_ms: 500          # driver.monitoring_ok=false this long -> announce (P1 already waits face_lost_s=2 s)
     repeat_s: 30                # repeat the announcement while it is still lost
+    # The face still lost this long after the announcement, while moving: the SOS (alarm + "Ești bine?"), once per
+    # loss. P1 waits face_lost_s = 2 s, the announcement lost_after_ms later: the alarm ~5.5 s after the face went.
+    alarm_after_s: 3
+    alarm_min_speed_kmh: 30
+    alarm_reasons: [face_lost]  # nothing wrong with the image, the person is not seen (not covered / dark / frozen)
 
 sos:                            # P0 (C4, C5): alarm -> "Ești bine?" -> countdown -> SOS on three channels (F6)
   # The timers follow the browser: "Ești bine?" waits for alarm_played + the alarm clip, the answer window starts at

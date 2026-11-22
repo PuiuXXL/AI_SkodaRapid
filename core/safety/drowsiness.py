@@ -14,6 +14,12 @@ The timer goes on while the face is lost or the eyes are unreliable inside a rea
 or with ``driver.head.nodding``), for up to ``face_lost_hold_ms``: a falling head leaves the face tracker, and with
 the head down the shut lids often read SQUINT. Eyes P1 reports ``OPEN`` always end the closure.
 
+**A head that falls with no closed eyes seen** (``safety.drowsiness.head_fall``, 2026-11-22): the face is lost right
+after the head pitch dropped fast (``drop_deg`` within ``window_s``) or while it was far below the driver's own upright
+pitch (``down_deg``): a closure starts at the last face frame and goes on while the face stays lost, so the alarm and
+the SOS come at ``alarm_ms`` as for a microsleep (alert ``head_down``). Live test: the head let down with the eyes open
+gave "Nu te mai văd. Monitorizarea e întreruptă." instead, because no closure had started before the face was lost.
+
 The check-in is a rule, not the LLM: fixed texts from ``templates.yaml`` (``drowsiness``), answered by voice, nod or
 thumbs up / down. Yes = the nearest stop ahead (``core.reminders.pick_stop``). It is said even while the assistant is
 silenced after a refusal (a safety rule; the cooldown keeps it rare), never over an alert or another question. After
@@ -22,6 +28,7 @@ an SOS cancelled by a yes it is asked once more ("Andrei, facem o pauză?"), wha
 
 from __future__ import annotations
 
+import statistics
 from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -45,6 +52,10 @@ def _cfg(key: str) -> float:
     return float(th("safety", "drowsiness", key))
 
 
+def _fall(key: str) -> float:
+    return float(th("safety", "drowsiness", "head_fall", key))
+
+
 def _checkin(key: str) -> float:
     return float(th("safety", "checkin", key))
 
@@ -61,6 +72,7 @@ class Closure:
     since: float  # when the eyes closed, on core's clock (now - closed_ms at the first frame)
     last_closed: float  # last frame where P1 saw them closed
     nodding: bool = False  # the head fell during this closure
+    head_fall: bool = False  # started by a falling head that lost the face (no closed eyes seen)
     warned: bool = False
     alarmed: bool = False
 
@@ -93,6 +105,8 @@ class DrowsinessRule:
         self.last_checkin: float | None = None
         self.pending_until: float | None = None  # the check-in question is waiting for its answer
         self.last_inputs: tuple[Any, Any] = (None, None)
+        self.pitches: deque[tuple[float, float]] = deque()  # (t, head pitch) of the frames with a face
+        self.fall_checked = False  # the current loss of the face was already checked for a falling head
 
     # --- the timer (fast path: every frame) ----------------------------------------------------------------------
 
@@ -113,7 +127,14 @@ class DrowsinessRule:
         self.last_frame = now
         eyes, head = frame.driver.eyes, frame.driver.head
         closed = eyes.reliable and (eyes.closed_ms > 0 or eyes.state == "CLOSED")
+        face = head.pitch is not None
+        self._track_pitch(head.pitch, now)
+        if not face and self.closure is None and not self.fall_checked:
+            self.fall_checked = True  # once per loss of the face
+            self._head_fall(now)
         closure = self.closure
+        if closure is not None and closure.head_fall and not face:
+            closure.last_closed = now  # the face is still gone: the "closure" goes on
         if closed:
             start = now - eyes.closed_ms / 1000.0
             if closure is None:
@@ -137,6 +158,36 @@ class DrowsinessRule:
         self._escalate(frame, now)
         self._answer_from_frame(frame, now)
 
+    def _track_pitch(self, pitch: float | None, now: float) -> None:
+        if pitch is None:
+            return
+        self.fall_checked = False
+        self.pitches.append((now, float(pitch)))
+        keep = _fall("baseline_s") + _fall("window_s")
+        while self.pitches and self.pitches[0][0] < now - keep:
+            self.pitches.popleft()
+
+    def _head_fall(self, now: float) -> None:
+        """The face just got lost: did the head fall (fast drop, or far below the driver's upright pitch)?"""
+        if not self.pitches or self.engine.state.trip.speed_kmh < _fall("min_speed_kmh"):
+            return
+        last_t, last_pitch = self.pitches[-1]
+        if now - last_t > _fall("max_gap_s"):
+            return  # the face has been gone for a while: not a fall seen now
+        window = _fall("window_s")
+        recent = [p for t, p in self.pitches if t >= last_t - window]
+        older = [p for t, p in self.pitches if t < last_t - window]
+        drop = max(recent) - last_pitch
+        upright = statistics.median(older) if len(older) >= int(_fall("min_baseline_frames")) else None
+        below = (upright - last_pitch) if upright is not None else 0.0
+        if drop < _fall("drop_deg") and below < _fall("down_deg"):
+            return
+        self.closure = Closure(since=last_t, last_closed=now, nodding=True, head_fall=True)
+        self.unseen_since = None
+        self.engine.log_event("head_fall", now, text="Capul a coborât și fața nu se mai vede.",
+                              drop_deg=round(drop, 1), below_upright_deg=round(below, 1),
+                              last_pitch=round(last_pitch, 1))
+
     def _holds(self, closure: Closure, frame: PerceptionFrame, now: float) -> bool:
         """The closure goes on although P1 does not see closed eyes on this frame."""
         eyes = frame.driver.eyes
@@ -159,7 +210,10 @@ class DrowsinessRule:
             closure.alarmed = True
             self.arbiter.clear(RULE)  # the SOS takes over at P1
             self.pending_until, self.due = None, None
-            if closure.nodding:
+            if closure.head_fall:
+                alert, explanation = "head_down", render("explanations", "head_down", speed_kmh=round(speed))
+                self.alarm_alert = "head_down"
+            elif closure.nodding:
                 alert, explanation = "nodding", render("explanations", "nodding", speed_kmh=round(speed))
                 self.alarm_alert = "nodding"
             else:
@@ -274,7 +328,7 @@ class DrowsinessRule:
         speed = self.alarm_speed_kmh or state.trip.speed_kmh
         if speed < _cfg("min_speed_kmh"):
             return render("drowsiness", "checkin_after_sos", driver_name=name)
-        nodding = self.alarm_alert == "nodding"
+        nodding = self.alarm_alert in ("nodding", "head_down")
         if not nodding and not self.last_episode_ms:
             return render("drowsiness", "checkin_after_sos", driver_name=name)
         fields: dict[str, Any] = {"driver_name": name, "speed_kmh": round(speed)}

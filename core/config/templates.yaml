@@ -77,6 +77,8 @@ explanations:                   # principle 4, D5: one sentence per alert, in th
   # Fields: s (seconds, one decimal with a comma, e.g. "2,1"), speed_kmh, zone_text, reason_text
   microsleep: "Ochii închiși {s} s la {speed_kmh} km/h."
   nodding: "Capul a căzut la {speed_kmh} km/h."
+  head_down: "Capul a coborât și fața nu s-a mai văzut, la {speed_kmh} km/h."
+  face_lost: "Fața nu s-a mai văzut {s} s, la {speed_kmh} km/h."
   off_road: "Ai privit {zone_text} {s} s la {speed_kmh} km/h."
   phone: "Telefon în mână {s} s la {speed_kmh} km/h."
   unresponsive: "Nu ai răspuns {s} s după alarmă."
@@ -90,7 +92,7 @@ clips:
   alarm_alert: "alarm_{alert}_{n}_{driver}"                 # "ANDREI! Trezește-te!" (variants n = 1, 2, ...)
   alarm_repeat: "alarm_repeat_{alert}_{driver}"             # "ANDREI! A doua oară! Hai să oprim."
   # Alerts that use another alert's clips (the head falling is a microsleep for the driver).
-  alarm_aliases: {nodding: microsleep, eyes_closing: microsleep}
+  alarm_aliases: {nodding: microsleep, eyes_closing: microsleep, head_down: microsleep, face_lost: unresponsive}
   passenger_wake: "passenger_wake_{passenger}_{driver}"     # "Maria, te rog, vorbește puțin cu Andrei..."
   are_you_ok: "are_you_ok"                                  # "Ești bine?"
   passenger_instructions: "passenger_instructions_{passenger}_{driver}"   # "Maria, Andrei nu răspunde. ..."
