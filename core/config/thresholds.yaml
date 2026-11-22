@@ -88,6 +88,12 @@ assistant:                      # C: core <-> P3's assistant (core/assistant_lin
   # tests without a browser): edge-tts ro-RO at +5 % says ~2.6 words/s (0.38 s); these bounds are generous on purpose.
   speech_s_per_word: 0.45
   speech_margin_s: 1.5
+  # After a distraction's spoken warning (C2) the conversation survives: the question stays pending and the stopped
+  # sentences are said again ("Cum ziceam, ...") once the alert is over, if that happens within resume_within_s and
+  # no alarm followed. Baseline (docs/eval/alerts-conversation-baseline-2026-11-22.md): a 3 s glance cut the answer
+  # and dropped the question for good. false = the old behaviour (the conversation ends at every warning).
+  resume_after_warning: true
+  resume_within_s: 10
 
 # C8: thumbs down adjusts only P3-P4 thresholds, inside fixed limits. Microsleep, distraction, SOS: never.
 tuning:

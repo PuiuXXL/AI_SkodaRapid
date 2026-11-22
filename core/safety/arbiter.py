@@ -36,7 +36,8 @@ class Arbiter:
         self.engine = engine
         self.active: dict[str, Alert] = {}  # rule name -> its alert
         self.interruptions = 0
-        self.on_interrupt: list[Callable[[], None]] = []  # e.g. the assistant drops its pending question
+        # called with the rule that interrupted, e.g. the assistant drops (or keeps, for a distraction) its question
+        self.on_interrupt: list[Callable[[str | None], None]] = []
 
     def top(self) -> tuple[str, Alert] | None:
         if not self.active:
@@ -58,18 +59,21 @@ class Arbiter:
         previous = self.active.get(rule)
         self.active[rule] = Alert(level, alert, previous.since if previous and previous.level == level else now)
         if interrupt and rank(level) < before and level in LLM_VETO_LEVELS:
-            self.interrupt()
+            self.interrupt(rule)
         self._write(self.engine.state)
 
     def clear(self, rule: str) -> None:
         if self.active.pop(rule, None) is not None:
             self._write(self.engine.state)
 
-    def interrupt(self) -> None:
-        """Stop the assistant's voice and the music (the alarm clip itself also stops them in the browser)."""
+    def interrupt(self, rule: str | None = None) -> None:
+        """Stop the assistant's voice and the music (the alarm clip itself also stops them in the browser).
+
+        ``rule``: who interrupts; the assistant resumes its sentence only after a distraction's warning.
+        """
         self.interruptions += 1
         for listener in self.on_interrupt:
-            listener()
+            listener(rule)
         self.engine.hub.broadcast_ui(to_wire(UiSpeakControl(action="stop")))
         self.engine.hub.broadcast_ui(to_wire(UiMedia(action="stop")))
         self.engine.state.media.playing = False

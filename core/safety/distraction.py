@@ -108,7 +108,7 @@ class DistractionRule:
         if episode.stage == 1 and elapsed_ms >= float(th("safety", "escalation", "voice_after_ms")):
             episode.stage = 2
             if self._pauses() and not self.arbiter.outranks("P2", RULE):
-                self.arbiter.interrupt()  # the spoken stage: the paused assistant and the music stop now
+                self.arbiter.interrupt(RULE)  # the spoken stage: the paused assistant and the music stop now
             self._voice(state, alert, explanation, now)
         if episode.stage == 2 and elapsed_ms >= float(th("safety", "escalation", "alarm_after_ms")):
             episode.stage = 3

@@ -65,6 +65,10 @@ DELEGATE_CAUSES = frozenset({"passenger_showing_phone", "passenger_talk", "child
 #: Initiatives sent again when the assistant skipped them by policy (not when it is muted after a refusal).
 RETRY_EVENTS = frozenset({"fatigue_high", "disengagement_high", "cause_detected"})
 RETRY_REASONS = frozenset({"policy:rate_limited", "policy:safety_veto", "policy:conversation"})
+#: Rules whose interruption the conversation survives: after a distraction's spoken warning the assistant keeps its
+#: question and says its unfinished sentences again ("...cum ziceam"). Anything else (SOS, microsleep, camera lost)
+#: ends the conversation, as before.
+RESUMABLE_RULES = frozenset({"distraction"})
 
 
 class AssistantLink:
@@ -120,6 +124,9 @@ class AssistantLink:
         self.speaking: str | None = None
         self.paused = False
         self.held = False  # a safety cue holds the voice (paused) until it ends (hold_voice / release_voice)
+        self.interrupted: list[Action] = []  # unfinished sentences stopped by a distraction's warning (to resume)
+        self.interrupted_at = 0.0
+        self.interrupted_alarms = 0  # alarms sent when it happened: an alarm afterwards cancels the resume
         self.greeted = False
         self.driver_seen_since: float | None = None
         self.offered: set[str] = set()  # messages handed to the assistant
@@ -129,10 +136,24 @@ class AssistantLink:
         self.retries: dict[str, tuple[float, int, dict[str, Any]]] = {}  # event type -> (due, attempt, data)
         self.last_inputs: tuple[Any, ...] = (None, None, None, None)
 
-    def on_safety_interrupt(self) -> None:
-        """A safety alert stopped every sound: the question the assistant was waiting on no longer stands."""
-        if self.dialog is not None:
-            self.dialog.reset()
+    def on_safety_interrupt(self, rule: str | None = None) -> None:
+        """A safety alert stopped every sound.
+
+        After a distraction's spoken warning (``RESUMABLE_RULES``, ``assistant.resume_after_warning``) the question
+        the assistant is waiting on still stands and its unfinished sentences are kept, to be said again once the
+        alert is over (``_resume``). After anything more serious the conversation is over: the question is dropped.
+        """
+        now = self.clock()
+        keep = rule in RESUMABLE_RULES and bool(th("assistant", "resume_after_warning"))
+        if keep:
+            self.interrupted = [u["action"] for u in self.utterances.values() if u.get("action") is not None]
+            self.interrupted_at = now
+            self.interrupted_alarms = self.engine.safety.alarms.sent
+        else:
+            self.interrupted = []
+            if self.dialog is not None:
+                self.dialog.reset()
+        self.utterances.clear()  # the browser drops its queue; only the current sentence reports speak_done
         self.speaking, self.paused = None, False
 
     def busy_with_driver(self, now: float) -> bool:
@@ -365,7 +386,7 @@ class AssistantLink:
         self.engine.hub.broadcast_ui(message)
         words = len(str(message.get("text") or "").split())
         self.utterances[message["id"]] = {"to": action.to or "driver", "is_question": action.type == "ask",
-                                          "ts": now, "until": now + words * float(th("assistant", "speech_s_per_word"))
+                                          "action": action, "ts": now, "until": now + words * float(th("assistant", "speech_s_per_word"))
                                           + float(th("assistant", "speech_margin_s"))}
         self.speaking, self.paused = message["id"], False
         if self.held:  # a safety cue is on: the new sentence waits paused until the gaze is back
@@ -570,6 +591,7 @@ class AssistantLink:
         self._greet(state, now)
         self._messages(state, now)
         self._yield(state, now)
+        self._resume(state, now)
         self._retry(state, now)
         self._sync_preferences(state)
         window = self.engine.safety.dialog.is_open(now)
@@ -618,6 +640,37 @@ class AssistantLink:
             from_contact = rule is not None and rule.is_contact_reply(message)
             self.submit("safe_contact_reply" if from_contact else "message_received", now, msg_id=message.id,
                         delivery=delivery)
+
+    def _resume(self, state: State, now: float) -> None:
+        """After a distraction's warning: once the alert is over, say the stopped sentences again ("...cum ziceam").
+
+        Only within ``assistant.resume_within_s`` of the interruption and when no alarm followed the warning;
+        otherwise the moment is gone and nothing is repeated (the pending question simply expires).
+        """
+        if not self.interrupted:
+            return
+        too_late = now - self.interrupted_at > float(th("assistant", "resume_within_s"))
+        if too_late or self.engine.safety.alarms.sent != self.interrupted_alarms:
+            self.interrupted = []
+            self.engine.log_event("assistant_action", now, source="RULE", action_type="resume_dropped",
+                                  text="Conversația nu se reia: a trecut prea mult de la avertisment.")
+            return
+        if (state.safety.level or "P4") in ("P0", "P1", "P2") or self.held or self._sos_active(now):
+            return  # still distracted, or something more serious: wait
+        actions, self.interrupted = self.interrupted, []
+        prefix = str(template("escalation", "resume_prefix"))
+        said = []
+        for index, action in enumerate(actions):
+            text = action.text if action.type == "speak" else action.question
+            if index == 0 and text:
+                text = f"{prefix} {text}"
+            again = action.model_copy(update={"text": text} if action.type == "speak" else {"question": text})
+            if validator.check(again, state, confirmed=False) is None:
+                self._send_speech(again, now)
+                said.append(again.type)
+        if said:
+            self.engine.log_event("assistant_action", now, source="RULE", action_type="resume",
+                                  text="Conversația se reia după avertisment: ...cum ziceam.")
 
     def _yield(self, state: State, now: float) -> None:
         """D4: pause while the driver checks a mirror, resume ("...cum ziceam") when the gaze is back."""

@@ -98,6 +98,8 @@ escalation:
   off_road: "{driver_name}, fii atent la drum, te rog."
   phone: "{driver_name}, lasă telefonul, te rog."
   phone_message: "{driver_name}, lasă telefonul, ți-l citesc eu."   # a message is waiting (scene 3)
+  # Before the assistant's sentence stopped by the warning, said again once the driver looks back (assistant.resume_*)
+  resume_prefix: "Cum ziceam,"
 
 # B4: the cause of the distraction, for the event log. Fields: glances (in cause.window_s)
 causes:

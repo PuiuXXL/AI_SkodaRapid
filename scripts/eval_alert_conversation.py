@@ -329,11 +329,12 @@ class Sim:
         self.interrupts_with_pending = 0
         original = self.link.on_safety_interrupt
 
-        def counted_interrupt() -> None:
-            if self.link.dialog is not None and self.link.dialog.has_pending(self.t):
+        def counted_interrupt(rule: str | None = None) -> None:
+            had = self.link.dialog is not None and self.link.dialog.has_pending(self.t)
+            original(rule)
+            if had and not self.link.dialog.has_pending(self.t):
                 self.interrupts_with_pending += 1
                 self.log(self.t, "core", "   pending question of the assistant DROPPED")
-            original()
 
         self.safety.arbiter.on_interrupt = [counted_interrupt if f == original else f
                                             for f in self.safety.arbiter.on_interrupt]

@@ -156,3 +156,57 @@ async def test_the_same_cause_is_sent_once_per_cooldown() -> None:
     await rig.link.drain()
     assert [e["data"]["label"] for e in rig.hub.events("cause")].count("passenger_showing_phone") == 2  # logged
     assert client.types().count("cause_detected") == 1  # but not said again
+
+
+# --- step 2: the conversation survives a distraction's spoken warning -----------------------------------------------
+
+ALARM_AFTER = th("safety", "escalation", "alarm_after_ms") / 1000.0
+
+
+def said(rig: Rig) -> list[str]:
+    return [s["text"] for s in rig.speaks()]
+
+
+async def test_after_the_warning_the_answer_resumes_and_the_question_stays() -> None:
+    rig = Rig(scene=5, assistant=FakeClient({"driver_speech": [speak(ANSWER), ask("Te mai ajut cu ceva?")]}))
+    rig.run(1.0)
+    await answering(rig)
+    rig.patch = glance(rig.t, LIMIT_HIGH + VOICE_AFTER + 0.5)  # long enough for the words, back before the alarm
+    rig.run(LIMIT_HIGH + VOICE_AFTER + 0.2)
+    assert controls(rig)[-1] == "stop" and "Andrei, fii atent la drum, te rog." in said(rig)
+    assert rig.link.dialog.has_pending(rig.t)  # the question still stands
+    rig.run(1.0)  # the gaze is back, the alert is over
+    assert f"Cum ziceam, {ANSWER}" in said(rig) and said(rig)[-1] == "Te mai ajut cu ceva?"
+    assert rig.hub.events("assistant_action")[-1]["data"]["action_type"] == "resume"
+    assert rig.link.dialog.has_pending(rig.t)
+
+
+async def test_no_resume_after_an_alarm() -> None:
+    rig = Rig(scene=5, assistant=FakeClient({"driver_speech": [speak(ANSWER)]}))
+    rig.run(1.0)
+    await answering(rig)
+    rig.patch = glance(rig.t, LIMIT_HIGH + ALARM_AFTER + 0.3)  # the alarm fires before the driver looks back
+    rig.run(LIMIT_HIGH + ALARM_AFTER + 1.5)
+    assert rig.hub.of_type("alarm")
+    assert not any(text.startswith("Cum ziceam") for text in said(rig))
+
+
+async def test_no_resume_when_the_driver_comes_back_too_late() -> None:
+    rig = Rig(scene=5, assistant=FakeClient({"driver_speech": [speak(ANSWER)]}))
+    rig.run(1.0)
+    await answering(rig)
+    rig.link.on_safety_interrupt("distraction")  # as at the spoken stage ...
+    rig.link.interrupted_at -= th("assistant", "resume_within_s") + 1.0  # ... but long ago
+    rig.run(0.5)
+    assert not any(text.startswith("Cum ziceam") for text in said(rig))
+    assert rig.hub.events("assistant_action")[-1]["data"]["action_type"] == "resume_dropped"
+
+
+async def test_a_serious_alert_still_ends_the_conversation() -> None:
+    rig = Rig(scene=5, assistant=FakeClient({"driver_speech": [speak(ANSWER), ask("Te mai ajut cu ceva?")]}))
+    rig.run(1.0)
+    await answering(rig)
+    rig.link.on_safety_interrupt("sos")  # microsleep alarm / SOS
+    assert not rig.link.dialog.has_pending(rig.t) and not rig.link.interrupted
+    rig.run(2.0)
+    assert not any(text.startswith("Cum ziceam") for text in said(rig))
