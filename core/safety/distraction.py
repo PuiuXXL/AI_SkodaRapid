@@ -9,9 +9,14 @@ A distraction is critical when, above ``safety.distraction.min_speed_kmh``:
   ``lap_pattern_min_conf``).
 
 One episode, while the condition holds: at once the ``visual_cue`` event (the dashboard lights up) and a P2 alert
-(the assistant's voice and the music stop, the LLM is silent); after ``escalation.voice_after_ms`` a fixed sentence
-with the driver's name ("Andrei, fii atent la drum, te rog." / "Andrei, lasă telefonul, ți-l citesc eu." when a message
-is waiting); after ``alarm_after_ms`` the alarm. A distraction never starts the SOS: the driver is awake.
+(the LLM is silent); after ``escalation.voice_after_ms`` a fixed sentence with the driver's name ("Andrei, fii atent
+la drum, te rog." / "Andrei, lasă telefonul, ți-l citesc eu." when a message is waiting); after ``alarm_after_ms`` the
+alarm. A distraction never starts the SOS: the driver is awake.
+
+**Cue vs. voice stage** (``escalation.cue_pauses_voice``): during the discrete cue the assistant's voice only
+**pauses** (like a mirror check, D4) and resumes ("...cum ziceam") when the gaze is back before the spoken warning; the
+voice and the music are stopped at the spoken stage. Before 2026-11-22 the cue itself stopped everything, so a 1.8 s
+glance cut the assistant mid-sentence and dropped its question (docs/eval/alerts-conversation-baseline-2026-11-22.md).
 The same sentence is not repeated within ``cooldown_s``. Nothing is said over a more critical alert (the SOS).
 When the episode ends, ``distraction_end`` logs how long the driver needed to come back (the visual reaction, B1).
 """
@@ -102,16 +107,26 @@ class DistractionRule:
         elapsed_ms = (now - episode.started) * 1000.0
         if episode.stage == 1 and elapsed_ms >= float(th("safety", "escalation", "voice_after_ms")):
             episode.stage = 2
+            if self._pauses() and not self.arbiter.outranks("P2", RULE):
+                self.arbiter.interrupt()  # the spoken stage: the paused assistant and the music stop now
             self._voice(state, alert, explanation, now)
         if episode.stage == 2 and elapsed_ms >= float(th("safety", "escalation", "alarm_after_ms")):
             episode.stage = 3
             if not self.arbiter.outranks("P2", RULE):
                 self.alarms.send(now, alert, "P2", explanation=explanation)
 
+    @staticmethod
+    def _pauses() -> bool:
+        return bool(th("safety", "escalation", "cue_pauses_voice"))
+
     def _start(self, alert: str, explanation: str, now: float) -> Episode:
         self.episode = Episode(alert, now)
         self.episodes += 1
-        self.arbiter.raise_alert(RULE, "P2", alert, now)
+        pauses = self._pauses()
+        self.arbiter.raise_alert(RULE, "P2", alert, now, interrupt=not pauses)
+        assistant = self.engine.assistant
+        if pauses and assistant is not None and not self.arbiter.outranks("P2", RULE):
+            assistant.hold_voice(now, alert)
         self.ab.our_alert(now, alert)
         self.engine.log_event("visual_cue", now, explanation=explanation, alert=alert, level="P2")
         return self.episode
@@ -133,6 +148,9 @@ class DistractionRule:
     def _end(self, episode: Episode, now: float) -> None:
         self.episode = None
         self.arbiter.clear(RULE)
+        assistant = self.engine.assistant
+        if assistant is not None:
+            assistant.release_voice(now)  # back on the road before the spoken stage: "...cum ziceam"
         text = "Privirea a revenit pe drum." if episode.alert == "off_road" else "Telefonul a fost lăsat."
         self.engine.log_event("distraction_end", now, alert=episode.alert, stage=episode.stage,
                               latency_ms=round((now - episode.started) * 1000.0, 1), text=text)

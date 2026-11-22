@@ -47,6 +47,8 @@ class Scores:
         self.cause = CauseDetector()
         self.intervention = InterventionTracker(engine, self.cause)
         self.armed = {"fatigue": True, "disengagement": True}
+        self.cause_waiting: str | None = None
+        self.cause_notified: dict[str, float] = {}
         self.last_inputs: tuple[Any, Any] = (None, None)
         engine.add_browser_listener(self.on_browser)
         engine.add_frame_listener(self.on_frame)
@@ -58,6 +60,8 @@ class Scores:
                      self.cause, self.intervention):
             part.reset()
         self.armed = {"fatigue": True, "disengagement": True}
+        self.cause_waiting = None  # a new cause the assistant gets once the conversation is over
+        self.cause_notified = {}  # label -> when it was last sent to the assistant
 
     # --- inputs --------------------------------------------------------------------------------------------------
 
@@ -117,18 +121,41 @@ class Scores:
         self.intervention.tick(state, now)
 
     def _cause(self, state: State, now: float) -> None:
-        """B4: a new cause goes to the event log and, for the labels the assistant resolves, to the assistant."""
+        """B4: a new cause goes to the event log and, for the labels the assistant resolves, to the assistant.
+
+        The assistant gets it only when it is not in the middle of a conversation with the driver (speaking, an
+        answer on the way, a question waiting, the dialog window open): the cause then waits while it still holds.
+        The same label is sent again only after ``cause.notify_cooldown_s`` (the passenger talk used to come back
+        every ~40 s, each time cutting in on the conversation).
+        """
         label = self.cause.update(state, now)
-        if label is None:
-            return
-        cause = state.cause
         muted = state.assistant.muted_until is not None and now < state.assistant.muted_until
-        self.engine.log_event("cause", now, text=render("causes", label, glances=cause.glances_30s), label=label,
-                              target=cause.target, person_id=cause.person_id, conf=cause.conf,
-                              sources=list(cause.sources), muted=muted)
+        if label is not None:
+            cause = state.cause
+            self.engine.log_event("cause", now, text=render("causes", label, glances=cause.glances_30s), label=label,
+                                  target=cause.target, person_id=cause.person_id, conf=cause.conf,
+                                  sources=list(cause.sources), muted=muted)
+            if not muted and label in th("cause", "notify_labels"):
+                self.cause_waiting = label
+        self._notify_cause(state, now, muted)
+
+    def _notify_cause(self, state: State, now: float, muted: bool) -> None:
+        label = self.cause_waiting
         assistant = self.engine.assistant
-        if assistant is not None and not muted and label in th("cause", "notify_labels"):
-            assistant.submit("cause_detected", now, label=label)
+        if label is None or assistant is None:
+            return
+        if muted or state.cause.label != label:  # muted meanwhile, or the evidence is gone: nothing to remove
+            self.cause_waiting = None
+            return
+        last = self.cause_notified.get(label)
+        if last is not None and now - last < float(th("cause", "notify_cooldown_s")):
+            self.cause_waiting = None
+            return
+        if assistant.busy_with_driver(now):
+            return  # after the conversation, if the cause still holds
+        self.cause_waiting = None
+        self.cause_notified[label] = now
+        assistant.submit("cause_detected", now, label=label)
 
     def _crossing(self, name: str, value: float, terms: dict[str, float], state: State, now: float) -> None:
         if value < float(th(name, "low")):

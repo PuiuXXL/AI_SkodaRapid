@@ -119,6 +119,7 @@ class AssistantLink:
         self.utterances: dict[str, dict[str, Any]] = {}  # the assistant's utterances not finished yet
         self.speaking: str | None = None
         self.paused = False
+        self.held = False  # a safety cue holds the voice (paused) until it ends (hold_voice / release_voice)
         self.greeted = False
         self.driver_seen_since: float | None = None
         self.offered: set[str] = set()  # messages handed to the assistant
@@ -133,6 +134,42 @@ class AssistantLink:
         if self.dialog is not None:
             self.dialog.reset()
         self.speaking, self.paused = None, False
+
+    def busy_with_driver(self, now: float) -> bool:
+        """A conversation with the driver is going on: the assistant speaks, an answer is on the way, a question
+        waits for the driver, or the dialog window is open. Initiatives (a cause to remove) wait for it to end."""
+        if not self.available:
+            return False
+        pending = self.dialog is not None and self.dialog.has_pending(now)
+        utterance = self.utterances.get(self.speaking) if self.speaking is not None else None
+        # speak_done may never come (page closed, no browser in tests): a sentence is over after its estimated length
+        speaking = utterance is not None and (self.paused or now < utterance.get("until", float("inf")))
+        answering = any(event.type in ("driver_speech", "passenger_speech") for event in self.queue)
+        return speaking or answering or pending or self.engine.safety.dialog.is_open(now)
+
+    def hold_voice(self, now: float, reason: str) -> None:
+        """A discrete safety cue (C2's first stage): pause the assistant mid-sentence instead of stopping it.
+
+        Its question stays pending; anything said while the cue lasts starts paused. ``release_voice`` resumes.
+        """
+        if not self.available or self.held:
+            return
+        self.held = True
+        if self.speaking is not None and not self.paused:
+            self.paused = True
+            self.engine.hub.broadcast_ui(to_wire(UiSpeakControl(action="pause")))
+            self.engine.log_event("assistant_action", now, source="RULE", action_type="yield",
+                                  text=f"Vocea așteaptă: semnal de atenție ({reason}).")
+
+    def release_voice(self, now: float) -> None:
+        """The cue ended before it became an alert with words: the paused sentence resumes ("...cum ziceam")."""
+        if not self.held:
+            return
+        self.held = False
+        zone = self.engine.state.driver.gaze.zone
+        if self.paused and self.speaking is not None and zone not in th("assistant", "yield_zones"):
+            self.paused = False
+            self.engine.hub.broadcast_ui(to_wire(UiSpeakControl(action="resume")))
 
     def _sos_active(self, now: float) -> bool:
         """The SOS is on, or this input already answered a rule (the SOS question, a stop reminder)."""
@@ -229,6 +266,10 @@ class AssistantLink:
             del self.retries[event_type]
             if muted or not self._still_true(event_type, data, state):
                 continue
+            if event_type == "cause_detected" and self.busy_with_driver(now):
+                # Not into the middle of a conversation: try again later, same attempt (the cause may also expire).
+                self.retries[event_type] = (now + float(th("assistant", "retry_s")), attempt, data)
+                continue
             self.submit(event_type, now, **data, retry=attempt)
             if event_type == "fatigue_high" and self.engine.safe_contact is not None:
                 self.engine.safe_contact.fatigue_dialog_started(now, state.assessment.fatigue)
@@ -322,9 +363,14 @@ class AssistantLink:
     def _send_speech(self, action: Action, now: float) -> None:
         message = self._tts.speak_message(action)
         self.engine.hub.broadcast_ui(message)
+        words = len(str(message.get("text") or "").split())
         self.utterances[message["id"]] = {"to": action.to or "driver", "is_question": action.type == "ask",
-                                          "ts": now}
+                                          "ts": now, "until": now + words * float(th("assistant", "speech_s_per_word"))
+                                          + float(th("assistant", "speech_margin_s"))}
         self.speaking, self.paused = message["id"], False
+        if self.held:  # a safety cue is on: the new sentence waits paused until the gaze is back
+            self.paused = True
+            self.engine.hub.broadcast_ui(to_wire(UiSpeakControl(action="pause")))
 
     def _intervention(self, kind: str, now: float) -> None:
         scores = self.engine.scores
@@ -583,7 +629,7 @@ class AssistantLink:
             self.engine.hub.broadcast_ui(to_wire(UiSpeakControl(action="pause")))
             self.engine.log_event("assistant_action", now, source="RULE", action_type="yield",
                                   text=f"Vocea așteaptă: privire {template('zones').get(zone, zone)}.")
-        elif self.paused and zone == "road":
+        elif self.paused and zone == "road" and not self.held:  # a safety cue resumes it itself (release_voice)
             self.paused = False
             self.engine.hub.broadcast_ui(to_wire(UiSpeakControl(action="resume")))
 

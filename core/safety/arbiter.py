@@ -48,12 +48,16 @@ class Arbiter:
         top = self.top()
         return top[1].level if top else None
 
-    def raise_alert(self, rule: str, level: str, alert: str, now: float) -> None:
-        """Rule ``rule`` has an active alert. Interrupts lower sounds when this makes the top level more critical."""
+    def raise_alert(self, rule: str, level: str, alert: str, now: float, *, interrupt: bool = True) -> None:
+        """Rule ``rule`` has an active alert. Interrupts lower sounds when this makes the top level more critical.
+
+        ``interrupt=False``: the level (and the LLM veto) apply, but nothing is stopped; the rule decides itself
+        when the sounds stop (the distraction's discrete cue only pauses the assistant, see ``distraction.py``).
+        """
         before = rank(self.level)
         previous = self.active.get(rule)
         self.active[rule] = Alert(level, alert, previous.since if previous and previous.level == level else now)
-        if rank(level) < before and level in LLM_VETO_LEVELS:
+        if interrupt and rank(level) < before and level in LLM_VETO_LEVELS:
             self.interrupt()
         self._write(self.engine.state)
 

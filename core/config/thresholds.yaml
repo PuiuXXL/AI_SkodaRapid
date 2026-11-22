@@ -48,6 +48,11 @@ safety:
     voice_after_ms: 1000        # still distracted this long after the visual cue -> voice (off road 3 s in total)
     alarm_after_ms: 3000        # still distracted this long after the visual cue -> alarm
     cooldown_s: 10              # the same spoken warning is not repeated within this (the cue and the alarm always fire)
+    # The discrete cue only PAUSES the assistant's voice (resumed when the gaze is back); the voice stage stops it.
+    # false = the old behaviour: the cue stops voice + music at once. Baseline with false
+    # (docs/eval/alerts-conversation-baseline-2026-11-22.md, 100 km/h): one 1.8 s glance cut the answer mid-sentence
+    # and dropped the assistant's question; four of them left 1 of 3 answers heard. The LLM veto is the same either way.
+    cue_pauses_voice: true
 
   monitoring:                   # C7: "Nu te mai văd, monitorizarea e întreruptă"
     lost_after_ms: 500          # driver.monitoring_ok=false this long -> announce (P1 already waits face_lost_s=2 s)
@@ -79,6 +84,10 @@ assistant:                      # C: core <-> P3's assistant (core/assistant_lin
   # a safety alert, a conversation) is sent again after retry_s while its condition still holds. Never when muted.
   retry_s: 10
   max_retries: 3
+  # Estimated length of an assistant sentence, used only when the browser's speak_done does not come (page closed,
+  # tests without a browser): edge-tts ro-RO at +5 % says ~2.6 words/s (0.38 s); these bounds are generous on purpose.
+  speech_s_per_word: 0.45
+  speech_margin_s: 1.5
 
 # C8: thumbs down adjusts only P3-P4 thresholds, inside fixed limits. Microsleep, distraction, SOS: never.
 tuning:
@@ -178,6 +187,10 @@ cause:                          # B4: cause of the distraction, from the two cam
   # Labels the assistant gets as cause_detected (D2: delegate, read it for you, riddle). "phone" is not sent: the
   # deterministic escalation (C2) already handles it and the LLM is silent at P2.
   notify_labels: [passenger_showing_phone, passenger_talk, incoming_message, child_activity]
+  # The same label goes to the assistant again only after this (and never into a running conversation with the
+  # driver: it waits until the assistant is idle, while the cause still holds). The label itself can come back
+  # every ~40 s (hold_s after the evidence, then 3 new glances); every time it cut in on the conversation.
+  notify_cooldown_s: 180
 
 blind_m:                        # B6: speed x time with the gaze off the road
   min_segment_m: 5              # shorter off-road stretches are not drawn on the map
